@@ -31,8 +31,8 @@
     mmsid = lapi.MMOpen(authSid, tweetId, "cur")
     function ScorePair() {}
     sp = new ScorePair
-    sp.score = Date.now()
-    sp.member = mid
+    sp.Score = Date.now()
+    sp.Member = mid
     lapi.Zadd(mmsid, COMMENT_LIST, sp)
 
     let count = lapi.Get(mmsid, COMMENT_COUNT) + 1

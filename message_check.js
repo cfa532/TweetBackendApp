@@ -4,7 +4,7 @@
         const INCOMING_MESSAGE = "incoming_message_indicator"
         const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
         const APP_EXT = "com.example.twitterclone"
-        const MESSAGE_MIMEI = "message_mimei"
+        const MESSAGE_MIMEI = "message_mimei_1"
 
         // check the last message from anyone who has sent a message.
 
@@ -29,6 +29,7 @@
                 lastTimeFetched = lapi.Zscore(mmsid, READ_MESSAGE, senderId)
             }
             let lastMsg = lapi.Hget(mmsid, INCOMING_MESSAGE, senderId)
+            console.log("last message checked,", JSON.stringify(lastMsg), lastTimeFetched)
             if (lastMsg.timestamp > lastTimeFetched) {
                 return lastMsg
             } else {
@@ -36,7 +37,7 @@
             }
         }).filter(e => e)   // return only non-null results.
         
-        console.log("Incoming from", msgMid, JSON.stringify(messageList))
+        console.log("Incoming from", JSON.stringify(messageList), msgMid)
         return messageList  // a list of most recent incoming messages
 
     } catch(e) {

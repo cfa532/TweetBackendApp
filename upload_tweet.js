@@ -36,8 +36,8 @@
     mmsid = lapi.MMOpen(authSid, authorId, "cur")
     function ScorePair() {}
     sp = new ScorePair
-    sp.score = Date.now()
-    sp.member = mid
+    sp.Score = Date.now()
+    sp.Member = mid
     console.log("appMid=", authorId, JSON.stringify(sp))
     lapi.Zadd(mmsid, TWT_LIST_KEY, sp)
     lapi.MMBackup(authSid, authorId, "")

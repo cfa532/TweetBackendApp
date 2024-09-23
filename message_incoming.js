@@ -2,7 +2,7 @@
     try {
         // get messags send by other users.
         const INCOMING_MESSAGE = "incoming_message_indicator"
-        const MESSAGE_MIMEI = "message_mimei"
+        const MESSAGE_MIMEI = "message_mimei_1"
         const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
         const APP_EXT = "com.example.twitterclone"
 
@@ -21,10 +21,10 @@
         // use a Zset as message index for fast query, and hset to store message.
         // senderId is the key for both.
         sp = new ScorePair
-        sp.score = msg.timestamp
-        sp.member = String(msg.timestamp)
+        sp.Score = msg.timestamp
+        sp.Member = String(msg.timestamp)
         lapi.Zadd(mmsid, senderId, sp)
-        lapi.Hset(mmsid, senderId, sp.member, msg)
+        lapi.Hset(mmsid, senderId, sp.Member, msg)
         lapi.MMBackup(authSid, msgMid, "", "delref=true")
 
     } catch(e) {
