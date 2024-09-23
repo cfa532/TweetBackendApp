@@ -15,6 +15,7 @@
         // "SpecialVers":[{"VerName":"last","Version":"1"}],
         // "MinDifSeq":0
         // }
+        // hdF-zawE_0MH0TSVuBvAU_yA0HA  upgrade package mimei
         return {
             version: appVersion.Versions[0].Version,
             packageId: mid,
