@@ -25,7 +25,7 @@
         sp.Member = String(msg.timestamp)
         lapi.Zadd(mmsid, senderId, sp)
         lapi.Hset(mmsid, senderId, sp.Member, msg)
-        lapi.MMBackup(authSid, msgMid, "", "delref=true")
+        // lapi.MMBackup(authSid, msgMid, "", "delref=true")
 
     } catch(e) {
         console.error(e)
