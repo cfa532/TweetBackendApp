@@ -15,6 +15,8 @@
     let userId = request["userid"]
     let mmsid = lapi.MMOpen("", tweetId, "last")
     let tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
+    
+    if (!tweet) return null
 
     let bookmarkCount = lapi.Get(mmsid, BOOKMARK_COUNT)
     let retweetCount = lapi.Get(mmsid, RETWEET_COUNT)

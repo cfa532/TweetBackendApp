@@ -24,7 +24,7 @@
         // senderId is the key for both.
         lapi.Zadd(mmsid, receiptId, sp)
         lapi.Hset(mmsid, receiptId, sp.Member, msg)
-        // lapi.MMBackup(authSid, msgMid, "", "delref=true")
+        lapi.MMBackup(authSid, msgMid, "", "delref=true")
 
     } catch(e) {
         console.error(e)

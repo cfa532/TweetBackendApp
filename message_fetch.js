@@ -23,13 +23,12 @@
             }
         })
         let nowTime = Date.now()
-        let tsList = lapi.Zrangebyscore(mmsid, senderId, lastTimeFetched, nowTime, 0, 10000)
+        let tsList = lapi.Zrangebyscore(mmsid, senderId, lastTimeFetched, nowTime, 0, 1000)
         let messages = tsList.map(e => {
             // message from both parties are here, but read only msg from the other.
-            if (e.Member == senderId)
-                return lapi.Hget(mmsid, senderId, e.Member)   // MUST have a return, otherwise null is returned.
+            return lapi.Hget(mmsid, senderId, e.Member)   // MUST have a return, otherwise null is returned.
         }).filter(e => e)
-        console.log("Fetch incoming from", senderId, JSON.stringify(messages))
+        console.log("Fetch from", senderId, JSON.stringify(messages), msgMid)
 
         // update message reading indicator
         function ScorePair() {}
@@ -37,7 +36,7 @@
         sp.Score = Date.now()
         sp.Member = senderId
         lapi.Zadd(mmsid, READ_MESSAGE, sp)  // if memeber exists, score will be updated, otherwise insert.
-        // lapi.MMBackup(authSid, msgMid, "", "delref=true")
+        lapi.MMBackup(authSid, msgMid, "", "delref=true")
         return messages
     } catch(e) {
         console.error(e)

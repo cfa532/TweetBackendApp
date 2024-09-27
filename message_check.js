@@ -10,14 +10,14 @@
         let userId = request["userid"]
         let authSid = lapi.BELoginAsAuthor()
         let msgMid = lapi.MMCreate(authSid, APP_ID, APP_EXT, userId+"_"+MESSAGE_MIMEI, 2, 0x07276704)
-        let mmsid = lapi.MMOpen(authSid, msgMid, "cur")
+        let mmsid = lapi.MMOpen(authSid, msgMid, "last")
 
         // all users who has sent incoming message.
         let senders = lapi.Hkeys(mmsid, INCOMING_MESSAGE)
 
         // user IDs whose massage has been fetched last time.
         let idsOfLastFetch = lapi.Zrange(mmsid, READ_MESSAGE, 0, -1).map(e => e.Member)
-        console.log("check senders and last fetch:", JSON.stringify(senders), JSON.stringify(idsOfLastFetch))
+        console.log("check senders and last fetch:", JSON.stringify(senders), msgMid)
 
         let messageList = senders.map(senderId => {
             let index = idsOfLastFetch.findIndex(e => e==senderId)
@@ -28,17 +28,13 @@
                 lastTimeFetched = lapi.Zscore(mmsid, READ_MESSAGE, senderId)
             }
             let lastMsg = lapi.Hget(mmsid, INCOMING_MESSAGE, senderId)
-            console.log("last message checked,", JSON.stringify(lastMsg), lastTimeFetched)
             if (lastMsg.timestamp > lastTimeFetched) {
                 return lastMsg
             } else {
                 return null
             }
         }).filter(e => e)   // return only non-null results.
-        
-        console.log("Incoming from", JSON.stringify(messageList), msgMid)
         return messageList  // a list of most recent incoming messages
-
     } catch(e) {
         console.error(e)
     }

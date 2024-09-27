@@ -11,7 +11,7 @@
         let arr = lapi.Zrangebyscore(mmsid, TWT_LIST_KEY, endScore, startScore, 0, 100)
         return arr.map(sp => {
             return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last", userid: userId, tweetid: sp.Member}, [])
-        })
+        }).filter(e=> e)
     } catch(e) {
         console.error(e)
         return e

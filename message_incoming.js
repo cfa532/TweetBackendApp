@@ -14,7 +14,7 @@
         let msgMid = lapi.MMCreate(authSid, APP_ID, APP_EXT, userId+"_"+MESSAGE_MIMEI, 2, 0x07276704)
         let mmsid = lapi.MMOpen(authSid, msgMid, "cur")
         let msg = JSON.parse(request["msg"])
-        console.log("Incoming message", msgMid, request["msg"])
+        console.log("Incoming message", request["msg"], msgMid)
         // Always keep the most recent message in the Hset
         lapi.Hset(mmsid, INCOMING_MESSAGE, senderId, msg)
 
@@ -25,7 +25,7 @@
         sp.Member = String(msg.timestamp)
         lapi.Zadd(mmsid, senderId, sp)
         lapi.Hset(mmsid, senderId, sp.Member, msg)
-        // lapi.MMBackup(authSid, msgMid, "", "delref=true")
+        lapi.MMBackup(authSid, msgMid, "", "delref=true")
 
     } catch(e) {
         console.error(e)

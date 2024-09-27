@@ -1,4 +1,6 @@
 (()=>{
+    // Not used now.
+
     const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
     const APP_EXT = "com.example.twitterclone"
     const APP_MARK = "version 0.0.4"
