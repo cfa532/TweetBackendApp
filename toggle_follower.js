@@ -11,8 +11,10 @@
     let f = lapi.Hget(mmsid, FOLLOWERS_LIST, otherId)
     if (f) {
         lapi.Hdel(mmsid, FOLLOWERS_LIST, otherId)
+        console.log("unfollowed by", userId)
     } else {
         lapi.Hset(mmsid, FOLLOWERS_LIST, otherId, Date.now())
+        console.log("followed by", userId)
     }
     lapi.MMBackup(mmsid, userId, "", "delref=true")
     mmsid = lapi.MMOpen(authSid, userId, "last")
