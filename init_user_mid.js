@@ -9,6 +9,7 @@
     const COMMENT_COUNT = "tweet_comment_count"
     const FANS_COUNT = "user_followers_count"
     const FOLLOWINGS_COUNT = "user_followings_count"
+    const TWT_LIST_KEY = "list_of_tweets_mid"
 
     // request, lapi are global variables
     let authSid = lapi.BELoginAsAuthor()
@@ -37,6 +38,7 @@
     delete user.password
     user["fansList"] = lapi.RunMApp("get_followers", {aid: request["aid"], ver:"last", userid: userId}, [])
     user["followingList"] = lapi.RunMApp("get_followings", {aid: request["aid"], ver:"last", userid: userId}, [])
+    user["tweetCount"] = lapi.Zcard(mmsid, TWT_LIST_KEY)
 
     console.log("init_user_mid", JSON.stringify(user))
     return user

@@ -15,7 +15,7 @@
     else {
         // use timestamp in place of boolean, for sorting if necessary.
         // has to turn it back to boolean returning to app.
-        lapi.Hset(mmsid, FOLLOWINGS_LIST, idToFollow, Date.now())
+        lapi.Hset(mmsid, FOLLOWINGS_LIST, idToFollow, String(Date.now()))
         count++
     }
     lapi.Set(mmsid, FOLLOWINGS_COUNT, count)

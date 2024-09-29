@@ -1,15 +1,16 @@
 ((request, args)=>{
-    // request, lapi are global variables
-    const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
-    const APP_EXT = "com.example.twitterclone"
-    let APP_MARK = "στηναρχή"
+        // request, lapi are global variables
+        try {
+        const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
+        const APP_EXT = "com.example.twitterclone"
+        let APP_MARK = "στηναρχή"
+        let url = request["url"]
+        let addr = lapi.GetVar("", "domainaddr", url)
 
-    let keyPhrase = request["phrase"]
-    if (keyPhrase) APP_MARK = keyPhrase
-    
-    let authSid = lapi.BELoginAsAuthor()
-    let creatorMid = lapi.MMCreate(authSid, APP_ID, APP_EXT, APP_MARK, 2, 0x07276704)
-    lapi.MiMeiPublish(authSid, "", creatorMid)
-    console.log("app id, ", creatorMid, request["aid"])
-    return {appId: request["mid"] || request["aid"], alphaId: creatorMid}
+        console.log("app id, ", request["mid"], url, "local")
+
+        return {appId: request["mid"], addr: addr}
+    } catch(e) {
+        console.error(e)
+    }
 })(request, args)

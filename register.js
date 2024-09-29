@@ -19,7 +19,7 @@
         user["mid"] = userMid
 
         let mmsid = lapi.MMOpen(authSid, userMid, "cur")
-        lapi.Hset(mmsid, FOLLOWINGS_KEY, userMid, Date.now())
+        // lapi.Hset(mmsid, FOLLOWINGS_KEY, userMid, Date.now())
         lapi.Set(mmsid, OWNER_DATA_KEY, user)      // create default user data area
         lapi.Set(mmsid, BOOKMARK_COUNT, 0)
         lapi.Set(mmsid, LIKE_COUNT, 0)

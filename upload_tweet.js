@@ -20,6 +20,7 @@
     console.log("tweet=", JSON.stringify(tweet))
 
     let mmsid = lapi.MMOpen(authSid, mid, "cur")
+    tweet["timestamp"] = Date.now()
     lapi.Set(mmsid, TWT_CONTENT_KEY, tweet)
 
     lapi.Set(mmsid, RETWEET_COUNT, 0)
@@ -39,9 +40,11 @@
     sp.Score = Date.now()
     sp.Member = mid
     console.log("appMid=", authorId, JSON.stringify(sp))
+    
     lapi.Zadd(mmsid, TWT_LIST_KEY, sp)
     lapi.MMBackup(authSid, authorId, "")
     lapi.MMAddRef(authSid, authorId, mid)
     // lapi.MiMeiPublish(authSid, "", appMid)
+    console.log("Tweet uploaded, ", JSON.stringify(tweet))
     return mid
 })()

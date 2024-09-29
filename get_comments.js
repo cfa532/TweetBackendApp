@@ -10,6 +10,7 @@
         let ret = arr.map(sp => {
             return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last", userid: userId, tweetid: sp.Member}, [])
         })
+        console.log(JSON.stringify(ret))
         return JSON.stringify(ret)
     } catch(e) {
         return e
