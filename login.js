@@ -18,10 +18,10 @@
             delete user.password
 
             // get follower and following list of login user
-            user["fansList"] = lapi.RunMApp("get_followers", {aid: request["aid"], ver:"last", userid: userId}, [])
-            user["followingList"] = lapi.RunMApp("get_followings", {aid: request["aid"], ver:"last", userid: userId}, [])
-
-            return JSON.stringify(user)
+            // user["fansList"] = lapi.RunMApp("get_followers", {aid: request["aid"], ver:"last", userid: userId}, [])
+            // user["followingList"] = lapi.RunMApp("get_followings", {aid: request["aid"], ver:"last", userid: userId}, [])
+            console.log("Login user", JSON.stringify(user))
+            return user
         }
     } catch(e) {
         console.log(e)

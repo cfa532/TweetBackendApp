@@ -1,4 +1,6 @@
 (()=>{
+    // NOT used
+    
     const OWNER_DATA_KEY = "data_of_author"
     const BOOKMARK_COUNT = "tweet_bookmark_count"
     const LIKE_COUNT = "tweet_like_count"

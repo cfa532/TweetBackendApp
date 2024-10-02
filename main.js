@@ -7,7 +7,7 @@
         let url = request["url"]
         let addr = lapi.GetVar("", "domainaddr", url)
 
-        console.log("app id, ", request["mid"], url, "local")
+        console.log("app id, ", request["mid"], url, APP_ID)
 
         return {appId: request["mid"], addr: addr}
     } catch(e) {
