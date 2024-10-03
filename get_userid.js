@@ -6,7 +6,7 @@
     APP_MARK = request["phrase"]
     let authSid = lapi.BELoginAsAuthor()
     let userId = lapi.MMCreate(authSid, APP_ID, APP_EXT, APP_MARK, 2, 0x07276704)
-    console.log("get userid", userId)
+    console.log("Get userid=", userId)
 
     return userId
 })(request, args)
