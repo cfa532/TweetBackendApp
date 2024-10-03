@@ -34,6 +34,7 @@
                 return null
             }
         }).filter(e => e)   // return only non-null results.
+        console.log("recent message", JSON.stringify(messageList))
         return messageList  // a list of most recent incoming messages
     } catch(e) {
         console.error(e)

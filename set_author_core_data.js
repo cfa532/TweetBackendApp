@@ -2,7 +2,7 @@
     const OWNER_DATA_KEY = "data_of_author"
     
     // request, lapi are global variables. so are aid, ver
-    console.log("Author mid=", request["user"])
+    console.log("set userdata", request["user"])
     let user = JSON.parse(request["user"])
     const authSid = lapi.BELoginAsAuthor()
     let mmsid = lapi.MMOpen(authSid, user.mid, "cur")
