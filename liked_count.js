@@ -22,7 +22,7 @@
         count += 1
     }
     lapi.Set(mmsid, LIKE_COUNT, count)
-    lapi.MMBackup(authSid, tweetId, "")
+    lapi.MMBackup(authSid, tweetId, "", "delref=true")
     // lapi.MiMeiPublish(authSid, "", tweetId)
 
     console.log("liked=", !hasLiked, count)

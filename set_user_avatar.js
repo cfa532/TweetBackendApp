@@ -6,6 +6,6 @@
     let user = lapi.Get(mmsid, OWNER_DATA_KEY)
     user["avatar"] = request["avatar"]
     lapi.Set(mmsid, OWNER_DATA_KEY, user)
-    lapi.MMBackup(authSid, user.mid, "")
+    lapi.MMBackup(authSid, user.mid, "", "delref=true")
     console.log("set user avatar", JSON.stringify(user))
 })(request, args)

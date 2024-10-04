@@ -29,7 +29,7 @@
         lapi.Set(mmsid, COMMENT_COUNT, 0)
         lapi.Set(mmsid, FANS_COUNT, 0)
         lapi.Set(mmsid, FOLLOWINGS_COUNT, 0)
-        lapi.MMBackup(authSid, userMid, "")
+        lapi.MMBackup(authSid, userMid, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", userMid)     // the only time to publish user Mid
     }
     let user = lapi.RunMApp("get_author_core_data", {aid: request["aid"], ver:"last", userid: userMid}, [])

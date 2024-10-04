@@ -27,7 +27,7 @@
     lapi.Set(mmsid, COMMENT_COUNT, 0)
     lapi.Set(mmsid, LIKE_COUNT, 0)
     lapi.Set(mmsid, BOOKMARK_COUNT, 0)
-    lapi.MMBackup(authSid, mid, "")
+    lapi.MMBackup(authSid, mid, "", "delref=true")
     lapi.MiMeiPublish(authSid, "", mid)     // publish the tweet ID.
 
     // only add the tweet in author's tweet list if it is not comment only.
@@ -42,7 +42,7 @@
     console.log("appMid=", authorId, JSON.stringify(sp))
     
     lapi.Zadd(mmsid, TWT_LIST_KEY, sp)
-    lapi.MMBackup(authSid, authorId, "")
+    lapi.MMBackup(authSid, authorId, "", "delref=true")
     lapi.MMAddRef(authSid, authorId, mid)
     // lapi.MiMeiPublish(authSid, "", appMid)
     console.log("Tweet uploaded, ", JSON.stringify(tweet))

@@ -24,7 +24,7 @@
         lapi.Set(mmsid, BOOKMARK_COUNT, 0)
         lapi.Set(mmsid, LIKE_COUNT, 0)
         lapi.Set(mmsid, COMMENT_COUNT, 0)
-        lapi.MMBackup(authSid, userMid, "")
+        lapi.MMBackup(authSid, userMid, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", userMid)     // the only time to publish user Mid
         
         delete user.password
