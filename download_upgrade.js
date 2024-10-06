@@ -4,7 +4,7 @@
         const APP_EXT = "com.example.twitterclone"
         const APP_MARK = "package upgrade download"
 
-        // get mid of upgrade app package.
+        // get mid of upgrade app package. hdF-zawE_0MH0TSVuBvAU_yA0HA
         let authSid = lapi.BELoginAsAuthor()
         let mid = lapi.MMCreate(authSid, APP_ID, APP_EXT, APP_MARK, 1, 0x07276704)
         let ip = lapi.RunMApp("get_provider", {aid: request["aid"], ver: "last", mid: mid}, [])
