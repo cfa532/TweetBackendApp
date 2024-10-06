@@ -14,7 +14,6 @@
 
     let tweetId = request["tweetid"]
     let userId = request["userid"]
-    console.log(tweetId, userId, lapi.aid)
     let mmsid = lapi.MMOpen("", tweetId, "last")
     let tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
     
