@@ -1,7 +1,8 @@
 (()=>{
-    // request, lapi are global variables
-    // data necessary to display a tweet item in list
-    // const AUTHOR_MID = "tweet_author_id"
+    // Take a tweetId as argument. The 2nd argument userId is NOT the author,
+    // but the current APP user. It is used to check if the curret app user
+    // has liked or bookmarked this tweet.
+
     const BOOKMARK_COUNT = "tweet_bookmark_count"
     const RETWEET_COUNT = "tweet_retweet_count"
     const COMMENT_COUNT = "tweet_comment_count"
@@ -13,6 +14,7 @@
 
     let tweetId = request["tweetid"]
     let userId = request["userid"]
+    console.log(tweetId, userId, lapi.aid)
     let mmsid = lapi.MMOpen("", tweetId, "last")
     let tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
     
@@ -23,10 +25,11 @@
     let commentCount = lapi.Get(mmsid, COMMENT_COUNT)
     let likeCount = lapi.Get(mmsid, LIKE_COUNT)
 
-    // check if the viewer has bookmarked or liked the tweet
+    // check if the appUser has bookmarked or liked the tweet
     let hasLiked = lapi.Hget(mmsid, LIKE_LIST, userId)
     let hasBookmarked = lapi.Hget(mmsid, BOOKMARK_LIST, userId)
     let hasRetweeted = lapi.Hget(mmsid, RETWEET_LIST, userId)
+
     ret = {
         // tweet core data
         "mid": tweet.mid,
@@ -47,6 +50,6 @@
             hasRetweeted ? true : false,
         ],
     }
-    console.log("Tweet=", JSON.stringify(ret))
+    console.log("Get tweet", JSON.stringify(ret))
     return ret
 })()

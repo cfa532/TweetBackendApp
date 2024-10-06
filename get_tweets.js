@@ -3,7 +3,7 @@
         const TWT_LIST_KEY = "list_of_tweets_mid"
 
         let startScore = parseInt(request["start"], 10)
-        let endScore = request["end"]!="null" ? parseInt(request["end"],10) : Date.now()
+        let endScore = request["end"]!="null" ? parseInt(request["end"], 10) : Date.now()
         let userId = request["userid"]
         let mmsid = lapi.MMOpen("", userId, "last")
     
