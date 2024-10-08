@@ -17,9 +17,10 @@
         // }
         // hdF-zawE_0MH0TSVuBvAU_yA0HA  upgrade package mimei
         return {
-            version: appVersion.Versions[0].Version,
+            version: appVersion.Versions[appVersion.Versions.length-1].Version,
             packageId: mid,
-            mission: "minor"     // App stop working without upgrade. minor, major, critical
+            mission: "minor",     // App stop working without upgrade. minor, major, critical
+            domain: "twbe.fireshare.us",
         }
     } catch(e) {
         console.error(e)
