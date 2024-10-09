@@ -4,13 +4,10 @@
         const APP_EXT = "com.example.twitterclone"
         let APP_MARK = "στηναρχή"
     
-        const FOLLOWINGS_KEY = "list_of_followings_mid"
         const OWNER_DATA_KEY = "data_of_author"
         const BOOKMARK_COUNT = "tweet_bookmark_count"
         const LIKE_COUNT = "tweet_like_count"
         const COMMENT_COUNT = "tweet_comment_count"
-        const FANS_COUNT = "user_followers_count"
-        const FOLLOWINGS_COUNT = "user_followings_count"
 
         let authSid = lapi.BELoginAsAuthor()
         APP_MARK = request["phrase"]

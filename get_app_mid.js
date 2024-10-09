@@ -10,8 +10,6 @@
     const BOOKMARK_COUNT = "tweet_bookmark_count"
     const LIKE_COUNT = "tweet_like_count"
     const COMMENT_COUNT = "tweet_comment_count"
-    const FANS_COUNT = "user_followers_count"
-    const FOLLOWINGS_COUNT = "user_followings_count"
 
     // request, lapi are global variables
     let authSid = lapi.BELoginAsAuthor()
@@ -27,8 +25,6 @@
         lapi.Set(mmsid, BOOKMARK_COUNT, 0)
         lapi.Set(mmsid, LIKE_COUNT, 0)
         lapi.Set(mmsid, COMMENT_COUNT, 0)
-        lapi.Set(mmsid, FANS_COUNT, 0)
-        lapi.Set(mmsid, FOLLOWINGS_COUNT, 0)
         lapi.MMBackup(authSid, userMid, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", userMid)     // the only time to publish user Mid
     }
