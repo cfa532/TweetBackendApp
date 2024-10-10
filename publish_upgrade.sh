@@ -4,11 +4,12 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
-AppId="d4lRyhABgqOnqY4bURSm_T-4FZ4"
-FileId="hdF-zawE_0MH0TSVuBvAU_yA0HA"
+AppId="d4lRyhABgqOnqY4bURSm_T-4FZ4"     # Tweet App
+FileId="hdF-zawE_0MH0TSVuBvAU_yA0HA"    # upgrade APK
 KeyFile="gen8.key"
-LeitherPath="../darwin/Leither"
+LeitherPath="/Users/cfa532/Documents/GitHub/darwin/Leither"
 
-# Execute the commands with the provided arguments
+# publish the upgrade APK and add reference to AppID, so when App is synced
+# to a new node. The upgrade APK will be synced too, and provided.
 "$LeitherPath" mimei setdata "$FileId" "$1" -k "$KeyFile"
 "$LeitherPath" mimei ref add "$AppId" "$FileId"
