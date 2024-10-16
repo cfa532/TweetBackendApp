@@ -26,6 +26,7 @@
         
         delete user.password
         return user
+        
     } catch(e) {
         return e
     }

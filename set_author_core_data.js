@@ -8,5 +8,9 @@
     let mmsid = lapi.MMOpen(authSid, user.mid, "cur")
     lapi.Set(mmsid, OWNER_DATA_KEY, user)
     lapi.MMBackup(authSid, user.mid, "", "delref=true")
-    lapi.MiMeiPublish(authSid, "", user.mid)
+    // lapi.MiMeiPublish(authSid, "", user.mid)
+
+    delete user.password
+    return user
+    
 })(request, args)
