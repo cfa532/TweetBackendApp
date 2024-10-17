@@ -7,7 +7,7 @@
         let authSid = lapi.BELoginAsAuthor()
         let userId = lapi.MMCreate(authSid, APP_ID, APP_EXT, request["phrase"], 2, 0x07276704)
         let mmsid = lapi.MMOpen(authSid, userId, "cur")
-        console.log("mmsid=", mmsid, userId, request["phrase"])
+        console.log("Login userId", userId, request["phrase"])
         let user = lapi.Get(mmsid, OWNER_DATA_KEY)
         if (!user) {
             console.log("User does not exist.", request["username"])
@@ -16,8 +16,6 @@
         // need to check hashed password
         if (user.username == request["username"] && user.password == request["password"]) {
             delete user.password
-
-            // get follower and following list of login user
             console.log("Login user", JSON.stringify(user))
             return user
         }
