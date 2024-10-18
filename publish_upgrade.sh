@@ -13,3 +13,4 @@ LeitherPath=~/tweet/Leither
 # to a new node. The upgrade APK will be synced too, and provided.
 "$LeitherPath" mimei setdata "$FileId" "$1" -k "$KeyFile"
 "$LeitherPath" mimei ref add "$AppId" "$FileId" -k "$KeyFile"
+"$LeitherPath" mimei publish "$FileId" -k "$KeyFile"

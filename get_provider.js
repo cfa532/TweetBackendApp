@@ -2,7 +2,7 @@
     // request, lapi are global variables
     let mid = request["mid"]
     let providers = lapi.GetVar("", "mmprovsips", mid)
-
+    console.log(providers)
     providers = JSON.parse(providers)
     let mini = null
     let ip = ""
@@ -17,7 +17,7 @@
             }   
         });
     });
-    console.log("Best provider", ip, mid)
+    console.log("Best provider:", ip, mid)
 
     return ip
 })()
