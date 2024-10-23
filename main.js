@@ -1,6 +1,6 @@
 ((request, args)=>{
-        // request, lapi are global variables
-        try {
+    // request, lapi are global variables
+    try {
         const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
         const APP_EXT = "com.example.twitterclone"
         let APP_MARK = "στηναρχή"

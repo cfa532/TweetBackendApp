@@ -16,10 +16,13 @@
         // "MinDifSeq":0
         // }
         // hdF-zawE_0MH0TSVuBvAU_yA0HA  upgrade package mimei
+        // When uploading new installation package, call the following code.
+        // ./publish_upgrade.sh app-release.apk
+        //
         return {
             version: appVersion.Versions[appVersion.Versions.length-1].Version,
             packageId: mid,
-            mission: "minor",     // App stop working without upgrade. minor, major, critical
+            mission: "minor",     // App stop working without upgrade. minor, major, critical. Not used.
             domain: "twbe.fireshare.us",
         }
     } catch(e) {

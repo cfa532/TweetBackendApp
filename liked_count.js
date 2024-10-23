@@ -1,4 +1,5 @@
 (()=>{
+    // update the number of likes of the tweet by users.
     const LIKE_COUNT = "tweet_like_count"
     const LIKE_LIST = "tweet_like_list"
 

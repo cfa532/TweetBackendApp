@@ -16,6 +16,7 @@
     let comment = JSON.parse(request["comment"])
     let mid = lapi.MMCreate(authSid, APP_ID, APP_EXT, "{{auto}}", 2, 0x07276704)
     comment["mid"] = mid
+    comment["timestamp"] = Date.now()
 
     let mmsid = lapi.MMOpen(authSid, mid, "cur")
     lapi.Set(mmsid, TWT_CONTENT_KEY, comment)
@@ -31,7 +32,7 @@
     mmsid = lapi.MMOpen(authSid, tweetId, "cur")
     function ScorePair() {}
     sp = new ScorePair
-    sp.Score = Date.now()
+    sp.Score = comment["timestamp"]
     sp.Member = mid
     lapi.Zadd(mmsid, COMMENT_LIST, sp)
 
