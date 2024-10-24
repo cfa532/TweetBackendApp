@@ -1,5 +1,6 @@
 ((request, args)=>{
     try {
+        // user registration
         const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
         const APP_EXT = "com.example.twitterclone"
         let APP_MARK = "στηναρχή"
@@ -16,18 +17,25 @@
         user["mid"] = userMid
 
         let mmsid = lapi.MMOpen(authSid, userMid, "cur")
-        // lapi.Hset(mmsid, FOLLOWINGS_KEY, userMid, Date.now())
+        if (lapi.Get(mmsid, OWNER_DATA_KEY)) {
+            // user object exist.
+            console.warn("User register failed. Existing user")
+            return null
+        }
+
         lapi.Set(mmsid, OWNER_DATA_KEY, user)      // create default user data area
         lapi.Set(mmsid, BOOKMARK_COUNT, 0)
         lapi.Set(mmsid, LIKE_COUNT, 0)
         lapi.Set(mmsid, COMMENT_COUNT, 0)
         lapi.MMBackup(authSid, userMid, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", userMid)     // the only time to publish user Mid
-        
+
+        lapi.RunMApp("update_app_data", {aid: APP_ID, ver: "last", user: JSON.stringify(user)}, [])
+        console.log("User regisgtered.", JSON.stringify(user))
         delete user.password
         return user
-        
     } catch(e) {
-        return e
+        console.error(e)
+        return null
     }
 })(request, args)
