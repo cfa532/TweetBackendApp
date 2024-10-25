@@ -1,28 +1,23 @@
 (()=>{
-    const FOLLOWERS_LIST = "list_of_followers_mid"
+    try {
+        const FOLLOWERS_LIST = "list_of_followers_mid"
 
-    let userId = request["userid"]
-    let otherId = request["otherid"]     // user to be followed or unfollowed
+        let userId = request["userid"]
+        let otherId = request["otherid"]     // user to be followed or unfollowed
+        let ifFollower = request["isfollower"]
+        let authSid = lapi.BELoginAsAuthor()
+        let mmsid = lapi.MMOpen(authSid, userId, "cur")
 
-    let authSid = lapi.BELoginAsAuthor()
-    let mmsid = lapi.MMOpen(authSid, userId, "cur")
-
-    // check if the otherid is following the user
-    let f = lapi.Hget(mmsid, FOLLOWERS_LIST, otherId)
-    if (f) {
-        lapi.Hdel(mmsid, FOLLOWERS_LIST, otherId)
-        console.log("unfollowed by", userId)
-    } else {
-        lapi.Hset(mmsid, FOLLOWERS_LIST, otherId, Date.now())
-        console.log("followed by", userId)
-    }
-    lapi.MMBackup(mmsid, userId, "", "delref=true")
-    mmsid = lapi.MMOpen(authSid, userId, "last")
-
-    // return if the other is follower or not
-    if (f) {
-        return false
-    } else {
-        return true
+        if (ifFollower) {
+            // otherId is a follower of userId
+            lapi.Hset(mmsid, FOLLOWERS_LIST, otherId, Date.now())
+            console.log("followed by", userId)
+        } else {
+            lapi.Hdel(mmsid, FOLLOWERS_LIST, otherId)
+            console.log("unfollowed by", userId)
+        }
+        lapi.MMBackup(mmsid, userId, "", "delref=true")
+    } catch(e) {
+        console.error(e)
     }
 })()
