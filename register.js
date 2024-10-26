@@ -35,7 +35,7 @@
         delete user.password
         return user
     } catch(e) {
-        console.error(e)
+        console.error("register", e)
         return null
     }
 })(request, args)
