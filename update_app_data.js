@@ -3,23 +3,18 @@
         // update the App registry of User data when user is created or updated.
         const APPUSER_LIST = "app_user_list_key"
         const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
-        const APP_MARK = "Registered users on current node"
-    
+        const APP_MARK = "user registry"
+
         // update App data
         let user = JSON.parse(request["user"])
         let authSid = lapi.BELoginAsAuthor()
-        let appMid = lapi.MMGetAppDataID("", APP_ID, "app", "", APP_MARK, true)
-        if (!appMid) {
-            appMid = lapi.MMCreateAppData(authSid, APP_ID, "app", "", APP_MARK, 0x07276704)
-            lapi.MiMeiPublish(authSid, "", appMid)
-            console.log("appMid from update app,", appMid)
-        }
-        console.log("App mid", appMid, request["user"])
-
-        let appsid = lapi.MMOpen(authSid, appMid, "cur")
+        let appsid = lapi.BEOpenAppDataNode("cur", APP_MARK)
+        let appMid = lapi.GetVar("", "mmsid2mid", appsid)
+        console.log("appsid", appsid, appMid)
         lapi.Hset(appsid, APPUSER_LIST, user.mid, user)
         lapi.MMBackup(authSid, appMid, "", "delref=true")
+        console.log("App mid", appMid)
     } catch(e) {
-        console.error(e)
+        console.error("update_app_data", e)
     }
 })(request, args)

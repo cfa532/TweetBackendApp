@@ -14,7 +14,7 @@
         }).filter(e=> e)
         
     } catch(e) {
-        console.error(e)
+        console.error("get_tweets", e)
         return e
     }
 })(request, args)
