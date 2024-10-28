@@ -12,12 +12,18 @@
         const BOOKMARK_LIST = "tweet_bookmark_list"
         const RETWEET_LIST = "tweet_retweet_list"
 
-        let tweetId = request["tweetid"]
+        // not the author of the tweet, but current app user.
+        // Need to find it the user has liked or bookmarked the tweet.
         let userId = request["userid"]
+        let tweetId = request["tweetid"]
         let mmsid = lapi.MMOpen("", tweetId, "last")
-        let tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
-        
+        let tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)        
         if (!tweet) return null
+
+        // private tweet readable only by author
+        if (userId != tweet.authorId && tweet.isPrivate) {
+            return null
+        }
 
         let bookmarkCount = lapi.Get(mmsid, BOOKMARK_COUNT)
         let retweetCount = lapi.Get(mmsid, RETWEET_COUNT)
@@ -49,6 +55,7 @@
                 hasRetweeted ? true : false,
             ],
         }
+
         console.log("Get tweet", JSON.stringify(ret))
         return ret
     } catch(e) {
