@@ -42,7 +42,7 @@
         
         lapi.Zadd(mmsid, TWT_LIST_KEY, sp)
         lapi.MMBackup(authSid, authorId, "", "delref=true")
-        tweet.attachments.forEach(element => {
+        tweet.attachments?.forEach(element => {
             lapi.MMAddRef(authSid, mid, element.mid)
         });
         lapi.MMAddRef(authSid, authorId, mid)
