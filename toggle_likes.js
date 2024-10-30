@@ -1,5 +1,5 @@
+// update the number of likes of the tweet by users.
 ((request, args)=>{
-    // update the number of likes of the tweet by users.
     try {
         const LIKE_COUNT = "tweet_like_count"
         const LIKE_LIST = "tweet_like_list"
@@ -30,6 +30,6 @@
         console.log("liked=", !hasLiked, count)
         return {hasLiked: hasLiked ? false:true, count: count}
     } catch(e) {
-        console.error("toggle_likes", e)
+        console.error("toggle_likes", JSON.stringify(request), e)
     }
 })(request, args)

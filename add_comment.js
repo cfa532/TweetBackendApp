@@ -1,4 +1,4 @@
-(()=>{
+((request, args)=>{
     // request, lapi are global variables
     // each comment is a tweet object
     try {
@@ -50,7 +50,6 @@
         // return comment mid and number of comments on the tweet.
         return {commentId: mid, count: count}
     } catch(e) {
-        console.error("add_comment:", e)
-        return null
+        console.error("add_comment:", JSON.stringify(request), e)
     }
-})()
+})(request, args)

@@ -1,4 +1,5 @@
-(()=>{
+((request, args) => {
+  try {
     // Update the record of the original tweet, after creating or removing a retweet of it.
     const RETWEET_COUNT = "tweet_retweet_count"
     const RETWEET_LIST = "tweet_retweet_list"
@@ -22,11 +23,11 @@
       console.log("Remove retweetId=", tweetId, tid, count)
 
       // Also remove it from user's tweet list
-      lapi.RunMApp("delete_tweet", {aid: request["aid"], ver: "last",
+      lapi.RunMApp("delete_tweet", {
+        aid: request["aid"], ver: "last",
         tweetid: tid, authorid: fansId
       })
-
-      return {retweetId: tid, count: count}
+      return { retweetId: tid, count: count }
     } else {
       lapi.Hset(mmsid, RETWEET_LIST, fansId, retweetId)
       count++
@@ -34,6 +35,9 @@
       lapi.MMBackup(authSid, tweetId, "", "delref=true")
 
       console.log("Add retweetId=", retweetId, count)
-      return {retweetId: null, count: count}
+      return { retweetId: null, count: count }
     }
-})()
+  } catch (e) {
+    console.error("toggle_likes", JSON.stringify(request), e)
+  }
+})(request, args)

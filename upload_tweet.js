@@ -1,4 +1,4 @@
-(() => {
+((request, args)=>{
     // let ScorePair = new Function('score', 'member', 'return {score, member}')
     // request, lapi are global variables.
     // each comment is also tweet object.
@@ -50,7 +50,6 @@
         console.log("Tweet uploaded, ", JSON.stringify(tweet))
         return mid
     } catch(e) {
-        console.error("upload_tweet:", e)
-        return null
+        console.error("upload_tweet:", JSON.stringify(request), e)
     }
-})()
+})(request, args)

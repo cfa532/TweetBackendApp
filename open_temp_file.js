@@ -1,6 +1,9 @@
-(()=>{
-    let authSid = lapi.BELoginAsAuthor()
-    let fsid = lapi.MFOpenTempFile(authSid);
-    console.log("fsid=", fsid)
-    return fsid
-})()
+((request, args)=>{
+    try {
+        let authSid = lapi.BELoginAsAuthor()
+        let fsid = lapi.MFOpenTempFile(authSid);
+        return fsid
+    } catch(e) {
+        console.error("open_temp_file", JSON.stringify(request), e)
+    }
+})(request, args)

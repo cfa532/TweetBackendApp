@@ -15,6 +15,6 @@
         lapi.MMBackup(authSid, appMid, "", "delref=true")
         console.log("App mid", appMid)
     } catch(e) {
-        console.error("update_app_data", e)
+        console.error("update_app_data", JSON.stringify(request), e)
     }
 })(request, args)

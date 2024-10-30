@@ -37,6 +37,6 @@
         console.log("recent message", JSON.stringify(messageList))
         return messageList  // a list of most recent incoming messages
     } catch(e) {
-        console.error(e)
+        console.error("message_check", JSON.stringify(request), e)
     }
 })(request, args)

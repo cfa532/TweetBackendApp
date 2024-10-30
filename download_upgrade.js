@@ -10,6 +10,6 @@
         let ip = lapi.RunMApp("get_provider", {aid: request["aid"], ver: "last", mid: mid}, [])
         return mid.length>27 ? "http://"+ip+"/ipfs/"+mid : "http://"+ip+"/mm/"+mid
     } catch(e) {
-        console.error(e)
+        console.error("download_upgrade", JSON.stringify(request), e)
     }
 })(request, args)

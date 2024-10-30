@@ -26,6 +26,6 @@
             domain: "twbe.fireshare.us",
         }
     } catch(e) {
-        console.error(e)
+        console.error("check_upgrade", JSON.stringify(request), e)
     }
 })(request, args)

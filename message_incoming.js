@@ -28,7 +28,7 @@
         lapi.MMBackup(authSid, msgMid, "", "delref=true")
 
     } catch(e) {
-        console.error(e)
+        console.error("message_incoming", JSON.stringify(request), e)
     }
 
     function ScorePair() {}

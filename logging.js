@@ -17,6 +17,6 @@
         lapi.Hset(appsid, "timber_logs", Date.now().toString(), msg)
         lapi.MMBackup(authSid, appMid, "", "delref=true")
     } catch(e) {
-        console.error(e)
+        console.error("logging", JSON.stringify(request), e)
     }
 })(request, args)

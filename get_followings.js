@@ -8,6 +8,6 @@
         console.log(userId, "is following", keys)
         return keys
     } catch(e) {
-        console.error("get_followings", e)
+        console.error("get_followings", JSON.stringify(request), e)
     }
 })(request, args)

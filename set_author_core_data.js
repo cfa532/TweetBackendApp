@@ -13,6 +13,6 @@
         delete user.password
         return user
     } catch(e) {
-        console.error(e)
+        console.error("set_auth_core_data", JSON.stringify(request), e)
     }
 })(request, args)

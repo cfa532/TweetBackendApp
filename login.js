@@ -20,6 +20,6 @@
             return user
         }
     } catch(e) {
-        console.log(e)
+        console.log("login", JSON.stringify(request), e)
     }
 })(request, args)

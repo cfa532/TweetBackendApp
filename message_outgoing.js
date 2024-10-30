@@ -27,6 +27,6 @@
         lapi.MMBackup(authSid, msgMid, "", "delref=true")
 
     } catch(e) {
-        console.error(e)
+        console.error("message_outgoing", JSON.stringify(request), e)
     }
 })(request, args)

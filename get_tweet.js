@@ -55,11 +55,9 @@
                 hasRetweeted ? true : false,
             ],
         }
-
         console.log("Get tweet", JSON.stringify(ret))
         return ret
     } catch(e) {
-        console.error("get_tweet", e)
-        return e
+        console.error("get_tweet", JSON.stringify(request), e)
 }
 })(request, args)

@@ -19,6 +19,6 @@
         }
         lapi.MMBackup(mmsid, userId, "", "delref=true")
     } catch(e) {
-        console.error("toggle_follower", e)
+        console.error("toggle_follower", JSON.stringify(request), e)
     }
 })(request, args)

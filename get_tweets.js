@@ -13,9 +13,7 @@
         return arr.map(sp => {
             return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last", userid: visitorId, tweetid: sp.Member}, [])
         }).filter(e=> e)
-        
     } catch(e) {
-        console.error("get_tweets", e)
-        return e
+        console.error("get_tweets", JSON.stringify(request), e)
     }
 })(request, args)
