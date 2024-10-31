@@ -7,7 +7,7 @@
         let authorMid = request["authorid"]
         let authSid = lapi.BELoginAsAuthor()
 
-        // if there is attachments, delete its reference too.
+        // if there is attachments, delete its reference.
         let mmsid = lapi.MMOpen(authSid, tweetId, "last")
         let tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
         tweet.attachments?.forEach(element => {
