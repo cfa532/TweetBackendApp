@@ -23,7 +23,7 @@
             version: appVersion.Versions[appVersion.Versions.length-1].Version,
             packageId: mid,
             mission: "minor",     // App stop working without upgrade. minor, major, critical. Not used.
-            domain: "twbe.fireshare.us",
+            domain: "twbe.sharefire.store",
         }
     } catch(e) {
         console.error("check_upgrade", JSON.stringify(request), e)
