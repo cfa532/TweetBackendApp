@@ -6,7 +6,7 @@ fi
 
 AppId="d4lRyhABgqOnqY4bURSm_T-4FZ4"     # Tweet App
 FileId="hdF-zawE_0MH0TSVuBvAU_yA0HA"    # upgrade APK
-KeyFile="gen8.key"
+KeyFile=~/tweet/gen8.key
 LeitherPath=~/tweet/Leither
 
 # publish the upgrade APK and add reference to AppID, so when App is synced
@@ -14,3 +14,4 @@ LeitherPath=~/tweet/Leither
 "$LeitherPath" mimei setdata "$FileId" "$1" -k "$KeyFile"
 "$LeitherPath" mimei ref add "$AppId" "$FileId" -k "$KeyFile"
 "$LeitherPath" mimei publish "$FileId" -k "$KeyFile"
+"$LeitherPath" mimei publish "$AppId" -k "$KeyFile"
