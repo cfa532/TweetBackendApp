@@ -26,6 +26,6 @@
             domain: "twbe.sharefire.store",
         }
     } catch(e) {
-        console.error("check_upgrade", JSON.stringify(request), e)
+        console.error("Error check_upgrade", JSON.stringify(request), e)
     }
 })(request, args)

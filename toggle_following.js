@@ -30,7 +30,7 @@
         // return the updated following status on the otherid
         return isFollowing ? false : true
     } catch(e) {
-        console.error("toggle_followings", JSON.stringify(request), e)
+        console.error("Error toggle_followings", JSON.stringify(request), e)
         return null
     } 
 })(request, args)

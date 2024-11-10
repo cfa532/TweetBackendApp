@@ -21,6 +21,6 @@
         console.log("Best provider:", ip, mid)
         return ip
     } catch(e) {
-        console.error("get_provider:", JSON.stringify(request), e)
+        console.error("Error get_provider:", JSON.stringify(request), e)
     }
 })(request, args)

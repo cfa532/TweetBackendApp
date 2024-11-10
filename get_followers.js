@@ -8,6 +8,6 @@
         console.log(userId, "followers list", keys)
         return keys
     } catch(e) {
-        console.error("get_followers", JSON.stringify(request), e)
+        console.error("Error get_followers", JSON.stringify(request), e)
     }
 })(request, args)

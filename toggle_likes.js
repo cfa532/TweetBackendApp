@@ -30,6 +30,6 @@
         console.log("liked=", !hasLiked, count)
         return {hasLiked: hasLiked ? false:true, count: count}
     } catch(e) {
-        console.error("toggle_likes", JSON.stringify(request), e)
+        console.error("Error toggle_likes", JSON.stringify(request), e)
     }
 })(request, args)

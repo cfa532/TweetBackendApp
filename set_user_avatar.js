@@ -11,6 +11,6 @@
         lapi.RunMApp("update_app_data", {aid: request["aid"], ver: "last", user: JSON.stringify(user)}, [])
         console.log("set user avatar", JSON.stringify(user))
     } catch(e) {
-        console.error("set_user_avatar", JSON.stringify(request), e)
+        console.error("Error set_user_avatar", JSON.stringify(request), e)
     }
 })(request, args)

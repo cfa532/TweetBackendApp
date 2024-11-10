@@ -50,6 +50,6 @@
         console.log("Tweet uploaded, ", JSON.stringify(tweet))
         return mid
     } catch(e) {
-        console.error("upload_tweet:", JSON.stringify(request), e)
+        console.error("Error upload_tweet:", JSON.stringify(request), e)
     }
 })(request, args)

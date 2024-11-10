@@ -31,6 +31,6 @@
 
         return {hasBookmarked: hasMarked?false:true, count: count}
     } catch(e) {
-        console.error("toggle_bookmark", JSON.stringify(request), e)
+        console.error("Error toggle_bookmark", JSON.stringify(request), e)
     }
 })(request, args)

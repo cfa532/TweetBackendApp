@@ -14,6 +14,6 @@
         })
         return ret
     } catch(e) {
-        console.error("get_comments:", JSON.stringify(request), e)
+        console.error("Error get_comments:", JSON.stringify(request), e)
     }
 })(request, args)

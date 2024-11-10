@@ -13,6 +13,6 @@
         let arr = lapi.Zrangebyscore(mmsid, TWT_LIST_KEY, endScore, startScore, 0, 100)
         return arr.map(sp => {return sp.Member})
     } catch(e) {
-        console.error("get_tweets", JSON.stringify(request), e)
+        console.error("Error get_tweets", JSON.stringify(request), e)
     }
 })(request, args)

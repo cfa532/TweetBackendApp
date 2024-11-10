@@ -1,6 +1,6 @@
 ((request, args)=>{
     // request, lapi are global variables
-    // each comment is a tweet object
+    // each comment is a tweet object.
     try {
         const BOOKMARK_COUNT = "tweet_bookmark_count"
         const RETWEET_COUNT = "tweet_retweet_count"
@@ -9,7 +9,7 @@
         const COMMENT_LIST = "comment_list_key"
         const TWT_CONTENT_KEY = "core_data_of_tweet"
 
-        const APP_ID = "V6MUd0cVeuCFE7YsGLNn5ygyJlm"
+        const APP_ID = request["aid"]
         const APP_EXT = "com.example.twitterclone"
         
         // create a new tweet for the comment, which is tweet itself.
@@ -50,6 +50,6 @@
         // return comment mid and number of comments on the tweet.
         return {commentId: mid, count: count}
     } catch(e) {
-        console.error("add_comment:", JSON.stringify(request), e)
+        console.error("Error add_comment:", JSON.stringify(request), e)
     }
 })(request, args)

@@ -17,7 +17,7 @@
       lapi.MMBackup(authSid, tweetId, "", "delref=true")
       return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last", userid: fansId, tweetid: tweetId}, [])
     } catch (e) {
-      console.error("toggle_likes", JSON.stringify(request), e)
+      console.error("Error toggle_likes", JSON.stringify(request), e)
     }
   })(request, args)
   

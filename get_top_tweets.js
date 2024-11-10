@@ -6,6 +6,6 @@
         let topTweets = lapi.Get(mmsid, TOP_TWEETS)
         return topTweets
     } catch(e) {
-        console.error("get_top_tweets:", JSON.stringify(request), e)
+        console.error("Error get_top_tweets:", JSON.stringify(request), e)
     }
 })(request, args)

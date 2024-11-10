@@ -25,6 +25,6 @@
         return tweetId
         // lapi.MiMeiPublish(authSid, "", authorMid)
     } catch(e) {
-        console.error("delete_tweet:", JSON.stringify(request), e)
+        console.error("Error delete_tweet:", JSON.stringify(request), e)
     }
 })(request, args)

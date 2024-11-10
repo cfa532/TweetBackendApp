@@ -1,6 +1,6 @@
 ((request, args) => {
     try {
-        // get messags send by other users.
+        // Record messags send by other users in receiver's mimei.
         const INCOMING_MESSAGE = "incoming_message_indicator"
         const MESSAGE_MIMEI = "message_mimei_1"
         const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
@@ -14,9 +14,10 @@
         let msgMid = lapi.MMCreate(authSid, APP_ID, APP_EXT, userId+"_"+MESSAGE_MIMEI, 2, 0x07276704)
         let mmsid = lapi.MMOpen(authSid, msgMid, "cur")
         let msg = JSON.parse(request["msg"])
-        console.log("Incoming message", request["msg"], msgMid)
-        // Always keep the most recent message in the Hset
+
+        // Always keep the most recent message in the imcoming message index
         lapi.Hset(mmsid, INCOMING_MESSAGE, senderId, msg)
+        console.log("Incoming message", request["msg"], msgMid)
 
         // use a Zset as message index for fast query, and hset to store message.
         // senderId is the key for both.
@@ -26,9 +27,8 @@
         lapi.Zadd(mmsid, senderId, sp)
         lapi.Hset(mmsid, senderId, sp.Member, msg)
         lapi.MMBackup(authSid, msgMid, "", "delref=true")
-
     } catch(e) {
-        console.error("message_incoming", JSON.stringify(request), e)
+        console.error("Error message_incoming", JSON.stringify(request), e)
     }
 
     function ScorePair() {}

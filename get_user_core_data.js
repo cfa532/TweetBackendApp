@@ -22,6 +22,6 @@
         console.log("get_user_core", JSON.stringify(user))
         return user
     } catch(e) {
-        console.error("get_user_core", JSON.stringify(request), e)
+        console.error("ERROR get_user_core", JSON.stringify(request), e)
     }
 })(request, args)

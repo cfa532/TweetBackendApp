@@ -23,6 +23,6 @@
         console.log("Delete comment", commentId, count)
         return count
     } catch(e) {
-        console.error("delete_comment:", JSON.stringify(request), e)
+        console.error("Error delete_comment:", JSON.stringify(request), e)
     }
 })(request, args)

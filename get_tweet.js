@@ -58,6 +58,6 @@
         console.log("Get tweet", JSON.stringify(ret))
         return ret
     } catch(e) {
-        console.error("get_tweet", JSON.stringify(request), e)
+        console.error("Error get_tweet", JSON.stringify(request), e)
 }
 })(request, args)

@@ -20,6 +20,6 @@
         console.log("toggle top tweets", JSON.stringify(topTweets))
         return topTweets
     } catch(e) {
-        console.error("toggle_top_tweets", JSON.stringify(request), e)
+        console.error("Error toggle_top_tweets", JSON.stringify(request), e)
     } 
 })(request, args)

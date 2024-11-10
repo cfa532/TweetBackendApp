@@ -8,6 +8,6 @@
         let addr = lapi.GetVar("", "domainaddr", url)
         return {appId: request["aid"], addr: addr}
     } catch(e) {
-        console.error("main", JSON.stringify(request), e)
+        console.error("Error main", JSON.stringify(request), e)
     }
 })(request, args)

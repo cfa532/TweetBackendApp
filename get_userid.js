@@ -10,6 +10,6 @@
         console.log("Get userid=", userId)
         return userId
     } catch(e) {
-        console.error("get_userid:", JSON.stringify(request), e)
+        console.error("Error get_userid:", JSON.stringify(request), e)
     }
 })(request, args)
