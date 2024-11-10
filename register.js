@@ -20,7 +20,7 @@
         if (lapi.Get(mmsid, OWNER_DATA_KEY)) {
             // user object exist.
             console.warn("User register failed. Existing user")
-            // return null
+            return null
         }
 
         lapi.Set(mmsid, OWNER_DATA_KEY, user)      // create default user data area

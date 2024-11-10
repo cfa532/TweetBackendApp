@@ -24,6 +24,7 @@
         })
         let nowTime = Date.now()
         let tsList = lapi.Zrangebyscore(mmsid, senderId, lastTimeFetched, nowTime, 0, 1000)
+        console.log(JSON.stringify(tsList))
         let messages = tsList.map(e => {
             // message from both parties are here, but read only msg from the other.
             return lapi.Hget(mmsid, senderId, e.Member)   // MUST have a return, otherwise null is returned.
@@ -39,6 +40,6 @@
         lapi.MMBackup(authSid, msgMid, "", "delref=true")
         return messages
     } catch(e) {
-        console.error("Error message_fetch", JSON.stringify(request), e)
+        console.error("Error message_fetch:", JSON.stringify(request), e)
     }
 })(request, args)

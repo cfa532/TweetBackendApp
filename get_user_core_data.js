@@ -12,6 +12,7 @@
 
         // return a few attributes for preview
         let user = lapi.Get(mmsid, OWNER_DATA_KEY)
+        if (!user) return null
         delete user.password
 
         user["bookmarkCount"] = lapi.Get(mmsid, BOOKMARK_COUNT)

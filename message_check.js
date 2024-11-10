@@ -23,8 +23,10 @@
             let index = idsOfLastFetch.findIndex(e => e==senderId)
             let lastTimeFetched = 0;
             if (index > -1) {
-                // if there is no Field value of senderId under key READ_MESSAGE, Redis excepts.
-                // get timestamp of last fetch
+                /**
+                 * if there is no Field value of senderId under key READ_MESSAGE,
+                 * Redis raises exception, no such Field.
+                 */
                 lastTimeFetched = lapi.Zscore(mmsid, READ_MESSAGE, senderId)
             }
             let lastMsg = lapi.Hget(mmsid, INCOMING_MESSAGE, senderId)
