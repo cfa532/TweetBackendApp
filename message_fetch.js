@@ -24,12 +24,11 @@
         })
         let nowTime = Date.now()
         let tsList = lapi.Zrangebyscore(mmsid, senderId, lastTimeFetched, nowTime, 0, 1000)
-        console.log(JSON.stringify(tsList))
         let messages = tsList.map(e => {
             // message from both parties are here, but read only msg from the other.
             return lapi.Hget(mmsid, senderId, e.Member)   // MUST have a return, otherwise null is returned.
         }).filter(e => e)
-        console.log("Fetch from", senderId, JSON.stringify(messages), msgMid)
+        console.log("Fetch from", senderId, JSON.stringify(messages), msgMid, lastTimeFetched, nowTime)
 
         // update message reading indicator
         function ScorePair() {}
