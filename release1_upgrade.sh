@@ -4,8 +4,8 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
-AppId="heWgeGkeBX2gaENbIBS_Iy1mdTS"     # Tweet App
-FileId="9OCLYP-SXzen3e171-Ei_6N3Gwl"    # upgrade APK
+AppId="d4lRyhABgqOnqY4bURSm_T-4FZ4"     # Tweet App
+FileId="hdF-zawE_0MH0TSVuBvAU_yA0HA"    # upgrade APK
 KeyFile=~/tweet/gen8.key
 LeitherPath=~/tweet/Leither
 
