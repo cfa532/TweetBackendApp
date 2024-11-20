@@ -3,7 +3,6 @@
         // Used only by tweet web.
         let mid = request["mid"]
         let providers = lapi.GetVar("", "mmprovsips", mid)
-        console.log("providers", providers)
         providers = JSON.parse(providers)
         let mini = null
         let ip = ""
@@ -20,7 +19,7 @@
                 ips.push(element2[0])
             }))
         });
-        console.log("IP addresses for", mid, JSON.stringify(ips))
+        console.log("Provider IP for", mid, JSON.stringify(ips))
         return ips
     } catch(e) {
         console.error("Error get_provider:", JSON.stringify(request), e)
