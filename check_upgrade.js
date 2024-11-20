@@ -23,7 +23,7 @@
             version: appVersion.Versions[appVersion.Versions.length-1].Version,
             packageId: mid,
             mission: "minor",     // App stop working without upgrade. minor, major, critical. Not used.
-            domain: "twbe.sharefire.store",
+            domain: "tweet1.sharefire.store",
         }
     } catch(e) {
         console.error("Error check_upgrade", JSON.stringify(request), e)

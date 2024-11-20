@@ -8,6 +8,7 @@
         let authSid = lapi.BELoginAsAuthor()
         let mid = lapi.MMCreate(authSid, APP_ID, APP_EXT, APP_MARK, 1, 0x07276704)
         let ip = lapi.RunMApp("get_provider", {aid: request["aid"], ver: "last", mid: mid}, [])
+        console.log("Upgrade package mid", mid, ip)
         return mid.length>27 ? "http://"+ip+"/ipfs/"+mid : "http://"+ip+"/mm/"+mid
     } catch(e) {
         console.error("Error download_upgrade", JSON.stringify(request), e)
