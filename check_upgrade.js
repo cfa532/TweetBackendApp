@@ -20,7 +20,8 @@
         // ./publish_upgrade.sh app-release.apk
         //
         return {
-            version: appVersion.Versions[appVersion.Versions.length-1].Version,
+            // version: appVersion.Versions[appVersion.Versions.length-1].Version,
+            version: 1,
             packageId: mid,
             mission: "minor",     // App stop working without upgrade. minor, major, critical. Not used.
             domain: "twbe.sharefire.store",

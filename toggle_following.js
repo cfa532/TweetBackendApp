@@ -3,7 +3,7 @@
         const FOLLOWINGS_LIST = "list_of_followings_mid"
 
         let userId = request["userid"]
-        let otherId = request["otherid"]     // user to followed or unfollowed
+        let otherId = request["otherid"]     // user to follow or unfollow
 
         let authSid = lapi.BELoginAsAuthor()
         let mmsid = lapi.MMOpen(authSid, userId, "cur")

@@ -45,7 +45,7 @@
             lapi.MMAddRef(authSid, mid, element.mid)
         });
         lapi.MMAddRef(authSid, tweetId, mid)
-        // lapi.MiMeiPublish(authSid, "", tweetId)
+        lapi.MiMeiPublish(authSid, "", tweetId)
         console.log("Comment added.", JSON.stringify(comment))
         // return comment mid and number of comments on the tweet.
         return {commentId: mid, count: count}

@@ -10,7 +10,7 @@
         let authSid = lapi.BELoginAsAuthor()
         let appsid = lapi.BEOpenAppDataNode("cur", APP_MARK)
         let appMid = lapi.GetVar("", "mmsid2mid", appsid)
-        console.log("appsid", appsid, appMid)
+        console.log("appsid", appMid, request["user"])
         lapi.Hset(appsid, APPUSER_LIST, user.mid, user)
         lapi.MMBackup(authSid, appMid, "", "delref=true")
         console.log("App mid", appMid)

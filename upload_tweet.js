@@ -46,7 +46,7 @@
             lapi.MMAddRef(authSid, mid, element.mid)
         });
         lapi.MMAddRef(authSid, authorId, mid)
-        // lapi.MiMeiPublish(authSid, "", appMid)
+        lapi.MiMeiPublish(authSid, "", authorId)
         console.log("Tweet uploaded, ", JSON.stringify(tweet))
         return mid
     } catch(e) {

@@ -19,7 +19,7 @@
         let count = lapi.Get(mmsid, COMMENT_COUNT) - 1
         lapi.Set(mmsid, COMMENT_COUNT, count)
         lapi.MMBackup(authSid, tweetId, "", "delref=true")
-        // lapi.MiMeiPublish(authSid, "", tweetid)
+        lapi.MiMeiPublish(authSid, "", tweetid)
         console.log("Delete comment", commentId, count)
         return count
     } catch(e) {

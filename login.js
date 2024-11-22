@@ -5,19 +5,23 @@
         const OWNER_DATA_KEY = "data_of_author"
 
         let authSid = lapi.BELoginAsAuthor()
-        let userId = lapi.MMCreate(authSid, APP_ID, APP_EXT, request["phrase"], 2, 0x07276704)
+        let userId = lapi.MMCreate(authSid, APP_ID, APP_EXT, request["username"], 2, 0x07276704)
         let mmsid = lapi.MMOpen(authSid, userId, "cur")
-        console.log("Login userId", userId, request["phrase"])
         let user = lapi.Get(mmsid, OWNER_DATA_KEY)
         if (!user) {
             console.log("User does not exist.", request["username"])
-            return
+            return {status: "failure", reason: "User does not exist"}
         }
+        console.log("open user", JSON.stringify(user))
         // need to check hashed password
-        if (user.username == request["username"] && user.password == request["password"]) {
+        if (user.password == lapi.MMCreate(authSid, APP_ID, APP_EXT, request["password"], 1, 0x07276704)) {
             delete user.password
-            console.log("Login user", JSON.stringify(user))
-            return user
+            // lapi.MiMeiSync(authSid, "", userId, {})
+
+            console.log("Login user synced", JSON.stringify(user))
+            return {user: JSON.stringify(user), status: "success"}
+        } else {
+            return {status: "failure", reason: "Wrong password"}
         }
     } catch(e) {
         console.log("Error login", JSON.stringify(request), e)
