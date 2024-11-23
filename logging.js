@@ -11,7 +11,6 @@
         if (!appMid) {
             appMid = lapi.MMCreateAppData(authSid, APP_ID, "app", "", APP_MARK, 0x07276704)
             console.log("appMid from logging,", appMid)
-            // K7sBB3fPeMtzIgiWAzwAdeoGTTB
         }
         let appsid = lapi.MMOpen(authSid, appMid, "cur")
         lapi.Hset(appsid, "timber_logs", Date.now().toString(), msg)

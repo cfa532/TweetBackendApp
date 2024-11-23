@@ -10,6 +10,7 @@
         const BOOKMARK_COUNT = "tweet_bookmark_count"
         const LIKE_COUNT = "tweet_like_count"
         const COMMENT_COUNT = "tweet_comment_count"
+        const FOLLOWINGS_LIST = "list_of_followings_mid"
 
         let authSid = lapi.BELoginAsAuthor()
         let user = JSON.parse(request["user"])
@@ -26,6 +27,9 @@
         lapi.Set(mmsid, BOOKMARK_COUNT, 0)
         lapi.Set(mmsid, LIKE_COUNT, 0)
         lapi.Set(mmsid, COMMENT_COUNT, 0)
+        user["followingList"]?.forEach(mid => {
+            lapi.Hset(mmsid, FOLLOWINGS_LIST, mid, Date.now())
+        });
         lapi.MMBackup(authSid, userMid, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", userMid)
 
