@@ -5,20 +5,17 @@
         let tweetId = request["tweetid"]
         let userId = request["userid"]
         let mmsid = lapi.MMOpen(authSid, userId, "cur")
-        let topTweets = lapi.Get(mmsid, TOP_TWEETS)
-        if (topTweets) {
-            let idx = topTweets.findIndex(i=> i==tweetId)
-            if ( idx > -1)
-                topTweets.splice(idx, 1)
-            else
-                topTweets.unshift(tweetId)
+
+        let topTweet = lapi.Hget(mmsid, TOP_TWEETS, tweetId)
+        if (topTweet) {
+            lapi.Hdel(mmsid, TOP_TWEETS, tweetId)
+            console.log("Removed top tweet", topTweet)
         } else {
-            topTweets = [tweetId]
+            lapi.Hset(mmsid, TOP_TWEETS, tweetId, Date.now())
+            console.log("Add top tweet", topTweet)
         }
-        lapi.Set(mmsid, TOP_TWEETS, topTweets)
         lapi.MMBackup(authSid, userId, "", "delref=true")
-        console.log("toggle top tweets", JSON.stringify(topTweets))
-        return topTweets
+        return topTweet
     } catch(e) {
         console.error("Error toggle_top_tweets", JSON.stringify(request), e)
     } 

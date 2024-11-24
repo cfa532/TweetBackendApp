@@ -1,11 +1,11 @@
 ((request, args)=>{
     try {
-        // Used only by tweet web.
+        /**
+         * Given a mimei Id, return a list of IP addresses of providers
+         */
         let mid = request["mid"]
         let providers = lapi.GetVar("", "mmprovsips", mid)
         providers = JSON.parse(providers)
-        let mini = null
-        let ip = ""
         let ips = []
         providers.forEach(element => {
             // iterate providers

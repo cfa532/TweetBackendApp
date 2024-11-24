@@ -24,7 +24,7 @@
             version: 1,
             packageId: mid,
             mission: "minor",     // App stop working without upgrade. minor, major, critical. Not used.
-            domain: "tweet1.sharefire.store",   // base url to be used for deeplink.
+            domain: "twbe.sharefire.store",   // base url to be used for deeplink.
         }
     } catch(e) {
         console.error("Error check_upgrade", JSON.stringify(request), e)
