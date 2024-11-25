@@ -10,7 +10,8 @@
         let arr = lapi.Zrevrange(mmsid, COMMENT_LIST, 0, -1)
         let ret = arr.map(sp => {
             console.log("Comment", JSON.stringify(sp))
-            return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last", userid: userId, tweetid: sp.Member}, [])
+            return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
+                userid: userId, tweetid: sp.Member}, [])
         })
         return ret
     } catch(e) {
