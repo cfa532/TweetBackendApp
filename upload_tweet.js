@@ -27,6 +27,10 @@
         lapi.Set(mmsid, COMMENT_COUNT, 0)
         lapi.Set(mmsid, LIKE_COUNT, 0)
         lapi.Set(mmsid, BOOKMARK_COUNT, 0)
+        tweet.attachments?.forEach(element => {
+            lapi.MMAddRef(authSid, mid, element.mid)
+        });
+
         lapi.MMBackup(authSid, mid, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", mid)     // publish the tweet ID.
 
@@ -39,13 +43,10 @@
         sp = new ScorePair
         sp.Score = Date.now()
         sp.Member = mid
-        
         lapi.Zadd(mmsid, TWT_LIST_KEY, sp)
-        lapi.MMBackup(authSid, authorId, "", "delref=true")
-        tweet.attachments?.forEach(element => {
-            lapi.MMAddRef(authSid, mid, element.mid)
-        });
+
         lapi.MMAddRef(authSid, authorId, mid)
+        lapi.MMBackup(authSid, authorId, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", authorId)
         console.log("Tweet uploaded, ", JSON.stringify(tweet))
         return mid

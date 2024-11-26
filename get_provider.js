@@ -9,7 +9,7 @@
         let ips = []
         providers.forEach(element => {
             // iterate providers
-            ips.concat(element.forEach(element2 => {
+            element.forEach(element2 => {
                 // iterate IP addresses of a provider, to find the best one.
                 // element2 format [183.156.208.29:1088, 3080507421]
                 // if (element2[1] < mini || mini == null) {
@@ -17,7 +17,7 @@
                 //     ip = element2[0]
                 // }
                 ips.push(element2[0])
-            }))
+            })
         });
         console.log("Provider's IPs for", mid, JSON.stringify(ips))
         return ips
