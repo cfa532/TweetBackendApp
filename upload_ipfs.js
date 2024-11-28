@@ -1,33 +1,30 @@
 ((request, args)=>{
-    let userId = request["userid"];
-    let chunkSize = 1024*1024*5; // 5MB
-    console.log("upload ipfs", args.length)
-    let authSid = lapi.BELoginAsAuthor();
-    let fsid = lapi.MFOpenTempFile(authSid);
-    let cid = readSlice(fsid, args[0], 0);
-    if (cid) {
-        console.log("IPFS cid=", cid);
-    } else {
-        console.error("Failed to get IPFS cid");
-    }
-    return cid;
 
-    function readSlice(fsid, buf, offset) {
-        let end, count;
-        while (offset < buf.length) {
-            end = Math.min(offset + chunkSize, buf.length);
-            try {
-                count = lapi.MFSetData(fsid, buf.slice(offset, end), offset);
-            } catch (error) {
-                console.error("Error in MFSetData:", error);
-                return;
-            }
-            offset += count;
-        }
-        try {
-            return lapi.MFTemp2Ipfs(fsid, userId);
-        } catch (error) {
-            console.error("Error in MFTemp2Ipfs:", error);
-        }
-    }
+    let authSid = lapi.BELoginAsAuthor();
+    let fsid = request["fsid"]? request["fsid"] : lapi.MFOpenTempFile(authSid);
+    let offset = parseInt(request["offset"], 10)
+    let b = new Uint8Array(args[0])         // key point.
+    count = lapi.MFSetData(fsid, b, offset);
+    console.log("count=", count, offset)
+    return fsid;
+
+    // function readSlice(fsid, buf, offset) {
+    //     let end, count;
+    //     while (offset < buf.length) {
+    //         end = Math.min(offset + chunkSize, buf.length);
+    //         try {
+    //             let b = new Uint8Array(buf.slice(offset, end))  // key point.
+    //             count = lapi.MFSetData(fsid, b, offset);
+    //         } catch (error) {
+    //             console.error("Error in MFSetData:", error);
+    //             return;
+    //         }
+    //         offset += count;
+    //     }
+    //     try {
+    //         return lapi.MFTemp2Ipfs(fsid, ref);
+    //     } catch (error) {
+    //         console.error("Error in MFTemp2Ipfs:", error);
+    //     }
+    // }
 })(request, args);
