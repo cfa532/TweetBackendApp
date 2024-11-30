@@ -17,7 +17,7 @@
         let userId = request["userid"]
         let tweetId = request["tweetid"]
         let mmsid = lapi.MMOpen("", tweetId, "last")
-        let tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)        
+        let tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
         if (!tweet) return null
 
         // private tweet readable only by author
@@ -59,5 +59,5 @@
         return ret
     } catch(e) {
         console.error("Error get_tweet", JSON.stringify(request), e)
-}
+    }
 })(request, args)

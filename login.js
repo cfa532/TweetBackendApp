@@ -17,8 +17,7 @@
         if (user.password == lapi.MMCreate(authSid, APP_ID, APP_EXT, request["password"], 1, 0x07276704)) {
             delete user.password
             // lapi.MiMeiSync(authSid, "", userId, {})
-
-            console.log("Login user synced", JSON.stringify(user))
+            // if enable Sync after login, remember to update hostIds of User data obj.
             return {user: JSON.stringify(user), status: "success"}
         } else {
             return {status: "failure", reason: "Wrong password"}
