@@ -39,6 +39,7 @@
             // tweet core data
             "mid": tweet.mid,
             "authorId": tweet.authorId,
+            "title": tweet.title,
             "content": tweet.content,
             "attachments": tweet.attachments,
             "isPrivate": tweet.isPrivate,
