@@ -20,7 +20,6 @@
         user["commentCount"] = lapi.Get(mmsid, COMMENT_COUNT)
         user["tweetCount"] = lapi.Zcard(mmsid, TWT_LIST_KEY)
 
-        console.log("get_user_core", JSON.stringify(user))
         return user
     } catch(e) {
         console.error("ERROR get_user_core", JSON.stringify(request), e)
