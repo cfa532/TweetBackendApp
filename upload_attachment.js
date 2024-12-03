@@ -1,6 +1,8 @@
 ((request, args)=>{
     try {
-        // given a cid, assign a Mimei Id to it.
+        /**
+         * Given admin user's ID and attaches the new file mid to it.
+         */
         const adminId = request["userid"]       // App ID assigned by Leither upon publication
         const APP_EXT = "com.example.twitterclone"
         const APP_MARK = request["filename"]
@@ -13,7 +15,7 @@
         lapi.MMOpen(authSid, adminId, "cur")
         lapi.MMAddRef(authSid, adminId, mid)
         lapi.MMBackup(authSid, adminId, "", "delref=true")
-        lapi.MiMeiPublish(authSid, "", mid)
+        // lapi.MiMeiPublish(authSid, "", mid)
         lapi.MiMeiPublish(authSid, "", adminId)
 
         console.log("upload_package to mid=", mid)

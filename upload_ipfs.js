@@ -1,5 +1,7 @@
 ((request, args)=>{
-
+    /**
+     * Given an array of ByteArray objects, set data into a fsid.
+     */
     let authSid = lapi.BELoginAsAuthor();
     let fsid = request["fsid"]? request["fsid"] : lapi.MFOpenTempFile(authSid);
     let offset = parseInt(request["offset"], 10)
