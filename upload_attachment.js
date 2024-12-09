@@ -1,7 +1,8 @@
 ((request, args)=>{
     try {
         /**
-         * Given admin user's ID and attaches the new file mid to it.
+         * Given admin user's ID and attaches the new file mid to it. The new file is IPFS,
+         * assign its cid to a MimeiID and return it.
          */
         const adminId = request["userid"]       // App ID assigned by Leither upon publication
         const APP_EXT = "com.example.twitterclone"

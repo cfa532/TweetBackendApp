@@ -19,7 +19,7 @@
         if (lapi.MFIsExist(mmsid, userMid)) {
             // user object exist.
             console.warn("User register failed. Existing user")
-            // return {status: "failure", reason: "Username is taken"}
+            return {status: "failure", reason: "Username is taken"}
         }
         user["mid"] = userMid
         user["password"] = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)

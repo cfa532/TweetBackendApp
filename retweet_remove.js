@@ -15,6 +15,7 @@
     count = count > 0 ? count - 1 : 0
     lapi.Set(mmsid, RETWEET_COUNT, count)
     lapi.MMBackup(authSid, tweetId, "", "delref=true")
+    lapi.MiMeiPublish(authSid, "", tweetId)
     
     return lapi.RunMApp("get_tweet", {
       aid: request["aid"], ver: "last",

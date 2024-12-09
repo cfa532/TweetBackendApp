@@ -27,7 +27,9 @@
         }
         lapi.Set(mmsid, BOOKMARK_COUNT, count)
         lapi.MMBackup(authSid, tweetId, "", "delref=true")
-        // lapi.MiMeiPublish(authSid, "", tweetId)
+        lapi.MiMeiPublish(authSid, "", tweetId)
+        
+        console.log("bookmark=", count, userId, tweetId)
 
         return {hasBookmarked: hasMarked?false:true, count: count}
     } catch(e) {

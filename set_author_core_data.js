@@ -9,10 +9,16 @@
         user.password = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)
 
         let mmsid = lapi.MMOpen(authSid, user.mid, "cur")
+        let oldUserData = lapi.Get(authSid, OWNER_DATA_KEY)
         lapi.Set(mmsid, OWNER_DATA_KEY, user)
         lapi.MMBackup(authSid, user.mid, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", user.mid)
 
+        // check if writable node Id is changed. Call sync user on the new node if true.
+        // if (oldUserData["hostIds"][0] !== user["hostIds"][0]) {
+        // }
+        // In reality, copy of user data on each node should be in sync.
+        
         // lapi.RunMApp("update_app_data", {aid: request["aid"], ver: "last", user: JSON.stringify(user)}, [])
         console.log("set userdata", JSON.stringify(user))
         delete user.password

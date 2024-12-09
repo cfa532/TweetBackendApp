@@ -23,8 +23,9 @@
 
         lapi.MMDelVers(mmsid, tweetId)
         lapi.MMBackup(authSid, tweetId, "", "delref=true")
-        console.log("Delete tweet ", JSON.stringify(tweet))
         lapi.MiMeiPublish(authSid, "", authorMid)
+        console.log("Delete tweet ", JSON.stringify(tweet))
+
         return tweetId
     } catch(e) {
         console.error("Error delete_tweet:", JSON.stringify(request), e)

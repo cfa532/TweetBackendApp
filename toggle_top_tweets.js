@@ -16,6 +16,8 @@
             lapi.Hset(mmsid, TOP_TWEETS, tweetId, Date.now())
         }
         lapi.MMBackup(authSid, userId, "", "delref=true")
+        lapi.MiMeiPublish(authSid, "", userId)
+        
         return lapi.RunMApp("get_top_tweets", {aid: request["aid"], ver:"last",
             userid: userId}, [])
     } catch(e) {

@@ -16,6 +16,7 @@
     count++
     lapi.Set(mmsid, RETWEET_COUNT, count)
     lapi.MMBackup(authSid, tweetId, "", "delref=true")
+    lapi.MiMeiPublish(authSid, "", tweetId)
 
     console.log("Add retweetId=", retweetId, count)
     return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last", userid: fansId, tweetid: tweetId}, [])

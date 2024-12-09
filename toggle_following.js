@@ -20,12 +20,12 @@
             console.log(userId, "unfollows", otherId)
         } else {
             lapi.Hset(mmsid, FOLLOWINGS_LIST, otherId, Date.now())
-            // let dhtreply = lapi.MiMeiProvide(authSid, "", otherId, false)
             // lapi.MiMeiSync(authSid, "", otherId, {})
+            // let dhtreply = lapi.MiMeiProvide(authSid, "", otherId, false)
             console.log(userId, "follows", otherId)
         }
         lapi.MMBackup(mmsid, userId, "", "delref=true")
-        mmsid = lapi.MMOpen(authSid, userId, "last")
+        lapi.MiMeiPublish(authSid, "", userId)
         
         // return the updated following status on the otherid
         return isFollowing ? false : true

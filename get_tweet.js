@@ -12,16 +12,15 @@
         const BOOKMARK_LIST = "tweet_bookmark_list"
         const RETWEET_LIST = "tweet_retweet_list"
 
-        // not the author of the tweet, but current app user.
-        // Need to find it the user has liked or bookmarked the tweet.
-        let userId = request["userid"]
+        // Need to find out if the current user has liked or bookmarked the tweet.
+        let appUserId = request["userid"]
         let tweetId = request["tweetid"]
         let mmsid = lapi.MMOpen("", tweetId, "last")
         let tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
         if (!tweet) return null
 
-        // private tweet readable only by author
-        if (userId != tweet.authorId && tweet.isPrivate) {
+        // private tweet readable only by author of the tweet
+        if (appUserId != tweet.authorId && tweet.isPrivate) {
             return null
         }
 
@@ -31,9 +30,9 @@
         let likeCount = lapi.Get(mmsid, LIKE_COUNT)
 
         // check if the appUser has bookmarked or liked the tweet
-        let hasLiked = lapi.Hget(mmsid, LIKE_LIST, userId)
-        let hasBookmarked = lapi.Hget(mmsid, BOOKMARK_LIST, userId)
-        let hasRetweeted = lapi.Hget(mmsid, RETWEET_LIST, userId)
+        let hasLiked = lapi.Hget(mmsid, LIKE_LIST, appUserId)
+        let hasBookmarked = lapi.Hget(mmsid, BOOKMARK_LIST, appUserId)
+        let hasRetweeted = lapi.Hget(mmsid, RETWEET_LIST, appUserId)
 
         ret = {
             // tweet core data

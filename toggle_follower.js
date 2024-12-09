@@ -18,6 +18,7 @@
             console.log(userId, "removed follower", otherId)
         }
         lapi.MMBackup(mmsid, userId, "", "delref=true")
+        lapi.MiMeiPublish(authSid, "", userId)
     } catch(e) {
         console.error("Error toggle_follower", JSON.stringify(request), e)
     }
