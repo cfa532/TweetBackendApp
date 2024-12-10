@@ -12,14 +12,16 @@
     let mmsid = lapi.MMOpen(authSid, tweetId, "cur")
     let count = lapi.Get(mmsid, RETWEET_COUNT)
 
-    lapi.Hset(mmsid, RETWEET_LIST, fansId, retweetId)
+    // use retweetId as index because one user can retweet many times.
+    lapi.Hset(mmsid, RETWEET_LIST, retweetId, fansId)
     count++
     lapi.Set(mmsid, RETWEET_COUNT, count)
     lapi.MMBackup(authSid, tweetId, "", "delref=true")
     lapi.MiMeiPublish(authSid, "", tweetId)
 
-    console.log("Add retweetId=", retweetId, count)
-    return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last", userid: fansId, tweetid: tweetId}, [])
+    // retrieve the original tweet after updating it.
+    return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
+      userid: fansId, tweetid: tweetId}, [])
   } catch (e) {
     console.error("Error toggle_likes", JSON.stringify(request), e)
   }

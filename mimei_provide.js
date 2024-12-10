@@ -3,17 +3,23 @@
      * If tweetId is passed in, provide for the tweet. Otherwise, provide the user only
      */
     try {
+        let userNodeId = request["nodeid"]
         let userId = request["userid"]
         let tweetId = request["tweetid"]
         let authSid = lapi.BELoginAsAuthor()
+        let hostId = lapi.GetVar("", "hostid")
+        // if current user shares the same node, do nothing.
+        if (hostId == userNodeId)
+            return
+
         if (tweetId) {
             // provide for tweet
-            lapi.MiMeiSync(authSid, "", tweetId, [])
+            lapi.MiMeiSync(authSid, "", tweetId, {})
             let dhtreply = lapi.MiMeiProvide(authSid, "", tweetId)
             console.log("provide tweet", JSON.stringify(dhtreply), tweetId)
         } else {
             // provide for user
-            lapi.MiMeiSync(authSid, "", userId, [])
+            lapi.MiMeiSync(authSid, "", userId, {})
             let dhtreply = lapi.MiMeiProvide(authSid, "", userId)
             console.log("provide user", JSON.stringify(dhtreply), userId)
         }

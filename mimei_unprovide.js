@@ -5,7 +5,6 @@
     try {
         // nodeId is the writable node of the user, or the base node of the user.
         let userNodeId = request["nodeid"]
-
         let userId = request["userid"]
         let tweetId = request["tweetid"]
         let authSid = lapi.BELoginAsAuthor()
@@ -26,6 +25,6 @@
             console.log("Unprovide user", userId, JSON.stringify(dhtreply))
         }
     } catch(e) {
-        console.error("Error provide", JSON.stringify(request), e)
+        console.error("Error unprovide", JSON.stringify(request), e)
     }
 })(request, args)
