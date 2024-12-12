@@ -26,7 +26,7 @@
         lapi.Set(mmsid, LIKE_COUNT, 0)
         lapi.Set(mmsid, BOOKMARK_COUNT, 0)
         lapi.MMBackup(authSid, mid, "", "delref=true")
-        // lapi.MiMeiPublish(authSid, "", mid)
+        lapi.MiMeiPublish(authSid, "", mid)     // publish the comment's Tweet object
 
         // add comment to comment_list of the tweet
         let tweetId = request["tweetid"]
@@ -47,6 +47,7 @@
         lapi.MMAddRef(authSid, tweetId, mid)
         lapi.MiMeiPublish(authSid, "", tweetId)
         console.log("Comment added.", JSON.stringify(comment))
+
         // return comment mid and number of comments on the tweet.
         return {commentId: mid, count: count}
     } catch(e) {

@@ -2,10 +2,7 @@
     try {
         // user registration
         const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
-        const APP_EXT = "com.example.twitterclone"
-        let APP_MARK = "στηναρχή"   // use device ID in future
-        APP_MARK = request["phrase"]
-    
+        const APP_EXT = "com.example.twitterclone"    
         const OWNER_DATA_KEY = "data_of_author"
         const BOOKMARK_COUNT = "tweet_bookmark_count"
         const LIKE_COUNT = "tweet_like_count"
@@ -19,7 +16,7 @@
         if (lapi.MFIsExist(mmsid, userMid)) {
             // user object exist.
             console.warn("User register failed. Existing user")
-            return {status: "failure", reason: "Username is taken"}
+            // return {status: "failure", reason: "Username is taken"}
         }
         user["mid"] = userMid
         user["password"] = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)
