@@ -9,7 +9,6 @@
         user.password = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)
 
         let mmsid = lapi.MMOpen(authSid, user.mid, "cur")
-        let oldUserData = lapi.Get(authSid, OWNER_DATA_KEY)
         lapi.Set(mmsid, OWNER_DATA_KEY, user)
         lapi.MMBackup(authSid, user.mid, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", user.mid)
