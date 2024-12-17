@@ -14,8 +14,7 @@
 
     // use retweetId as index because one user can retweet many times.
     lapi.Hset(mmsid, RETWEET_LIST, retweetId, fansId)
-    count++
-    lapi.Set(mmsid, RETWEET_COUNT, count)
+    lapi.Set(mmsid, RETWEET_COUNT, ++count)
     lapi.MMBackup(authSid, tweetId, "", "delref=true")
     lapi.MiMeiPublish(authSid, "", tweetId)
 

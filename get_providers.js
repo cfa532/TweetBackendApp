@@ -19,7 +19,6 @@
                 ips.push(element2[0])
             })
         });
-        console.log("Provider's IPs for", mid, JSON.stringify(ips))
         return ips
     } catch(e) {
         console.error("Error get_provider:", JSON.stringify(request), e)
