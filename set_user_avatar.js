@@ -9,7 +9,7 @@
         lapi.MMBackup(authSid, user.mid, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", user.mid)
 
-        lapi.RunMApp("update_app_data", {aid: request["aid"], ver: "last", user: JSON.stringify(user)}, [])
+        // lapi.RunMApp("update_app_data", {aid: request["aid"], ver: "last", user: JSON.stringify(user)}, [])
         console.log("set user avatar", JSON.stringify(user))
     } catch(e) {
         console.error("Error set_user_avatar", JSON.stringify(request), e)

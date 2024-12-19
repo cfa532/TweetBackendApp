@@ -16,10 +16,10 @@
 
         let mmsid = lapi.MMOpen(authSid, tweetId, "cur")
         lapi.Zrem(mmsid, COMMENT_LIST, commentId)
-        let count = lapi.Get(mmsid, COMMENT_COUNT) - 1
+        let count = Math.max(0, lapi.Get(mmsid, COMMENT_COUNT)-1)
         lapi.Set(mmsid, COMMENT_COUNT, count)
         lapi.MMBackup(authSid, tweetId, "", "delref=true")
-        lapi.MiMeiPublish(authSid, "", tweetid)
+        lapi.MiMeiPublish(authSid, "", tweetId)
         console.log("Delete comment", commentId, count)
         return count
     } catch(e) {
