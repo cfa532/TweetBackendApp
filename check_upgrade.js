@@ -10,21 +10,18 @@
         let appVersion = lapi.GetVar("", "mimeiversions", mid)
         console.log("Package ver:", JSON.stringify(appVersion), mid)
 
-        //{
-        // "Versions":[{"Version":"1","MacRes":"QmRTT1L6pxpeyptApszu9LYzNn9sMgoJg6qgTpCe54gqGD","MacRef":"MqKW0iTyhcZ77pPDD4owkVfw2ql"}],
-        // "SpecialVers":[{"VerName":"last","Version":"1"}],
-        // "MinDifSeq":0
-        // }
-        // hdF-zawE_0MH0TSVuBvAU_yA0HA  upgrade package mimei
-        // When uploading new installation package, call the following code.
-        // ./publish_upgrade.sh app-release.apk
-        //
+        /**
+         * http://tweet1.sharefire.store/upload
+         * Login with account: developer, upload new installation package.
+         * 9OCLYP-SXzen3e171-Ei_6N3Gwl installation package mimei.
+         * command line tool: ./publish_upgrade.sh app-release.apk
+         */
         return {
             // version: appVersion.Versions[appVersion.Versions.length-1].Version,
-            version: 20,
+            version: 20,  // set it larger than defaultConfig.versionName in build.gradle to force upgrade.
             packageId: mid,
             mission: "minor",     // App stop working without upgrade. minor, major, critical. Not used.
-            domain: "tweet1.sharefire.store",   // base url to be used for deeplink.
+            domain: "tweet1.sharefire.store",   // base url to be used for deeplink and share.
         }
     } catch(e) {
         console.error("Error check_upgrade", JSON.stringify(request), e)
