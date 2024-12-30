@@ -42,6 +42,7 @@
             "content": tweet.content,
             "attachments": tweet.attachments,
             "isPrivate": tweet.isPrivate,
+            "downloadable": tweet.downloadable,
             "originalTweetId": tweet.originalTweetId,
             "originalAuthorId": tweet.originalAuthorId,
             "timestamp": tweet.timestamp,
