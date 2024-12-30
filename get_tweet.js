@@ -20,9 +20,9 @@
         if (!tweet) return null
 
         // private tweet readable only by author of the tweet
-        if (appUserId != tweet.authorId && tweet.isPrivate) {
-            return null
-        }
+        // if (appUserId != tweet.authorId && tweet.isPrivate) {
+        //     return null
+        // }
 
         let bookmarkCount = lapi.Get(mmsid, BOOKMARK_COUNT)
         let retweetCount = lapi.Get(mmsid, RETWEET_COUNT)
@@ -41,8 +41,8 @@
             "title": tweet.title,
             "content": tweet.content,
             "attachments": tweet.attachments,
-            "isPrivate": tweet.isPrivate,
-            "downloadable": tweet.downloadable,
+            "isPrivate": tweet.isPrivate,           // viewable by author only.
+            "downloadable": tweet.downloadable,     // if the attachment is downloadable
             "originalTweetId": tweet.originalTweetId,
             "originalAuthorId": tweet.originalAuthorId,
             "timestamp": tweet.timestamp,
