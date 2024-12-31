@@ -4,11 +4,18 @@
         const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
         const APP_EXT = "com.example.twitterclone"
         const authSid = lapi.BELoginAsAuthor()
-
         let user = JSON.parse(request["user"])
-        user.password = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)
+        const mmsid = lapi.MMOpen(authSid, user.mid, "cur")
+        let userInDB = lapi.Get(mmsid, OWNER_DATA_KEY)
+        /**
+         * When user update without providing password, keep the old one.
+         */
+        if (user.password) {
+            user.password = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)
+        } else {
+            user.password = userInDB.password
+        }
 
-        let mmsid = lapi.MMOpen(authSid, user.mid, "cur")
         lapi.Set(mmsid, OWNER_DATA_KEY, user)
         lapi.MMBackup(authSid, user.mid, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", user.mid)
