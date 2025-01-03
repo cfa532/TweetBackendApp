@@ -4,7 +4,7 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
-AppId="d4lRyhABgqOnqY4bURSm_T-4FZ4"     # Tweet App
+AppId="d4lRyhABgqOnqY4bURSm_T-4FZ4"     # Tweet App twbe
 FileId="hdF-zawE_0MH0TSVuBvAU_yA0HA"    # upgrade APK
 KeyFile=~/tweet/gen8.key
 LeitherPath=~/tweet/Leither
