@@ -5,7 +5,7 @@
         const APP_MARK = "package upgrade download"
         let authSid = lapi.BELoginAsAuthor()
 
-        // get mid of upgrade app package. hdF-zawE_0MH0TSVuBvAU_yA0HA
+        // get mid of upgrade app package. 9OCLYP-SXzen3e171-Ei_6N3Gwl
         let mid = lapi.MMCreate(authSid, APP_ID, APP_EXT, APP_MARK, 1, 0x07276704)
         // let ip = lapi.RunMApp("get_provider", {aid: request["aid"], ver: "last", mid: mid}, [])
         // console.log("Upgrade package mid", mid, ip)
