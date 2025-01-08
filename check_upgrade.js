@@ -21,7 +21,7 @@
             version: 24,  // set it larger than defaultConfig.versionName in build.gradle to force upgrade.
             packageId: mid,
             mission: "minor",     // App stop working without upgrade. minor, major, critical. Not used.
-            domain: "t3.sharefire.store",   // base url to be used for deeplink and share.
+            domain: "t4.sharefire.store",   // base url to be used for deeplink and share.
         }
     } catch(e) {
         console.error("Error check_upgrade", JSON.stringify(request), e)
