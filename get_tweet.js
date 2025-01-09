@@ -39,7 +39,6 @@
             "mid": tweet.mid,
             "authorId": tweet.authorId,
             "title": tweet.title,
-            "content": tweet.content,
             "attachments": tweet.attachments,
             "isPrivate": tweet.isPrivate,           // viewable by author only.
             "downloadable": tweet.downloadable,     // if the attachment is downloadable
@@ -56,6 +55,8 @@
                 hasRetweeted ? true : false,
             ],
         }
+        if (tweet.content)
+            ret["content"] = tweet.content  // prevent null from becoming empty string. 
         console.log("Get tweet", JSON.stringify(ret))
         return ret
     } catch(e) {
