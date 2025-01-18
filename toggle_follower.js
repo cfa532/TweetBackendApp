@@ -8,7 +8,9 @@
         let authSid = lapi.BELoginAsAuthor()
         let mmsid = lapi.MMOpen(authSid, userId, "cur")
 
-        // IMPORTANT: bool is passed as string
+        ///////////////////////////////////////
+        //  IMPORTANT: bool is passed as string
+        ///////////////////////////////////////
         if (isFollower == "true") {
             // otherId is a follower of userId
             lapi.Hset(mmsid, FOLLOWERS_LIST, otherId, Date.now())

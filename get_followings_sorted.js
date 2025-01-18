@@ -4,8 +4,7 @@
 
         let userId = request["userid"]
         let mmsid = lapi.MMOpen("", userId, "last")
-        let keys = lapi.Hkeys(mmsid, FOLLOWINGS_LIST)
-        return keys
+        return lapi.Hgetall(mmsid, FOLLOWINGS_LIST)
     } catch(e) {
         console.error("Error get_followings", JSON.stringify(request), e)
     }
