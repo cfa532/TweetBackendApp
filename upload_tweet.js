@@ -13,6 +13,7 @@
         // Keys in App mimei database
         const TWT_CONTENT_KEY = "core_data_of_tweet"
         const TWT_LIST_KEY = "list_of_tweets_mid"
+        // console.log("upload_tweet", JSON.stringify(request))
 
         let tweet = JSON.parse(request["tweet"])
         let authSid = lapi.BELoginAsAuthor()
