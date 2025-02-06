@@ -9,7 +9,7 @@
         let mmsid = lapi.MMOpen(authSid, userId, "cur")
         let user = lapi.Get(mmsid, OWNER_DATA_KEY)
         if (!user) {
-            console.log("User does not exist.", request["username"])
+            console.error("User does not exist.", request["username"])
             return {status: "failure", reason: "User does not exist"}
         }
         console.log("Check login user", JSON.stringify(user))
@@ -23,6 +23,6 @@
             return {status: "failure", reason: "Wrong password"}
         }
     } catch(e) {
-        console.log("Error login", JSON.stringify(request), e)
+        console.error("Error login", JSON.stringify(request), e)
     }
 })(request, args)
