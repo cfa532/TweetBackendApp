@@ -16,7 +16,7 @@
         }
         let offset = parseInt(request["offset"], 10)
         let b = new Uint8Array(args[0])         // key point.
-        let count = lapi.MFSetData(fsid, b, offset);
+        lapi.MFSetData(fsid, b, offset);
         return fsid;
     } catch(e) {
         console.error("Error upload_ipfs:", JSON.stringify(request), e)
