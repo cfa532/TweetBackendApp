@@ -17,10 +17,12 @@
             count -= 1
         } 
         else {
-            // use timestamp in place of boolean, for sorting if necessary.
+            // Use timestamp in place of boolean, for sorting if necessary.
             // Turn it back to boolean when returning to app.
             lapi.Hset(mmsid, LIKE_LIST, userId, Date.now())
             count += 1
+
+            // provide for this tweet when liked it.
         }
         lapi.Set(mmsid, LIKE_COUNT, count)
         lapi.MMBackup(authSid, tweetId, "", "delref=true")

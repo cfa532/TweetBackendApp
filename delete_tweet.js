@@ -8,7 +8,8 @@
         let authorMid = request["authorid"]
         let authSid = lapi.BELoginAsAuthor()
 
-        // if there is attachments, delete its reference.
+        // If there is attachments, delete its reference.
+        // If not referred, attachments will be deleted by garbage collector
         let mmsid = lapi.MMOpen(authSid, tweetId, "last")
         let tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
         tweet.attachments?.forEach(element => {
@@ -21,6 +22,7 @@
         lapi.MMBackup(authSid, authorMid, "", "delref=true")
         lapi.MMDelRef(authSid, authorMid, tweetId)
 
+        lapi.MiMeiUnprovide(authSid, "", tweetId)
         lapi.MMDelVers(mmsid, tweetId)
         lapi.MMBackup(authSid, tweetId, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", authorMid)

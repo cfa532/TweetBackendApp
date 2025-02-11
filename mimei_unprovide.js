@@ -18,7 +18,8 @@
             let dhtreply = lapi.MiMeiUnprovide(authSid, "", tweetId)
             lapi.MMDelVers(authSid, tweetId)
             console.log("Unprovide tweet", tweetId, JSON.stringify(dhtreply))
-        } else {
+        }
+        if (userId) {
             // provide for user
             let dhtreply = lapi.MiMeiUnprovide(authSid, "", userId)
             lapi.MMDelVers(authSid, userId)

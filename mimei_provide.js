@@ -1,6 +1,6 @@
 ((request, args)=>{
     /**
-     * If tweetId is passed in, provide for the tweet. Otherwise, provide the user only
+     * Provide the user or tweet to the DHT network.
      */
     try {
         let userNodeId = request["nodeid"]
@@ -17,7 +17,8 @@
             lapi.MiMeiSync(authSid, "", tweetId, {})
             let dhtreply = lapi.MiMeiProvide(authSid, "", tweetId)
             console.log("provide tweet", JSON.stringify(dhtreply), tweetId)
-        } else {
+        } 
+        if (userId) {
             // provide for user
             lapi.MiMeiSync(authSid, "", userId, {})
             let dhtreply = lapi.MiMeiProvide(authSid, "", userId)
