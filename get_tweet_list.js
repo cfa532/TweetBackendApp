@@ -9,7 +9,7 @@
         let userId = request["userid"]
         let mmsid = lapi.MMOpen("", userId, "last")
     
-        let arr = lapi.Zrangebyscore(mmsid, TWT_LIST_KEY, endScore, startScore, 0, 100)
+        let arr = lapi.Zrangebyscore(mmsid, TWT_LIST_KEY, endScore, startScore, 0, 100) // from small to large
             .map(sp => sp.Member)
         console.log("get_tweet_list", startScore, endScore, userId, JSON.stringify(arr))
         return arr
