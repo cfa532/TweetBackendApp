@@ -57,7 +57,6 @@
         }
         if (tweet.content)
             ret["content"] = tweet.content  // prevent null from becoming empty string. 
-        console.log("Get tweet", JSON.stringify(ret))
         return ret
     } catch(e) {
         console.error("Error get_tweet", JSON.stringify(request), e)

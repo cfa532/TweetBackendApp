@@ -3,26 +3,18 @@
      * Provide the user or tweet to the DHT network.
      */
     try {
-        let userNodeId = request["nodeid"]
-        let userId = request["userid"]
-        let tweetId = request["tweetid"]
+        let targetId = request["mid"]
+        let isProvider = request["provide"]
         let authSid = lapi.BELoginAsAuthor()
-        let hostId = lapi.GetVar("", "hostid")
-        // if current user shares the same node, do nothing.
-        if (hostId == userNodeId)
-            return
 
-        if (tweetId) {
-            // provide for tweet
-            lapi.MiMeiSync(authSid, "", tweetId, {})
-            let dhtreply = lapi.MiMeiProvide(authSid, "", tweetId)
-            console.log("provide tweet", JSON.stringify(dhtreply), tweetId)
-        } 
-        if (userId) {
-            // provide for user
-            lapi.MiMeiSync(authSid, "", userId, {})
-            let dhtreply = lapi.MiMeiProvide(authSid, "", userId)
-            console.log("provide user", JSON.stringify(dhtreply), userId)
+        if (isProvider == "true") {
+            lapi.MiMeiSync(authSid, "", targetId, {})
+            let dhtreply = lapi.MiMeiProvide(authSid, "", targetId)
+            console.log("provide", targetId, JSON.stringify(dhtreply))
+        } else {
+            let dhtreply = lapi.MiMeiUnprovide(authSid, "", targetId)
+            lapi.MMDelVers(authSid, targetId)
+            console.log("Unprovide", targetId, JSON.stringify(dhtreply))
         }
     } catch(e) {
         console.error("Error provide", JSON.stringify(request), e)

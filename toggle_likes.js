@@ -11,6 +11,7 @@
 
         let count = lapi.Get(mmsid, LIKE_COUNT)
         count = count ? count : 0
+
         let hasLiked = lapi.Hget(mmsid, LIKE_LIST, userId) ? true : false
         if (hasLiked) {
             lapi.Hdel(mmsid, LIKE_LIST, userId)
@@ -29,7 +30,7 @@
         lapi.MiMeiPublish(authSid, "", tweetId)
 
         console.log("liked=", !hasLiked, count, userId, tweetId)
-        return {hasLiked: hasLiked ? false:true, count: count}
+        return {hasLiked: hasLiked ? false : true, count: count}
     } catch(e) {
         console.error("Error toggle_likes", JSON.stringify(request), e)
     }

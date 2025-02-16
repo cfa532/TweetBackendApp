@@ -4,9 +4,6 @@
         const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
         const APP_EXT = "com.example.twitterclone"    
         const OWNER_DATA_KEY = "data_of_author"
-        const BOOKMARK_COUNT = "tweet_bookmark_count"
-        const LIKE_COUNT = "tweet_like_count"
-        const COMMENT_COUNT = "tweet_comment_count"
         const FOLLOWINGS_LIST = "list_of_followings_mid"
 
         let authSid = lapi.BELoginAsAuthor()
@@ -16,14 +13,12 @@
 
         if (lapi.Get(mmsid, OWNER_DATA_KEY)) {
             console.warn("User register failed. Existing user", userMid)
-            return {status: "failure", reason: "Username is taken"}
+            // return {status: "failure", reason: "Username is taken"}
         }
         user["mid"] = userMid
         user["password"] = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)
         lapi.Set(mmsid, OWNER_DATA_KEY, user)      // create default user data area
-        lapi.Set(mmsid, BOOKMARK_COUNT, 0)
-        lapi.Set(mmsid, LIKE_COUNT, 0)
-        lapi.Set(mmsid, COMMENT_COUNT, 0)
+
         user["followingList"]?.forEach(mid => {
             lapi.Hset(mmsid, FOLLOWINGS_LIST, mid, Date.now())
         });

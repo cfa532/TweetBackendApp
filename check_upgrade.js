@@ -22,7 +22,7 @@
             mission: "minor",     // App stop working without upgrade. minor, major, critical. Not used.
             domain: "t1.fireshare.store",   // base url to be used for deeplink and share.
         }
-        console.log("check_upgrade", request["uid"], JSON.stringify(ret))
+        console.log("check_upgrade", JSON.stringify(ret))
         return ret
     } catch(e) {
         console.error("Error check_upgrade", JSON.stringify(request), e)

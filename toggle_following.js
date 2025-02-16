@@ -1,27 +1,25 @@
 ((request, args)=>{
     try {
+        const OWNER_DATA_KEY = "data_of_author"
         const FOLLOWINGS_LIST = "list_of_followings_mid"
+        const followingCount = "followingCount"
 
         let userId = request["userid"]
         let otherId = request["otherid"]     // user to follow or unfollow
 
         let authSid = lapi.BELoginAsAuthor()
         let mmsid = lapi.MMOpen(authSid, userId, "cur")
-        console.log(JSON.stringify(request))
-        console.log(JSON.stringify(lapi.GetVar("", "mminfo", userId)))
-        console.log(JSON.stringify(lapi.GetVar("", "mminfo", otherId)))
-        
+        let user = lapi.Get(mmsid, OWNER_DATA_KEY)
+
         // check if the otherid is in the following list of the user
         let isFollowing = lapi.Hget(mmsid, FOLLOWINGS_LIST, otherId)
         if (isFollowing) {
             lapi.Hdel(mmsid, FOLLOWINGS_LIST, otherId)
-            // let dhtreply = lapi.MiMeiUnprovide(authSid, "", otherId, false)
-            // lapi.MMDelVers(authSid, otherId)
+            user[followingCount] = user[followingCount]>0 ? user[followingCount]-1 : 0
             console.log(userId, "unfollows", otherId)
         } else {
             lapi.Hset(mmsid, FOLLOWINGS_LIST, otherId, Date.now())
-            // lapi.MiMeiSync(authSid, "", otherId, {})
-            // let dhtreply = lapi.MiMeiProvide(authSid, "", otherId, false)
+            user[followingCount] += 1
             console.log(userId, "follows", otherId)
         }
         lapi.MMBackup(mmsid, userId, "", "delref=true")

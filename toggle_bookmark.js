@@ -1,5 +1,5 @@
 ((request, args)=>{
-    // update bookmark count of the tweet by users
+    // update bookmark count of a tweet
     try {
         const BOOKMARK_COUNT = "tweet_bookmark_count"
         const BOOKMARK_LIST = "tweet_bookmark_list"

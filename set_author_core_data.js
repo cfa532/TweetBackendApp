@@ -25,8 +25,6 @@
         // }
         // In reality, copy of user data on each node should be in sync.
         
-        // lapi.RunMApp("update_app_data", {aid: request["aid"], ver: "last", user: JSON.stringify(user)}, [])
-        console.log("set userdata", JSON.stringify(user))
         delete user.password
         return {user: JSON.stringify(user), status: "success"}
     } catch(e) {
