@@ -12,6 +12,7 @@
             console.error("User does not exist.", request["username"])
             return {status: "failure", reason: "User does not exist"}
         }
+
         console.log("Check login user", JSON.stringify(user))
         // need to check hashed password
         if (user.password == lapi.MMCreate(authSid, APP_ID, APP_EXT, request["password"], 1, 0x07276704)) {

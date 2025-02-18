@@ -14,10 +14,9 @@
         if (isFollower == "true") {
             // otherId is a follower of userId
             lapi.Hset(mmsid, FOLLOWERS_LIST, otherId, Date.now())
-            console.log(userId, "add follower", otherId)
         } else {
+            // otherId is NOT a follower of userId
             lapi.Hdel(mmsid, FOLLOWERS_LIST, otherId)
-            console.log(userId, "removed follower", otherId)
         }
         lapi.MMBackup(mmsid, userId, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", userId)
