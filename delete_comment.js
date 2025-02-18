@@ -2,7 +2,6 @@
     try {
         // request, lapi are global variables
         // each comment is a tweet object
-        const COMMENT_COUNT = "tweet_comment_count"
         const COMMENT_LIST = "comment_list_key"
 
         let commentId = request["commentid"]
@@ -16,8 +15,6 @@
 
         let mmsid = lapi.MMOpen(authSid, tweetId, "cur")
         lapi.Zrem(mmsid, COMMENT_LIST, commentId)
-        let count = Math.max(0, lapi.Get(mmsid, COMMENT_COUNT)-1)
-        lapi.Set(mmsid, COMMENT_COUNT, count)
         lapi.MMBackup(authSid, tweetId, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", tweetId)
         console.log("Delete comment", commentId, count)

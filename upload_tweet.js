@@ -5,15 +5,8 @@
     try {
         const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
         const APP_EXT = "com.example.twitterclone"
-        const BOOKMARK_COUNT = "tweet_bookmark_count"
-        const RETWEET_COUNT = "tweet_retweet_count"
-        const COMMENT_COUNT = "tweet_comment_count"
-        const LIKE_COUNT = "tweet_like_count"
-
-        // Keys in App mimei database
         const TWT_CONTENT_KEY = "core_data_of_tweet"
         const TWT_LIST_KEY = "list_of_tweets_mid"
-        console.log("upload_tweet", JSON.stringify(request))
 
         let tweet = JSON.parse(request["tweet"])
         let authSid = lapi.BELoginAsAuthor()
@@ -24,10 +17,6 @@
         tweet["timestamp"] = Date.now()
         lapi.Set(mmsid, TWT_CONTENT_KEY, tweet)
 
-        lapi.Set(mmsid, RETWEET_COUNT, 0)
-        lapi.Set(mmsid, COMMENT_COUNT, 0)
-        lapi.Set(mmsid, LIKE_COUNT, 0)
-        lapi.Set(mmsid, BOOKMARK_COUNT, 0)
         tweet.attachments?.forEach(element => {
             lapi.MMAddRef(authSid, mid, element.mid)
         });
@@ -38,18 +27,15 @@
         // only add the tweet in author's tweet list if it is not comment only.
         // otherwise only show the comment under the original tweet
         let authorId = tweet["authorId"]
-
         mmsid = lapi.MMOpen(authSid, authorId, "cur")
         function ScorePair() {}
         sp = new ScorePair
         sp.Score = Date.now()
         sp.Member = mid
         lapi.Zadd(mmsid, TWT_LIST_KEY, sp)
-
         lapi.MMAddRef(authSid, authorId, mid)
         lapi.MMBackup(authSid, authorId, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", authorId)
-        console.log("Tweet uploaded, ", JSON.stringify(tweet))
         return mid
     } catch(e) {
         console.error("Error upload_tweet:", JSON.stringify(request), e)

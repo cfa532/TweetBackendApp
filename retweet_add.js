@@ -1,7 +1,6 @@
 ((request, args) => {
   try {
     // Update the record of the original tweet, after retweeting it.
-    const RETWEET_COUNT = "tweet_retweet_count"
     const RETWEET_LIST = "tweet_retweet_list"
 
     let retweetId = request["retweetid"]  // the retweed Id created by the follower
@@ -10,11 +9,9 @@
 
     var authSid = lapi.BELoginAsAuthor()
     let mmsid = lapi.MMOpen(authSid, tweetId, "cur")
-    let count = lapi.Get(mmsid, RETWEET_COUNT)
 
     // use retweetId as index because one user can retweet many times.
     lapi.Hset(mmsid, RETWEET_LIST, retweetId, fansId)
-    lapi.Set(mmsid, RETWEET_COUNT, ++count)
     lapi.MMBackup(authSid, tweetId, "", "delref=true")
     lapi.MiMeiPublish(authSid, "", tweetId)
 
@@ -22,6 +19,6 @@
     return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
       userid: fansId, tweetid: tweetId}, [])
   } catch (e) {
-    console.error("Error toggle_likes", JSON.stringify(request), e)
+    console.error("Error retweet_add", JSON.stringify(request), e)
   }
 })(request, args)
