@@ -14,6 +14,6 @@
                 userid: visitorId, tweetid: sp.Member}, [])
         }).filter(e=> e)
     } catch(e) {
-        console.error("Error get_tweets by rank", JSON.stringify(request), e)
+        console.error("Error get_tweets_by_rank", JSON.stringify(request), e)
     }
 })(request, args)
