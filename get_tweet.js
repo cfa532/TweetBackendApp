@@ -33,9 +33,9 @@
             "originalAuthorId": tweet.originalAuthorId,
             "timestamp": tweet.timestamp,
             "bookmarkCount": lapi.Hlen(mmsid, BOOKMARK_LIST),
-            "retweetCount": lapi.Hlen(mmsid, RETWEET_LIST),
-            "commentCount": lapi.Hlen(mmsid, COMMENT_LIST),
             "likeCount": lapi.Hlen(mmsid, LIKE_LIST),
+            "commentCount": lapi.Zcard(mmsid, COMMENT_LIST),
+            "retweetCount": lapi.Hlen(mmsid, RETWEET_LIST),
             "favorites": [
                 hasLiked ? true : false,
                 hasBookmarked ? true : false,
