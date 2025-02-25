@@ -12,7 +12,7 @@
             console.log("Comment", JSON.stringify(sp))
             return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
                 userid: userId, tweetid: sp.Member}, [])
-        })
+        }).filter(e=> e)
         return ret
     } catch(e) {
         console.error("Error get_comments:", JSON.stringify(request), e)
