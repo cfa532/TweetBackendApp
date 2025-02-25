@@ -13,12 +13,19 @@
             return {status: "failure", reason: "User does not exist"}
         }
 
-        console.log("Check login user", JSON.stringify(user))
         // need to check hashed password
         if (user.password == lapi.MMCreate(authSid, APP_ID, APP_EXT, request["password"], 1, 0x07276704)) {
-            delete user.password
             // lapi.MiMeiSync(authSid, "", userId, {})
             // if enable Sync after login, remember to update hostIds of User data obj.
+            user["lastLogin"] = Date.now()
+            lapi.Set(mmsid, OWNER_DATA_KEY, user)
+            lapi.MMBackup(authSid, user.mid, "", "delref=true")
+            lapi.MiMeiPublish(authSid, "", user.mid)
+
+            /**
+             * Make sure to remove password from user data right before sending it back to client.
+             */
+            delete user.password
             return {user: JSON.stringify(user), status: "success"}
         } else {
             return {status: "failure", reason: "Wrong password"}
