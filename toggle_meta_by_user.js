@@ -32,6 +32,11 @@
         else {
             lapi.Hset(mmsid, key, mid, Date.now())
         }
+
+        // update the score of the user in AppData
+        lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
+            userid: userId, mid: mid}, [])
+
         lapi.MMBackup(authSid, userId, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", userId)
         return user

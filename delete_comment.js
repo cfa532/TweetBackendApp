@@ -1,11 +1,11 @@
 ((request, args)=>{
     try {
-        // request, lapi are global variables
-        // each comment is a tweet object
+        // add new comment to the tweet
         const COMMENT_LIST = "comment_list_key"
 
         let commentId = request["commentid"]
-        let tweetId = request["tweetid"]
+        let userId = request["userid"]
+        let tweetId = request["mid"]
         let authSid = lapi.BELoginAsAuthor()
 
         let csid = lapi.MMOpen(authSid, commentId, "cur")
@@ -17,7 +17,10 @@
         lapi.Zrem(mmsid, COMMENT_LIST, commentId)
         lapi.MMBackup(authSid, tweetId, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", tweetId)
-        console.log("Delete comment", commentId, count)
+
+        // update the score of the tweet in AppData
+        lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
+            userid: userId, mid: tweetId}, [])
         return count
     } catch(e) {
         console.error("Error delete_comment:", JSON.stringify(request), e)

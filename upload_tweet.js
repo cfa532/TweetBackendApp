@@ -36,6 +36,11 @@
         lapi.MMAddRef(authSid, authorId, mid)
         lapi.MMBackup(authSid, authorId, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", authorId)
+
+        // update the score of the user in AppData
+        lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
+            userid: tweet.authorId, mid: tweet.authorId}, [])
+
         return mid
     } catch(e) {
         console.error("Error upload_tweet:", JSON.stringify(request), e)
