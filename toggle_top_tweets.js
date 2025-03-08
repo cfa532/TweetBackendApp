@@ -17,6 +17,10 @@
         }
         lapi.MMBackup(authSid, userId, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", userId)
+
+        // update the score of the user in AppData
+        lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
+            userid: userId, mid: userId}, [])
         
         return lapi.RunMApp("get_top_tweets", {aid: request["aid"], ver:"last",
             userid: userId}, [])

@@ -4,6 +4,7 @@
         const BOOKMARK_LIST = "tweet_bookmark_list"
 
         let userId = request["userid"]    // appUser who is bookmarking the tweet
+        let authorId = request["authorid"] // author of the tweet
         let tweetId = request["tweetid"]
         var authSid = lapi.BELoginAsAuthor()
         let mmsid = lapi.MMOpen(authSid, tweetId, "cur")
@@ -19,6 +20,12 @@
         }
         lapi.MMBackup(authSid, tweetId, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", tweetId)
+        lapi.MiMeiPublish(authSid, "", userId)
+
+        // update the score of the user in AppData
+        lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
+            userid: authorId, mid: tweetId}, [])
+
         mmsid = lapi.MMOpen("", tweetId, "last")
         return {hasBookmarked: hasMarked ? false : true,
             count: lapi.Hlen(mmsid, BOOKMARK_LIST)}

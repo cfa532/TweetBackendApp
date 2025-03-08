@@ -3,7 +3,7 @@
         const FOLLOWERS_LIST = "list_of_followers_mid"
 
         let userId = request["userid"]
-        let otherId = request["otherid"]
+        let otherId = request["otherid"]    // the follower whose status is toggled
         let isFollower = request["isfollower"]
         let authSid = lapi.BELoginAsAuthor()
         let mmsid = lapi.MMOpen(authSid, userId, "cur")
@@ -20,6 +20,10 @@
         }
         lapi.MMBackup(mmsid, userId, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", userId)
+
+        // update the score of the user in AppData
+        lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
+            userid: userId, mid: userId}, [])
 
     } catch(e) {
         console.error("Error toggle_follower", JSON.stringify(request), e)

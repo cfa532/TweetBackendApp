@@ -12,6 +12,7 @@
             console.error("User does not exist.", request["username"])
             return {status: "failure", reason: "User does not exist"}
         }
+        // return {user: JSON.stringify(user), status: "success"}
 
         // need to check hashed password
         if (user.password == lapi.MMCreate(authSid, APP_ID, APP_EXT, request["password"], 1, 0x07276704)) {
@@ -21,7 +22,6 @@
             lapi.Set(mmsid, OWNER_DATA_KEY, user)
             lapi.MMBackup(authSid, user.mid, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", user.mid)
-
             /**
              * Make sure to remove password from user data right before sending it back to client.
              */

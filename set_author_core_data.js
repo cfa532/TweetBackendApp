@@ -20,10 +20,9 @@
         lapi.MMBackup(authSid, user.mid, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", user.mid)
 
-        // check if writable node Id is changed. Call sync user on the new node if true.
-        // if (oldUserData["hostIds"][0] !== user["hostIds"][0]) {
-        // }
-        // In reality, copy of user data on each node should be in sync.
+        // update the score of the user in AppData
+        lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
+            userid: user.mid, mid: user.mid}, [])
         
         delete user.password
         return {user: JSON.stringify(user), status: "success"}

@@ -16,6 +16,10 @@
         }
         lapi.MMBackup(mmsid, userId, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", userId)
+
+        // update the score of the user in AppData
+        lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
+            userid: userId, mid: userId}, [])
         
         // return the updated following status on the otherid,
         return isFollowing ? false : true

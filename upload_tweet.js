@@ -24,8 +24,6 @@
         lapi.MMBackup(authSid, mid, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", mid)     // publish the tweet ID.
 
-        // only add the tweet in author's tweet list if it is not comment only.
-        // otherwise only show the comment under the original tweet
         let authorId = tweet["authorId"]
         mmsid = lapi.MMOpen(authSid, authorId, "cur")
         function ScorePair() {}
@@ -36,6 +34,11 @@
         lapi.MMAddRef(authSid, authorId, mid)
         lapi.MMBackup(authSid, authorId, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", authorId)
+
+        // update the score of the user in AppData
+        lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
+            userid: tweet.authorId, mid: tweet.authorId}, [])
+
         return mid
     } catch(e) {
         console.error("Error upload_tweet:", JSON.stringify(request), e)
