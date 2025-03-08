@@ -6,21 +6,15 @@
     const mid = request["mid"]
     const mmsid = lapi.BEOpenAppDataNode("cur", APP_ID)
     try {
-        let currentHost = lapi.GetVar("", "hostid")
-        console.log("check score host", currentHost, hostId)
-
         req = {aid: APP_ID, ver: request.ver, userid: userId, mid: mid,
             nid: hostId,    // remote host id
             sid: mmsid,     // necessary to prove the user's authenticity.
         }
         // get new score from the remote host
         let newScore = lapi.RunMApp("node_get_score", req, [])
-        console.log("Check remote new score", newScore, hostId, userId, mid)
-
-        oldScore = lapi.Zscore(mmsid, userId, mid)
-        console.log("check local old score", oldScore, userId, mid)
-
+        let oldScore = lapi.Zscore(mmsid, userId, mid)
         if (newScore != oldScore) {
+            console.log("new and old score", newScore, oldScore, userId, mid)
             lapi.MiMeiSync(mmsid, "", mid, {})
             setScore(mmsid, userId, newScore, mid)
         }

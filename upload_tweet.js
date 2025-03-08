@@ -24,8 +24,6 @@
         lapi.MMBackup(authSid, mid, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", mid)     // publish the tweet ID.
 
-        // only add the tweet in author's tweet list if it is not comment only.
-        // otherwise only show the comment under the original tweet
         let authorId = tweet["authorId"]
         mmsid = lapi.MMOpen(authSid, authorId, "cur")
         function ScorePair() {}

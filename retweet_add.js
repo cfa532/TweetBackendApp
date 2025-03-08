@@ -15,6 +15,7 @@
     lapi.Hset(mmsid, RETWEET_LIST, retweetId, fansId)
     lapi.MMBackup(authSid, tweetId, "", "delref=true")
     lapi.MiMeiPublish(authSid, "", tweetId)
+    lapi.MiMeiPublish(authSid, "", authorId)
 
     // update the score of the original tweet in AppData
     lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",

@@ -41,6 +41,7 @@
         lapi.MMBackup(authSid, tweetId, "", "delref=true")
         lapi.MMAddRef(authSid, tweetId, mid)
         lapi.MiMeiPublish(authSid, "", tweetId)
+        lapi.MiMeiPublish(authSid, "", userId)
 
         // update the score of the parent tweet in AppData
         lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",

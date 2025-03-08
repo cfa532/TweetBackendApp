@@ -17,6 +17,7 @@
         lapi.Zrem(mmsid, COMMENT_LIST, commentId)
         lapi.MMBackup(authSid, tweetId, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", tweetId)
+        lapi.MiMeiPublish(authSid, "", userId)
 
         // update the score of the tweet in AppData
         lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
