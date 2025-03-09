@@ -53,7 +53,7 @@
 
         // return comment mid and number of comments on the tweet.
         const commentCount = lapi.Zcard(tweetSid, COMMENT_LIST)
-        JSON.stringify({commentId: commentId, count: commentCount})
+        JSON.stringify({commentId: commentId, count: commentCount})     // NO return statement here
     } catch(e) {
         console.error("Error add_comment_host", e, JSON.stringify(request))
     }
