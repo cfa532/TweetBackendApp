@@ -1,29 +1,27 @@
 ((request, args)=>{
     try {
         // add new comment to the tweet
-        const COMMENT_LIST = "comment_list_key"
+        const APP_ID = request["aid"]
+        const userId = request["userid"]
+        const tweetId = request["tweetid"]
+        const commentId = request["commentid"]
+        const hostId = request["hostid"]
 
-        let commentId = request["commentid"]
-        let userId = request["userid"]
-        let tweetId = request["mid"]
-        let authSid = lapi.BELoginAsAuthor()
-
-        let csid = lapi.MMOpen(authSid, commentId, "cur")
-        lapi.MMDelVers(csid, commentId)
-        lapi.MMBackup(authSid, commentId, "", "delref=true")
-        lapi.MMDelRef(authSid, tweetId, commentId)
-
-        let mmsid = lapi.MMOpen(authSid, tweetId, "cur")
-        lapi.Zrem(mmsid, COMMENT_LIST, commentId)
-        lapi.MMBackup(authSid, tweetId, "", "delref=true")
-        lapi.MiMeiPublish(authSid, "", tweetId)
-        lapi.MiMeiPublish(authSid, "", userId)
-
-        // update the score of the tweet in AppData
-        lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
-            userid: userId, mid: tweetId}, [])
-        return count
+        let nodeId = lapi.GetVar("", "hostid")    // current node id
+        if (nodeId != hostId) {
+            // send the request to the remote host
+            const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
+            const req = {aid: APP_ID, ver: "last", nid: hostId, sid: systemSid,
+                userid: userId, tweetid: tweetId, commentid: commentId}
+            let ret = lapi.RunMApp("delete_comment_host", req, [])
+            lapi.MiMeiSync(systemSid, "", tweetId, {})
+            return ret
+        } else {
+            const req = {aid: APP_ID, ver: "last",
+                userid: userId, tweetid: tweetId, commentid: commentId}
+            return lapi.RunMApp("delete_comment_host", req, [])
+        }
     } catch(e) {
-        console.error("Error delete_comment:", JSON.stringify(request), e)
+        console.error("Error delete_comment", JSON.stringify(request), e)
     }
 })(request, args)

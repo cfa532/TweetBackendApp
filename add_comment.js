@@ -11,21 +11,25 @@
         const userId = request["userid"]
         const tweetId = request["tweetid"]
         const hostId = request["hostid"]
+        const comment = JSON.parse(request["comment"])
 
         let nodeId = lapi.GetVar("", "hostid")    // current node id
-
         if (nodeId != hostId) {
             // send the request to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             const req = {aid: APP_ID, ver: "last", nid: hostId, sid: systemSid,
-                userid: userId, tweetid: tweetId, comment: request["comment"]}
-            return lapi.RunMApp("add_comment_host", req, [])
+                userid: userId, tweetid: tweetId, comment: JSON.stringify(comment)}
+            let ret = lapi.RunMApp("add_comment_host", req, [])
+            let authSid = lapi.BELoginAsAuthor()
+            lapi.MiMeiSync(authSid, "", ret["commentId"], {})
+            lapi.MiMeiSync(authSid, "", tweetId, {})
+            return ret
         } else {
             const req = {aid: APP_ID, ver: "last",
-                userid: userId, tweetid: tweetId, comment: request["comment"]}
+                userid: userId, tweetid: tweetId, comment: JSON.stringify(comment)}
             return lapi.RunMApp("add_comment_host", req, [])
         }
     } catch(e) {
-        console.error("Error add_comment:", JSON.stringify(request), e)
+        console.error("Error add_comment", JSON.stringify(request), e)
     }
 })(request, args)

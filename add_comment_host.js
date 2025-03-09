@@ -12,45 +12,50 @@
             const APP_ID = request["aid"]
             const userId = request["userid"]
             const APP_EXT = "com.example.twitterclone"
+            const comment = JSON.parse(request['comment'])
             
             // create a new tweet for the comment, which is a tweet object too.
             let authSid = lapi.BELoginAsAuthor()
-            let comment = JSON.parse(request["comment"])
             let commentId = lapi.MMCreate(authSid, APP_ID, APP_EXT, "{{auto}}", 2, 0x07276704)
+            console.log("Comment ID:", JSON.stringify(comment))
             comment["mid"] = commentId
-            comment["timestamp"] = Date.now()
-    
+            comment["timestamp"] = comment["timestamp"] ? comment["timestamp"] : Date.now()
             let commentSid = lapi.MMOpen(authSid, commentId, "cur")
             lapi.Set(commentSid, TWT_CONTENT_KEY, comment)
             comment.attachments?.forEach(element => {
                 // add attachment's reference to comment mid
-                lapi.MMAddRef(authSid, commentId, element.mid)
+                lapi.MMAddRef(commentSid, commentId, element.mid)
             });
-            lapi.MMBackup(authSid, commentId, "", "delref=true")
-            lapi.MiMeiPublish(authSid, "", commentId)     // publish the comment object as a tweet
+            lapi.MMBackup(commentSid, commentId, "", "delref=true")
+            lapi.MiMeiPublish(commentSid, "", commentId)     // publish the comment object as a tweet
+            console.log("Comment ID2:", JSON.stringify(comment))
     
             // add comment to comment_list of the tweet
             let tweetId = request["tweetid"]
             let tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
-            function ScorePair() {}
-            sp = new ScorePair
-            sp.Score = comment["timestamp"]
-            sp.Member = commentId
-            lapi.Zadd(tweetSid, COMMENT_LIST, sp)
+            lapi.Zadd(tweetSid, COMMENT_LIST, getScorePair(commentId))
     
-            lapi.MMBackup(authSid, tweetId, "", "delref=true")
-            lapi.MMAddRef(authSid, tweetId, commentId)
+            lapi.MMAddRef(tweetSid, tweetId, commentId)
+            lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", tweetId)
-            lapi.MiMeiPublish(authSid, "", userId)
     
-            // update the score of the parent tweet in AppData
+            // update the score of the parent tweet in AppData,
+            // so that any change in the tweet will be reflected in the AppData.
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
                 userid: userId, mid: tweetId}, [])
     
             // return comment mid and number of comments on the tweet.
             return {commentId: commentId, count: lapi.Zcard(tweetSid, COMMENT_LIST)}
+
+            function getScorePair(mid) {
+                function ScorePair() {}
+                sp = new ScorePair
+                sp.Score = Date.now()
+                sp.Member = mid
+                return sp
+            }
         } catch(e) {
-            console.error("Error add_comment:", JSON.stringify(request), e)
+            console.error("Error add_comment_host", JSON.stringify(request), e)
         }
     })(request, args)
     

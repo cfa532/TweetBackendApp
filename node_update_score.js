@@ -12,7 +12,7 @@
             // In this case, we need to update the score of the user's mimei id as well.
             ret = lapi.Zaddwithseq(mmsid, userId, userId)
         }
-        console.log("update score", userId, mid, lapi.Zscore(mmsid, userId, mid))
+        console.log("update score", lapi.Zscore(mmsid, userId, mid), userId, mid)
     } catch(e) {
         console.error("Error node_update_score", JSON.stringify(request), e)
     }
