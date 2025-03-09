@@ -12,13 +12,13 @@
         // Need to find out if the current user has liked or bookmarked the tweet.
         let appUserId = request["appuserid"]
         let tweetId = request["tweetid"]
-        let hostId = request["hostid"]  // host of the tweet's author
+        let hostId = request["hostid"]  // main host of the tweet's author
         let nodeId = request["nodeid"]  // node from which the tweet is loaded.
         let userId = request["userid"]  // author of the tweet
         if (nodeId != hostId) {
             console.log("Refresh tweet from a different host", hostId, nodeId, userId, tweetId)
             // loading tweet from a different host. Need to check the score.
-            lapi.RunMApp("node_check_score", {aid: request["aid"], ver:"last",
+            lapi.RunMApp("node_update_tweet", {aid: request["aid"], ver:"last",
                 hostid: hostId, userid: userId, mid: tweetId}, [])
         }
         let mmsid = lapi.MMOpen("", tweetId, "last")

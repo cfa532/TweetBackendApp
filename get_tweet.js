@@ -47,5 +47,6 @@
         return ret
     } catch(e) {
         console.error("Error get_tweet", JSON.stringify(request), e)
+        return null
     }
 })(request, args)
