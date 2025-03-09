@@ -8,7 +8,7 @@
         const TWT_CONTENT_KEY = "core_data_of_tweet"
         const TWT_LIST_KEY = "list_of_tweets_mid"
 
-        let tweet = JSON.parse(JSON.stringify(request['tweet']))
+        let tweet = JSON.parse(request['tweet'])
         let authSid = lapi.BELoginAsAuthor()
         let tweetId = lapi.MMCreate(authSid, APP_ID, APP_EXT, "{{auto}}", 2, 0x07276704)
         tweet["mid"] = tweetId

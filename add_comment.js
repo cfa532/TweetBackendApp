@@ -7,6 +7,7 @@
  * @param {string} [userId] - (Optional) The ID of the user posting the comment.
  */
     try {
+        const COMMENT_LIST = "comment_list_key"
         const APP_ID = request["aid"]
         const userId = request["userid"]
         const tweetId = request["tweetid"]
@@ -19,10 +20,17 @@
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             const req = {aid: APP_ID, ver: "last", nid: hostId, sid: systemSid,
                 userid: userId, tweetid: tweetId, comment: JSON.stringify(comment)}
-            let ret = lapi.RunMApp("add_comment_host", req, [])
-            let authSid = lapi.BELoginAsAuthor()
-            lapi.MiMeiSync(authSid, "", ret["commentId"], {})
-            lapi.MiMeiSync(authSid, "", tweetId, {})
+            let ret = JSON.parse(lapi.RunMApp("add_comment_host", req, []))
+
+            // lapi.MiMeiSync(systemSid, "", ret["commentId"], {})
+            lapi.MiMeiSync(systemSid, "", tweetId, {})
+
+            // sync all comments of the tweet
+            const tweetSid = lapi.MMOpen("", tweetId, "last")
+            lapi.Zrange(tweetSid, COMMENT_LIST, 0, -1).forEach(element => {
+                if (!lapi.MFIsExist("", element.Member))
+                    lapi.MiMeiSync(systemSid, "", element.Member, {})
+            })
             return ret
         } else {
             const req = {aid: APP_ID, ver: "last",
@@ -30,6 +38,6 @@
             return lapi.RunMApp("add_comment_host", req, [])
         }
     } catch(e) {
-        console.error("Error add_comment", JSON.stringify(request), e)
+        console.error("Error add_comment", e, JSON.stringify(request))
     }
 })(request, args)
