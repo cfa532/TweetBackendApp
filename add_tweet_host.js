@@ -1,4 +1,12 @@
-((request, args)=>{
+// ((request, args)=>{
+    function getScorePair(mid) {
+        function ScorePair() {}
+        sp = new ScorePair
+        sp.Score = Date.now()
+        sp.Member = mid
+        return sp
+    }
+
     // let ScorePair = new Function('score', 'member', 'return {score, member}')
     // request, lapi are global variables.
     // each comment is also tweet object.
@@ -32,16 +40,8 @@
         // update the score of the user in AppData
         lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
             userid: tweet.authorId, mid: tweet.authorId}, [])
-        return tweetId
-
-        function getScorePair(mid) {
-            function ScorePair() {}
-            sp = new ScorePair
-            sp.Score = Date.now()
-            sp.Member = mid
-            return sp
-        }
+        tweetId
     } catch(e) {
-        console.error("Error upload_tweet:", JSON.stringify(request), e)
+        console.error("Error add_tweet_host", JSON.stringify(request), e)
     }
-})(request, args)
+// })(request, args)

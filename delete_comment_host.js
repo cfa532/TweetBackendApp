@@ -6,7 +6,6 @@
         const userId = request["userid"]
         const tweetId = request["tweetid"]
         const authSid = lapi.BELoginAsAuthor()
-        console.log("delete comment", JSON.stringify(request))
 
         const commentSid = lapi.MMOpen(authSid, commentId, "cur")
         lapi.MMDelVers(commentSid, commentId)
@@ -22,9 +21,7 @@
         lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
             userid: userId, mid: tweetId}, [])
 
-        const ret = lapi.Zcard(tweetSid, COMMENT_LIST)      // return the number of comments
-        console.log("delete comment", ret)
-        ret
+        lapi.Zcard(tweetSid, COMMENT_LIST)      // return the number of comments
     } catch(e) {
         console.error("Error delete_comment_host", JSON.stringify(request), e)
     }
