@@ -1,8 +1,15 @@
 ((request, args)=>{
+    function getUser(mid) {
+        const OWNER_DATA_KEY = "data_of_author"
+        const mmsid = lapi.MMOpen("", mid, "last")
+        return lapi.Get(mmsid, OWNER_DATA_KEY)
+    }
+
     try {
         // add new comment to the tweet
         const APP_ID = request["aid"]
         const userId = request["userid"]
+        const user = getUser(userId)
         const tweetId = request["tweetid"]
         const commentId = request["commentid"]
         const hostId = request["hostid"]

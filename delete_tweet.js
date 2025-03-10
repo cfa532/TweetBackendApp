@@ -15,7 +15,7 @@
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
             // send the request to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            const req = {aid: APP_ID, ver: "last", nid: hostId, sid: systemSid,
+            const req = {aid: APP_ID, ver: "last", nid: user.hostIds[0], sid: systemSid,
                 tweetid: tweetId, authorid: userId}
             let ret = lapi.RunMApp("delete_tweet_host", req, [])
             return ret
