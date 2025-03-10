@@ -12,15 +12,15 @@
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             const req = {aid: APP_ID, ver: "last", nid: hostId, sid: systemSid,
                 tweet: request["tweet"]}
-            let ret = lapi.RunMApp("add_tweet_host", req, [])
+            const tweetId = lapi.RunMApp("add_tweet_host", req, [])
 
             lapi.MiMeiSync(systemSid, "", tweetId, {})
-            return ret
+            return tweetId
         } else {
             const req = {aid: APP_ID, ver: "last", tweet: request["tweet"]}
             return lapi.RunMApp("add_tweet_host", req, [])
         }
     } catch(e) {
-        console.error("Error upload_tweet", JSON.stringify(request), e)
+        console.error("Error add_tweet", JSON.stringify(request), e)
     }
 })(request, args)
