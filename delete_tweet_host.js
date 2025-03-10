@@ -7,7 +7,6 @@
         const userId = request["authorid"]
         const authSid = lapi.BELoginAsAuthor()
 
-        console.log("Delete tweet host", tweetId, JSON.stringify(request))
         // If there are attachments, delete all of the references.
         // If not referred, attachments will be deleted by garbage collector
         const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")

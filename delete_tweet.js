@@ -1,13 +1,18 @@
 ((request, args)=>{
+    function getUser(mid) {
+        const OWNER_DATA_KEY = "data_of_author"
+        const mmsid = lapi.MMOpen("", mid, "last")
+        return lapi.Get(mmsid, OWNER_DATA_KEY)
+    }
+
     try {
         const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
-        const hostId = request["hostid"]
         const tweetId = request["tweetid"]    // tweet Id to be removed
         const userId = request["authorid"]
-
+        const user = getUser(userId)
         const nodeId = lapi.GetVar("", "hostid")    // current node id
-        console.log("Delete tweet ", tweetId, " on host ", hostId, nodeId)
-        if (nodeId != hostId) {
+
+        if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
             // send the request to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             const req = {aid: APP_ID, ver: "last", nid: hostId, sid: systemSid,
