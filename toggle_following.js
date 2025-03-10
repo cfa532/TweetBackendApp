@@ -1,6 +1,6 @@
 ((request, args)=>{
     function toggleFollowing(
-        userId, otherId
+        userId, otherId, appId
     ) {
         try {
             const FOLLOWINGS_LIST = "list_of_followings_mid"
@@ -18,7 +18,7 @@
             lapi.MiMeiPublish(authSid, "", userId)
     
             // update the score of the user in AppData
-            lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
+            lapi.RunMApp("node_update_score", {aid: appId, ver:"last",
                 userid: userId, mid: userId}, [])
             
             // return the updated following status on the otherid,
@@ -46,11 +46,11 @@
         const req = {aid: APP_ID, ver: "last", nid: user.hostIds[0], sid: systemSid,
             userid: userId, otherid: otherId}
         let ret = lapi.RunMApp("toggle_following", req, [])
-        console.log("Toggle following remote ret", ret)
+        console.log("Toggle following remote ret=", ret, userId, otherId)
         return ret
     } else {
-        let ret = toggleFollowing(userId, otherId)
-        console.log("Toggle following ret", ret)
+        let ret = toggleFollowing(userId, otherId, APP_ID)
+        console.log("Toggle following ret=", ret, userId, otherId)
         return ret
     }
 })(request, args)
