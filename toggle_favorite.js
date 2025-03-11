@@ -30,8 +30,8 @@
         // send the request to that remote host that published the tweet.
         let ret = lapi.RunMApp("toggle_favorite", {aid: APP_ID, ver: "last",
             nid: user.hostIds[0], sid: systemSid,
-            userid: userId, authorid: authorId, tweetid: tweetId}, [])
-
+            userid: userId, authorid: authorId, tweetid: tweetId}, []
+        )
         // ret = {user: user, hasLiked: hasLiked, count: count}
         console.log("Toggle favorite remote ret=", nodeId, JSON.stringify(ret))
         return ret
@@ -67,7 +67,8 @@
             lapi.MiMeiPublish(tweetSid, "", tweetId)
     
             // update the score of the user in AppData
-            lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last", userid: authorId, mid: tweetId}, [])
+            lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
+                userid: authorId, mid: tweetId}, [])
 
             // return current favorite count and favorite status by userId (appUser).
             const favoriteCount = lapi.Hlen(tweetSid, FAVORITE_LIST)
