@@ -9,9 +9,9 @@
     try {
         const COMMENT_LIST = "comment_list_key"
         const APP_ID = request["aid"]
-        const userId = request["userid"]
-        const tweetId = request["tweetid"]
-        const hostId = request["hostid"]
+        const userId = request["userid"]    // appUser who makes the comment
+        const tweetId = request["tweetid"]  // tweet commented to
+        const hostId = request["hostid"]    // host where the tweet is published.
         const comment = JSON.parse(request["comment"])
 
         let nodeId = lapi.GetVar("", "hostid")    // current node id
@@ -22,10 +22,10 @@
                 userid: userId, tweetid: tweetId, comment: JSON.stringify(comment)}
             let ret = JSON.parse(lapi.RunMApp("add_comment_host", req, []))
 
-            // lapi.MiMeiSync(systemSid, "", ret["commentId"], {})
+            // sync tweet to node from where appUser is being loaded.
             lapi.MiMeiSync(systemSid, "", tweetId, {})
 
-            // sync all comments of the tweet
+            // sync all comments of the tweet to local node
             const tweetSid = lapi.MMOpen("", tweetId, "last")
             lapi.Zrange(tweetSid, COMMENT_LIST, 0, -1).forEach(element => {
                 if (!lapi.MFIsExist("", element.Member))

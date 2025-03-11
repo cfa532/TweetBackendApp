@@ -51,6 +51,10 @@
         lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
             userid: userId, mid: tweetId}, [])
 
+        // In future, add the comment to appUser's comment list here
+        // lapi.RunMApp("add_comment_by_user", {aid: APP_ID, ver:"last",
+        //      userid: userId, commentid: commentId}, [])
+
         // return comment mid and number of comments on the tweet.
         const commentCount = lapi.Zcard(tweetSid, COMMENT_LIST)
         JSON.stringify({commentId: commentId, count: commentCount})     // NO return statement here
