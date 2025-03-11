@@ -10,10 +10,10 @@
         if (nodeId != hostId) {
             // send the request to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            const req = {aid: APP_ID, ver: "last", nid: hostId, sid: systemSid,
-                tweet: request["tweet"]}
-            const tweetId = lapi.RunMApp("add_tweet_host", req, [])
-
+            const tweetId = lapi.RunMApp("add_tweet_host", {aid: APP_ID, ver: "last",
+                nid: hostId, sid: systemSid, tweet: request["tweet"]}, []
+            )
+            // tweet is created in remote host, sync it here.
             lapi.MiMeiSync(systemSid, "", tweetId, {})
             return tweetId
         } else {

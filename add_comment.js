@@ -12,16 +12,15 @@
         const userId = request["userid"]    // appUser who makes the comment
         const tweetId = request["tweetid"]  // tweet commented to
         const hostId = request["hostid"]    // host where the tweet is published.
-        const comment = JSON.parse(request["comment"])
 
         let nodeId = lapi.GetVar("", "hostid")    // current node id
         if (nodeId != hostId) {
             // send the request to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            const req = {aid: APP_ID, ver: "last", nid: hostId, sid: systemSid,
-                userid: userId, tweetid: tweetId, comment: JSON.stringify(comment)}
-            let ret = JSON.parse(lapi.RunMApp("add_comment_host", req, []))
-
+            let ret = JSON.parse(lapi.RunMApp("add_comment_host", {aid: APP_ID, ver: "last",
+                nid: hostId, sid: systemSid,
+                userid: userId, tweetid: tweetId, comment: request["comment"]}, [])
+            )
             // sync tweet to node from where appUser is being loaded.
             lapi.MiMeiSync(systemSid, "", tweetId, {})
 
@@ -34,7 +33,7 @@
             return ret
         } else {
             const req = {aid: APP_ID, ver: "last",
-                userid: userId, tweetid: tweetId, comment: JSON.stringify(comment)}
+                userid: userId, tweetid: tweetId, comment: request["comment"]}
             return lapi.RunMApp("add_comment_host", req, [])
         }
     } catch(e) {

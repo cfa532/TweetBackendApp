@@ -1,36 +1,37 @@
+/**
+ * appUserId is used to check if it has bookmarked or favored the tweet.
+ */
 ((request, args)=>{
-    // Take a tweetId as argument. The 2nd argument userId is NOT the author,
-    // but the current APP user. It is used to check if the curret app user
-    // has liked or bookmarked this tweet.
-    try {
-        const TWT_CONTENT_KEY = "core_data_of_tweet"
-        const LIKE_LIST = "tweet_like_list"
-        const BOOKMARK_LIST = "tweet_bookmark_list"
-        const RETWEET_LIST = "tweet_retweet_list"
-        const COMMENT_LIST = "comment_list_key"
+    const TWT_CONTENT_KEY = "core_data_of_tweet"
+    const LIKE_LIST = "tweet_like_list"
+    const BOOKMARK_LIST = "tweet_bookmark_list"
+    const RETWEET_LIST = "tweet_retweet_list"
+    const COMMENT_LIST = "comment_list_key"
 
-        // Need to find out if the current user has liked or bookmarked the tweet.
-        let appUserId = request["appuserid"]
-        let tweetId = request["tweetid"]
-        let hostId = request["hostid"]  // main host of the tweet's author
-        let nodeId = request["nodeid"]  // node from which the tweet is loaded.
-        let userId = request["userid"]  // author of the tweet
+    try {
+        // Need to find out if appUser has liked or bookmarked the tweet.
+        const appUserId = request["appuserid"]
+        const tweetId = request["tweetid"]
+        const hostId = request["hostid"]  // main host of the tweet's author
+        const authorId = request["userid"]  // author of the tweet
         
+        const nodeId = lapi.GetVar("", "hostid")
         if (nodeId != hostId) {
-            console.log("Refresh tweet from a different host", hostId, nodeId, userId, tweetId)
-            // loading tweet from a different host. Need to check the score.
+            console.log("Refresh tweet from a different host", hostId, nodeId, authorId, tweetId)
+            // loading tweet from a node other than author's host,
+            // make sure the current node is up to date.
             lapi.RunMApp("node_update_tweet", {aid: request["aid"], ver:"last",
-                hostid: hostId, userid: userId, mid: tweetId}, [])
+                hostid: hostId, userid: authorId, tweetid: tweetId}, [])
         }
-        let mmsid = lapi.MMOpen("", tweetId, "last")
-        let tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
+        const tweetSid = lapi.MMOpen("", tweetId, "last")
+        const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
         if (!tweet)
             return null
 
         // check if the appUser has bookmarked or liked the tweet
-        let hasLiked = lapi.Hget(mmsid, LIKE_LIST, appUserId)
-        let hasBookmarked = lapi.Hget(mmsid, BOOKMARK_LIST, appUserId)
-        let hasRetweeted = lapi.Hget(mmsid, RETWEET_LIST, appUserId)
+        const hasFavored = lapi.Hget(tweetSid, LIKE_LIST, appUserId)
+        const hasBookmarked = lapi.Hget(tweetSid, BOOKMARK_LIST, appUserId)
+        const hasRetweeted = lapi.Hget(tweetSid, RETWEET_LIST, appUserId)
         ret = {
             // tweet core data
             "mid": tweet.mid,
@@ -42,12 +43,12 @@
             "originalTweetId": tweet.originalTweetId,
             "originalAuthorId": tweet.originalAuthorId,
             "timestamp": tweet.timestamp,
-            "bookmarkCount": lapi.Hlen(mmsid, BOOKMARK_LIST),
-            "likeCount": lapi.Hlen(mmsid, LIKE_LIST),
-            "commentCount": lapi.Zcard(mmsid, COMMENT_LIST),
-            "retweetCount": lapi.Hlen(mmsid, RETWEET_LIST),
+            "bookmarkCount": lapi.Hlen(tweetSid, BOOKMARK_LIST),
+            "likeCount": lapi.Hlen(tweetSid, LIKE_LIST),
+            "commentCount": lapi.Zcard(tweetSid, COMMENT_LIST),
+            "retweetCount": lapi.Hlen(tweetSid, RETWEET_LIST),
             "favorites": [
-                hasLiked ? true : false,
+                hasFavored ? true : false,
                 hasBookmarked ? true : false,
                 hasRetweeted ? true : false,
             ],

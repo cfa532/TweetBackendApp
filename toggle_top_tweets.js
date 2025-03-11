@@ -3,28 +3,47 @@
      * Toggle pinned tweets and return updated pinned tweets list.
      */
     try {
-        const TOP_TWEETS = "top_tweet_list"
+        const PINNED_TWEETS = "top_tweet_list"
+        const APP_ID = request["aid"]
         const authSid = lapi.BELoginAsAuthor()
-        let tweetId = request["tweetid"]
-        let userId = request["userid"]
-        let mmsid = lapi.MMOpen(authSid, userId, "cur")
+        const tweetId = request["tweetid"]
+        const userId = request["userid"]
+        const user = getUser(userId)
 
-        let topTweet = lapi.Hget(mmsid, TOP_TWEETS, tweetId)
-        if (topTweet) {
-            lapi.Hdel(mmsid, TOP_TWEETS, tweetId)
+        const nodeId = lapi.GetVar("", "hostid")
+        if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
+            const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
+            let ret = lapi.RunMApp("toggle_top_tweet", {aid: APP_ID, ver: "last",
+                nid: user.hostIds[0], sid: systemSid,
+                tweetid: tweetId, userid: userId}, []
+            )
+            // user mimei will be updated by system.
+            return ret
         } else {
-            lapi.Hset(mmsid, TOP_TWEETS, tweetId, Date.now())
+            const userSid = lapi.MMOpen(authSid, userId, "cur")
+            const pinned = lapi.Hget(userSid, PINNED_TWEETS, tweetId)
+            if (pinned) {
+                lapi.Hdel(userSid, PINNED_TWEETS, tweetId)
+            } else {
+                lapi.Hset(userSid, PINNED_TWEETS, tweetId, Date.now())
+            }
+            lapi.MMBackup(authSid, userId, "", "delref=true")
+            lapi.MiMeiPublish(authSid, "", userId)
+    
+            // update the score of the user in AppData
+            lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
+                userid: userId, mid: userId}, [])
+            
+            return lapi.RunMApp("get_top_tweets", {aid: request["aid"], ver:"last",
+                userid: userId}, [])    
         }
-        lapi.MMBackup(authSid, userId, "", "delref=true")
-        lapi.MiMeiPublish(authSid, "", userId)
-
-        // update the score of the user in AppData
-        lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
-            userid: userId, mid: userId}, [])
-        
-        return lapi.RunMApp("get_top_tweets", {aid: request["aid"], ver:"last",
-            userid: userId}, [])
     } catch(e) {
         console.error("Error toggle_top_tweets", JSON.stringify(request), e)
-    } 
+    }
+
+    function getUser(mid) {
+        const OWNER_DATA_KEY = "data_of_author"
+        const mmsid = lapi.MMOpen("", mid, "last")
+        return lapi.Get(mmsid, OWNER_DATA_KEY)
+    }
 })(request, args)

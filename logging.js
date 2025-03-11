@@ -1,21 +1,34 @@
 ((request, args)=>{
-    // request, lapi are global variables
+    const APP_MARK = "Registered users on current node"
+    const APP_ID = request["aid"]
+    const msg = request["msg"]
+    const hostId = request["hostid"]
+    const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
     try {
-        const APP_MARK = "Registered users on current node"
-        const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
-        const msg = JSON.parse(request["msg"])
-        console.warn("Timber.log:", request["msg"])
-
-        let authSid = lapi.BELoginAsAuthor()
-        let appMid = lapi.MMGetAppDataID("", APP_ID, "app", "", APP_MARK, true)
-        if (!appMid) {
-            appMid = lapi.MMCreateAppData(authSid, APP_ID, "app", "", APP_MARK, 0x07276704)
-            console.log("appMid from logging,", appMid)
+        const nodeId = lapi.GetVar("", "hostid")
+        if (hostId != nodeId) {
+            // the node is not host of appUser
+            lapi.RunMApp("logging", {aid: APP_ID, ver: "last",
+                nid: hostId, sid: systemSid,
+                msg: msg, hostid: hostId
+            })
+        } else {
+            console.log(msg)
+            logging()
         }
-        let appsid = lapi.MMOpen(authSid, appMid, "cur")
-        lapi.Hset(appsid, "timber_logs", Date.now().toString(), msg)
-        lapi.MMBackup(authSid, appMid, "", "delref=true")
     } catch(e) {
         console.error("Error logging", JSON.stringify(request), e)
+    }
+
+    function logging() {
+        try {
+            const appMid = lapi.MMCreateAppData(systemSid, APP_ID, "app", "", APP_MARK, 0x07276704)
+            const appsid = lapi.MMOpen(systemSid, appMid, "cur")
+            lapi.Hset(appsid, "timber_logs", Date.now().toString(), msg)
+            lapi.MMBackup(authSid, appMid, "", "delref=true")
+        } catch(e) {
+            console.error("Error logging", JSON.stringify(request), e)
+        }
+    
     }
 })(request, args)

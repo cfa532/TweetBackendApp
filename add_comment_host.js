@@ -6,15 +6,6 @@
      * @param {string} comment - The comment object, which is a Tweet object itself.
      * @param {string} [userId] - (Optional) The ID of the user posting the comment.
      */
-
-    function getScorePair(mid) {
-        function ScorePair() {}
-        sp = new ScorePair
-        sp.Score = Date.now()
-        sp.Member = mid
-        return sp
-    }
-
     try {
         const COMMENT_LIST = "comment_list_key"
         const TWT_CONTENT_KEY = "core_data_of_tweet"
@@ -60,5 +51,13 @@
         JSON.stringify({commentId: commentId, count: commentCount})     // NO return statement here
     } catch(e) {
         console.error("Error add_comment_host", e, JSON.stringify(request))
+    }
+
+    function getScorePair(mid) {
+        function ScorePair() {}
+        sp = new ScorePair
+        sp.Score = Date.now()
+        sp.Member = mid
+        return sp
     }
 // })(request, args)
