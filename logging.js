@@ -14,21 +14,12 @@
             })
         } else {
             console.log(msg)
-            logging()
-        }
-    } catch(e) {
-        console.error("Error logging", JSON.stringify(request), e)
-    }
-
-    function logging() {
-        try {
             const appMid = lapi.MMCreateAppData(systemSid, APP_ID, "app", "", APP_MARK, 0x07276704)
             const appsid = lapi.MMOpen(systemSid, appMid, "cur")
             lapi.Hset(appsid, "timber_logs", Date.now().toString(), msg)
             lapi.MMBackup(authSid, appMid, "", "delref=true")
-        } catch(e) {
-            console.error("Error logging", JSON.stringify(request), e)
         }
-    
+    } catch(e) {
+        console.error("Error logging", JSON.stringify(request), e)
     }
 })(request, args)
