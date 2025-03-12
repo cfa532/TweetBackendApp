@@ -23,6 +23,7 @@
             lapi.RunMApp("node_update_tweet", {aid: request["aid"], ver:"last",
                 hostid: hostId, userid: authorId, tweetid: tweetId}, [])
         }
+        
         const tweetSid = lapi.MMOpen("", tweetId, "last")
         const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
         if (!tweet)

@@ -6,12 +6,13 @@
  * @param {string} comment - The comment object, which is a Tweet object itself.
  * @param {string} [userId] - (Optional) The ID of the user posting the comment.
  */
+    const COMMENT_LIST = "comment_list_key"
+    const APP_ID = request["aid"]
+    const userId = request["userid"]    // appUser who makes the comment
+    const tweetId = request["tweetid"]  // tweet commented to
+    const hostId = request["hostid"]    // host where the tweet is published.
+
     try {
-        const COMMENT_LIST = "comment_list_key"
-        const APP_ID = request["aid"]
-        const userId = request["userid"]    // appUser who makes the comment
-        const tweetId = request["tweetid"]  // tweet commented to
-        const hostId = request["hostid"]    // host where the tweet is published.
 
         let nodeId = lapi.GetVar("", "hostid")    // current node id
         if (nodeId != hostId) {
@@ -32,9 +33,9 @@
             })
             return ret
         } else {
-            const req = {aid: APP_ID, ver: "last",
-                userid: userId, tweetid: tweetId, comment: request["comment"]}
-            return lapi.RunMApp("add_comment_host", req, [])
+            return lapi.RunMApp("add_comment_host", {aid: APP_ID, ver: "last",
+                userid: userId, tweetid: tweetId, comment: request["comment"]}, []
+            )
         }
     } catch(e) {
         console.error("Error add_comment", e, JSON.stringify(request))

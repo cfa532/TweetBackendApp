@@ -4,14 +4,15 @@
      *
      * @param {string} tweetId - The ID of the tweet to which the comment is being added.
      * @param {string} comment - The comment object, which is a Tweet object itself.
-     * @param {string} [userId] - (Optional) The ID of the user posting the comment.
+     * @param {string} userId - The ID of the user posting the comment.
      */
     try {
         const COMMENT_LIST = "comment_list_key"
         const TWT_CONTENT_KEY = "core_data_of_tweet"
+        const APP_EXT = "com.example.twitterclone"
         const APP_ID = request["aid"]
         const userId = request["userid"]
-        const APP_EXT = "com.example.twitterclone"
+        const tweetId = request["tweetid"]
         const comment = JSON.parse(request['comment'])
         
         // create a new tweet for the comment, which is a tweet object too.
@@ -19,6 +20,7 @@
         const commentId = lapi.MMCreate(authSid, APP_ID, APP_EXT, "{{auto}}", 2, 0x07276704)
         comment["mid"] = commentId
         comment["timestamp"] = comment["timestamp"] ? comment["timestamp"] : Date.now()
+
         const commentSid = lapi.MMOpen(authSid, commentId, "cur")
         lapi.Set(commentSid, TWT_CONTENT_KEY, comment)
         comment.attachments?.forEach(element => {
@@ -29,7 +31,6 @@
         lapi.MiMeiPublish(commentSid, "", commentId)     // publish the comment object as a tweet
 
         // add comment to comment_list of the tweet
-        const tweetId = request["tweetid"]
         const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
         lapi.Zadd(tweetSid, COMMENT_LIST, getScorePair(commentId))
 

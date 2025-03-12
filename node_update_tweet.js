@@ -5,9 +5,9 @@
     const hostId = request["hostid"]
     const userId = request["userid"]
     const tweetId = request["tweetid"]
+    const mmsid = lapi.BEOpenAppDataNode("cur", APP_ID)
 
     try {
-        const mmsid = lapi.BEOpenAppDataNode("cur", APP_ID)
         req = {aid: APP_ID, ver: request.ver, userid: userId, mid: tweetId,
             nid: hostId,    // remote host id
             sid: mmsid,     // necessary to prove the user's authenticity.
@@ -21,7 +21,7 @@
             console.log("new and old score", newScore, oldScore, userId, tweetId)
             lapi.MiMeiSync(mmsid, "", tweetId, {})
             sp = new ScorePair
-            sp.Score = score ? score : 0
+            sp.Score = newScore ? newScore : 0
             sp.Member = tweetId
             lapi.Zadd(mmsid, userId, sp)    // update the score of tweet
             
