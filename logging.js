@@ -3,8 +3,11 @@
     const APP_ID = request["aid"]
     const msg = request["msg"]
     const hostId = request["hostid"]
-    const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
+    if (!hostId) {
+        return
+    }
     try {
+        const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
         const nodeId = lapi.GetVar("", "hostid")
         if (hostId != nodeId) {
             // the node is not host of appUser
