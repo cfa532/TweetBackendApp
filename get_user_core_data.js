@@ -24,6 +24,7 @@
         user["nodeId"] = lapi.GetVar("", "hostid")
         
         delete user.password
+        console.log("accessible user", JSON.stringify(user))
         return user
     } catch(e) {
         console.error("ERROR get_user_core", JSON.stringify(request), e)

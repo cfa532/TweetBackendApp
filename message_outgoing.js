@@ -5,12 +5,11 @@
     const MESSAGE_MIMEI = "message_mimei_1"
     const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
     const APP_EXT = "com.example.twitterclone"
+    const receiptId = request["receiptid"]
+    const userId = request["userid"]
+    const msg = JSON.parse(request["msg"])
 
-    try {
-        const receiptId = request["receiptid"]
-        const userId = request["userid"]
-        const msg = JSON.parse(request["msg"])
-        
+    try {        
         const user = getUser(userId)
         const nodeId = lapi.GetVar("", "hostid")
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {

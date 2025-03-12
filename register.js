@@ -6,16 +6,17 @@
     const APP_EXT = "com.example.twitterclone"    
     const OWNER_DATA_KEY = "data_of_author"
     const FOLLOWINGS_LIST = "list_of_followings_mid"
+    const user = JSON.parse(request["user"])
 
     try {
-        const user = JSON.parse(request["user"])
         const nodeId = lapi.GetVar("", "hostid")
+        console.log("nodeId", nodeId, request["user"])
         if (user.hostIds?.length > 0 && user.hostIds[0] != nodeId) {
             // register it on remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             return lapi.RunMApp("register", {aid: APP_ID, ver: "last",
-                nid: author.hostIds[0], sid: systemSid, user: request["user"]
-            }, [])
+                nid: user.hostIds[0], sid: systemSid, user: request["user"]}, []
+            )
         } else {
             // register it on current node
             const authSid = lapi.BELoginAsAuthor()
@@ -24,7 +25,7 @@
     
             if (lapi.Get(userSid, OWNER_DATA_KEY)) {
                 console.warn("User register failed. Existing user", userMid)
-                return {status: "failure", reason: "Username is taken"}
+                // return {status: "failure", reason: "Username is taken"}
             }
             user["mid"] = userMid
             user["password"] = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)

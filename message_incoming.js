@@ -4,12 +4,13 @@
 ((request, args) => {
     const INCOMING_MESSAGE = "incoming_message_indicator"
     const MESSAGE_MIMEI = "message_mimei_1"
-    const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
     const APP_EXT = "com.example.twitterclone"
+    const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
+    const senderId = request["senderid"]
+    const userId = request["receiptid"]       // owner of the data Mimei
+    const msg = JSON.parse(request["msg"])
+
     try {
-        const senderId = request["senderid"]
-        const userId = request["receiptid"]       // owner of the data Mimei
-        const msg = JSON.parse(request["msg"])
         const user = getUser(userId)
         const nodeId = lapi.GetVar("", "hostid")
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {

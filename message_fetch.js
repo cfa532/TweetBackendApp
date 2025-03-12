@@ -4,13 +4,13 @@
 ((request, args)=>{
     const READ_MESSAGE = "read_message_indicator"   // hset of the last time a user message is read.
     const MESSAGE_MIMEI = "message_mimei_1"
-    const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
     const APP_EXT = "com.example.twitterclone"
+    const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
+    const userId = request["userid"]
+    const senderId = request["senderid"]
 
     try {
         const authSid = lapi.BELoginAsAuthor()
-        const userId = request["userid"]
-        const senderId = request["senderid"]
         const user = getUser(userId)
         const nodeId = lapi.GetVar("", "hostid")
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {

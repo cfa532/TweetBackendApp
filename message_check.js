@@ -4,6 +4,7 @@
     const APP_ID = request["aid"]
     const APP_EXT = "com.example.twitterclone"
     const MESSAGE_MIMEI = "message_mimei_1"
+    const userId = request["userid"]
 
     try {
         // check the last message from anyone who has sent a message.
@@ -11,7 +12,6 @@
         const msgMid = lapi.MMCreate(authSid, APP_ID, APP_EXT, userId+"_"+MESSAGE_MIMEI, 2, 0x07276704)
         const msgSid = lapi.MMOpen("", msgMid, "last")
         
-        const userId = request["userid"]
         const user = getUser(userId)
         const nodeId = lapi.GetVar("", "hostid")
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
