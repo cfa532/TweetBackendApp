@@ -1,5 +1,7 @@
 /**
- * appUserId is used to check if it has bookmarked or favored the tweet.
+ * Different from get_tweet, this function makes sure the current node is up to date.
+ * It syncs the tweet from the author's host, and its comments.
+ * AppUserId is used to check if it has bookmarked or favored the tweet.
  */
 ((request, args)=>{
     const TWT_CONTENT_KEY = "core_data_of_tweet"
@@ -23,7 +25,7 @@
             lapi.RunMApp("node_update_tweet", {aid: request["aid"], ver:"last",
                 hostid: hostId, userid: authorId, tweetid: tweetId}, [])
         }
-        
+
         const tweetSid = lapi.MMOpen("", tweetId, "last")
         const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
         if (!tweet)
@@ -33,7 +35,7 @@
         const hasFavored = lapi.Hget(tweetSid, LIKE_LIST, appUserId)
         const hasBookmarked = lapi.Hget(tweetSid, BOOKMARK_LIST, appUserId)
         const hasRetweeted = lapi.Hget(tweetSid, RETWEET_LIST, appUserId)
-        ret = {
+        let ret = {
             // tweet core data
             "mid": tweet.mid,
             "authorId": tweet.authorId,

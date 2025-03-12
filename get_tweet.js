@@ -1,3 +1,8 @@
+/**
+ * Get a tweet from its author's node. Not necessary its host, which has the latest data.
+ * The current node may be out of date, but get it anyway for better user experience.
+ * When the user opens the tweet detail page, call refresh_tweet to update current node.
+ */
 ((request, args)=>{
     // Take a tweetId as argument. The 2nd argument userId is NOT the author,
     // but the current APP user. It is used to check if the curret app user
@@ -10,18 +15,18 @@
         const COMMENT_LIST = "comment_list_key"
 
         // Need to find out if the current user has liked or bookmarked the tweet.
-        let appUserId = request["userid"]
-        let tweetId = request["tweetid"]
-        let mmsid = lapi.MMOpen("", tweetId, "last")
-        let tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
+        const appUserId = request["userid"]
+        const tweetId = request["tweetid"]
+        const mmsid = lapi.MMOpen("", tweetId, "last")
+        const tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
         if (!tweet)
             return null
 
         // check if the appUser has bookmarked or liked the tweet
-        let hasLiked = lapi.Hget(mmsid, FAVORITE_LIST, appUserId)
-        let hasBookmarked = lapi.Hget(mmsid, BOOKMARK_LIST, appUserId)
-        let hasRetweeted = lapi.Hget(mmsid, RETWEET_LIST, appUserId)
-        ret = {
+        const hasLiked = lapi.Hget(mmsid, FAVORITE_LIST, appUserId)
+        const hasBookmarked = lapi.Hget(mmsid, BOOKMARK_LIST, appUserId)
+        const hasRetweeted = lapi.Hget(mmsid, RETWEET_LIST, appUserId)
+        let ret = {
             // tweet core data
             "mid": tweet.mid,
             "authorId": tweet.authorId,
