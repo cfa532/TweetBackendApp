@@ -17,7 +17,7 @@
          */
         let ret = {
             // version: appVersion.Versions[appVersion.Versions.length-1].Version,
-            version: 30,  // set it larger than defaultConfig.versionName in build.gradle to force upgrade.
+            version: 31,  // set it larger than defaultConfig.versionName in build.gradle to force upgrade.
             packageId: mid,
             mission: "minor",     // App stop working without upgrade. minor, major, critical. Not used.
             domain: "t1.fireshare.store",   // base url to be used for deeplink and share.

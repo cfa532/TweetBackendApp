@@ -11,13 +11,13 @@
             lapi.RunMApp("logging", {aid: APP_ID, ver: "last",
                 nid: hostId, sid: systemSid,
                 msg: msg, hostid: hostId
-            })
+            }, [])
         } else {
             console.log(msg)
             const appMid = lapi.MMCreateAppData(systemSid, APP_ID, "app", "", APP_MARK, 0x07276704)
             const appsid = lapi.MMOpen(systemSid, appMid, "cur")
             lapi.Hset(appsid, "timber_logs", Date.now().toString(), msg)
-            lapi.MMBackup(authSid, appMid, "", "delref=true")
+            lapi.MMBackup(appsid, appMid, "", "delref=true")
         }
     } catch(e) {
         console.error("Error logging", JSON.stringify(request), e)
