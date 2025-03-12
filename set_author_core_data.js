@@ -2,24 +2,26 @@
  * Update registered user data
  */
 ((request, args)=>{
-    try {
-        const OWNER_DATA_KEY = "data_of_author"
-        const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
-        const APP_EXT = "com.example.twitterclone"
+    const OWNER_DATA_KEY = "data_of_author"
+    const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
+    const APP_EXT = "com.example.twitterclone"
+    const user = JSON.parse(request["user"])
 
-        const user = JSON.parse(request["user"])
+    try {
+        const authSid = lapi.BELoginAsAuthor()
+        const userSid = lapi.MMOpen(authSid, user.mid, "cur")
+        const userInDB = lapi.Get(userSid, OWNER_DATA_KEY)    
         const nodeId = lapi.GetVar("", "hostid")
-        if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
-            const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
+        const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
+
+        if (userInDB.hostIds?.findIndex(id => id == nodeId) != 0) {
             return lapi.RunMApp("set_author_core_data", {aid: APP_ID, ver: "last",
-                nid: author.hostIds[0], sid: systemSid,
-                user: request["user"]}, []
+                nid: userInDB.hostIds[0], sid: systemSid, user: request["user"]}, []
             )
         } else {
-            const authSid = lapi.BELoginAsAuthor()
-            lapi.MiMeiSync(authSid, "", user.mid, {})   // make sure existing data is up to date.
-            const userSid = lapi.MMOpen(authSid, user.mid, "cur")
-            const userInDB = lapi.Get(userSid, OWNER_DATA_KEY)    
+            if (!user.hostIds || user.hostIds.length == 0) {
+                user.hostIds = userInDB.hostIds
+            }
             /**
              * When user update without providing password, keep the old one.
              */
@@ -32,7 +34,11 @@
             lapi.Set(userSid, OWNER_DATA_KEY, user)
             lapi.MMBackup(userSid, user.mid, "", "delref=true")
             lapi.MiMeiPublish(userSid, "", user.mid)
-
+            if (user.hostIds[0] != userInDB.hostIds[0]) {
+                // user has changed hostId, make sure user mimei is available on the new hostId
+                lapi.RunMApp("sync_user", {aid: APP_ID, ver: "last",
+                    nid: user.hostIds[0], sid: systemSid, mid: user.mid}, [])
+            }
             delete user.password
             return {user: JSON.stringify(user), status: "success"}
         }
