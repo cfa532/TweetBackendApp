@@ -21,7 +21,6 @@
         user["bookmarksCount"] = lapi.Hlen(mmsid, BOOKMARK_LIST)
         user["favoritesCount"] = lapi.Hlen(mmsid, FAVORITE_LIST)
         user["commentsCount"] = lapi.Hlen(mmsid, COMMENT_LIST)
-        user["nodeId"] = lapi.GetVar("", "hostid")
         
         delete user.password
         return user
