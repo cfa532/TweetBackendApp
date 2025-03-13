@@ -12,21 +12,17 @@
         const isBookmarked = request["isbookmarked"]
     
         const nodeId = lapi.GetVar("", "hostid")    // current node id
-        console.log("Toggle bookmark by user", nodeId, tweetId, userId, isBookmarked, user.hostIds[0])
     
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             const userData = lapi.RunMApp("toggle_bookmark_by_user",
                 { aid: APP_ID, ver: "last",
                     nid: user.hostIds[0], sid: systemSid,
-                    userid: userId, mid: tweetId }, []
+                    userid: userId, mid: tweetId, isbookmarked: isBookmarked}, []
             )
-            console.log("toggle_bookmark_by_user remote ret=", JSON.stringify(userData))
-    
-            // user local data will be updated by Leither
+            console.log("Toggle bookmark by remote user", isBookmarked, user.hostIds[0], nodeId, tweetId, userId)
             return userData
         } else {
-            console.log("Before toggleBookmark by user")
             toggleBookmarkByUser(tweetId, userId, isBookmarked)
             const authSid = lapi.BELoginAsAuthor();
             if (isBookmarked) {
@@ -37,10 +33,9 @@
                 // lapi.MiMeiUnprovide(authSid, "", tweetId)
                 // lapi.MMDelVers(authSid, tweetId)
             }
-            console.log("After toggleBookmark by user")
             const userSid = lapi.MMOpen("", userId, "last")
             const userData = lapi.Get(userSid, OWNER_DATA_KEY)
-            console.log("toggle_bookmark_by_user ret=", JSON.stringify(userData))
+            console.log("Toggle bookmark by user", isBookmarked, user.hostIds[0], nodeId, tweetId, userId)
             return userData
         }
     } catch(e) {
