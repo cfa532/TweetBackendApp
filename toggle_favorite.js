@@ -35,12 +35,11 @@
                 userid: userId, authorid: authorId, tweetid: tweetId}, []
             )
             // ret = {user: user, hasLiked: hasLiked, count: count}
-            console.log("Toggle tweet favorite remote", JSON.stringify(ret), author.hostIds[0], nodeId)
+            console.log("Toggle favorite of remote tweet", JSON.stringify(ret))
             return ret
         } else {
             // current node is the author's host, where tweet is published.
             let ret = toggleFavoriteOfTweet(userId, authorId, tweetId)
-            console.log("Toggle tweet favorite", JSON.stringify(ret), nodeId)
     
             // toggle the favorite status of the tweet in appUser's node.
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
@@ -48,8 +47,8 @@
                 nid: userHostId, sid: systemSid,
                 userid: userId, tweetid: tweetId, isfavorite: ret.hasLiked}, []
             )
-            console.log("Toggle tweet favorite local", JSON.stringify(ret), JSON.stringify(updatedUser))
-            return { hasLiked: ret.hasLiked, count: ret.count }
+            console.log("Toggle favorite of local tweet", JSON.stringify(ret))
+            return {user: updatedUser, hasLiked: ret.hasLiked, count: ret.count }
         }
     } catch(e) {
         console.error("Error toggle_favorite", e, JSON.stringify(request))
