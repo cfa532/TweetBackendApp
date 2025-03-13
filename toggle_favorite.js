@@ -23,17 +23,21 @@
     const userHostId = request["userhostid"]    // host id of the appUser
 
     try {
+        const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
         const author = getUser(authorId)    // tweet's author, should be available locally.
         const nodeId = lapi.GetVar("", "hostid")  // id of the current node.
     
         if (author.hostIds?.findIndex(id => id == nodeId) != 0) {
             // current node is not the author's host, where tweet is published.
             // send the request to that remote host that published the tweet.
-            const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             let ret = lapi.RunMApp("toggle_favorite", {aid: APP_ID, ver: "last",
                 nid: author.hostIds[0], sid: systemSid, userhostid: userHostId,
                 userid: userId, authorid: authorId, tweetid: tweetId}, []
             )
+            // new sync the tweet from the remote host.
+            lapi.MiMeiSync(systemSid, "", tweetId, {})
+            lapi.MiMeiProvide(systemSid, "", tweetId)
+
             // ret = {user: user, hasLiked: hasLiked, count: count}
             console.log("Toggle favorite of remote tweet", JSON.stringify(ret))
             return ret
@@ -42,7 +46,6 @@
             let ret = toggleFavoriteOfTweet(userId, authorId, tweetId)
     
             // toggle the favorite status of the tweet in appUser's node.
-            const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             const updatedUser = lapi.RunMApp("toggle_favorite_by_user", {aid: APP_ID, ver: "last",
                 nid: userHostId, sid: systemSid,
                 userid: userId, tweetid: tweetId, isfavorite: ret.hasLiked}, []
