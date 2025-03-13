@@ -15,16 +15,16 @@
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
         lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
             nid: user.hostIds[0], sid: systemSid,
-            userid: userId, otherid: otherId}, []
+            userid: userId, otherid: otherId, isfollower: isFollower}, []
         )
         console.log("Toggle follower remote isFollower=", isFollower, userId, otherId)
     } else {
-        toggleFollower(userId, otherId, isFollower, APP_ID)
+        toggleFollower(userId, otherId, isFollower)
         console.log("Toggle follower isFollower=", isFollower, userId, otherId)
     }
 
     function toggleFollower(
-        userId, otherId, isFollower, appId
+        userId, otherId, isFollower
     ) {
         try {
             const FOLLOWERS_LIST = "list_of_followers_mid"
@@ -42,7 +42,7 @@
             lapi.MiMeiPublish(authSid, "", userId)
     
             // update the score of the user in AppData
-            lapi.RunMApp("node_update_score", {aid: appId, ver:"last",
+            lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
                 userid: userId, mid: userId}, [])
         } catch(e) {
             console.error("Error toggle_follower", JSON.stringify(request), e)
