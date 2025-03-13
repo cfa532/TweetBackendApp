@@ -11,10 +11,10 @@
 
     try {
         const tweetId = request["tweetid"]  // tweetID that appUser bookmarked or favored
-        const isFavorite = request["isfavorite"]
-        const nodeId = lapi.GetVar("", "hostid")    // current node id
+        const isFavorite = request["isfavorite"] == "true" ? true : false
         const user = getUser(userId)
     
+        const nodeId = lapi.GetVar("", "hostid")    // current node id
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             const userData = lapi.RunMApp("toggle_favorite_by_user",
@@ -22,20 +22,20 @@
                     nid: user.hostIds[0], sid: systemSid,
                     userid: userId, mid: tweetId, isfavorite: isFavorite }, []
             )
-            console.log("Toggle favorite by remote user", isFavorite, nodeId, user.hostIds[0], tweetId, userId)
-            // user local data will be updated by Leither
-            return userData
+            console.log("Toggle favorite of remote user", isFavorite, JSON.stringify(userData))
+            return userData     // user local data will be updated by Leither
         } else {
+            console.log("Toggle favorite of local user", JSON.stringify(request))
             const authSid = lapi.BELoginAsAuthor()
             const userSid = lapi.MMOpen(authSid, userId, "cur")
             if (isFavorite) {
+                console.log("Add favorite of local user", tweetId, isFavorite)
                 lapi.Hset(userSid, FAVORITE_LIST, tweetId, Date.now())
             } 
             else {
+                console.log("Remove favorite of local user", tweetId, isFavorite)
                 lapi.Hdel(userSid, FAVORITE_LIST, tweetId)
             }
-            // update the score of the user in AppData
-            lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last", userid: userId, mid: userId}, [])
             lapi.MMBackup(userSid, userId, "", "delref=true")
             lapi.MiMeiPublish(userSid, "", userId)
 
@@ -47,6 +47,11 @@
                 // lapi.MiMeiUnprovide(authSid, "", tweetId)
                 // lapi.MMDelVers(authSid, tweetId)
             }
+            const updatedUser = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
+                userid: userId}, []
+            )
+            console.log("Toggle favorite by user", isFavorite, JSON.stringify(updatedUser))
+            return updatedUser
         }
     } catch(e) {
         console.error("toggle user favorite error", e)

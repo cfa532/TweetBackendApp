@@ -20,6 +20,7 @@
     const userId = request["userid"]    // appUser who favorites the tweet
     const tweetId = request["tweetid"]
     const authorId = request["authorid"]
+    const userHostId = request["userhostid"]    // host id of the appUser
 
     try {
         const author = getUser(authorId)    // tweet's author, should be available locally.
@@ -30,24 +31,24 @@
             // send the request to that remote host that published the tweet.
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             let ret = lapi.RunMApp("toggle_favorite", {aid: APP_ID, ver: "last",
-                nid: author.hostIds[0], sid: systemSid,
+                nid: author.hostIds[0], sid: systemSid, userhostid: userHostId,
                 userid: userId, authorid: authorId, tweetid: tweetId}, []
             )
             // ret = {user: user, hasLiked: hasLiked, count: count}
-            console.log("Toggle tweet favorite remote", JSON.stringify(ret), nodeId)
+            console.log("Toggle tweet favorite remote", JSON.stringify(ret), author.hostIds[0], nodeId)
             return ret
         } else {
             // current node is the author's host, where tweet is published.
-            let ret = toggleFavorite(userId, authorId, tweetId)
+            let ret = toggleFavoriteOfTweet(userId, authorId, tweetId)
             console.log("Toggle tweet favorite", JSON.stringify(ret), nodeId)
     
             // toggle the favorite status of the tweet in appUser's node.
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            lapi.RunMApp("toggle_favorite_by_user", {aid: APP_ID, ver: "last",
-                nid: request["userhostid"], sid: systemSid,
+            const updatedUser = lapi.RunMApp("toggle_favorite_by_user", {aid: APP_ID, ver: "last",
+                nid: userHostId, sid: systemSid,
                 userid: userId, tweetid: tweetId, isfavorite: ret.hasLiked}, []
             )
-            console.log("Toggle tweet favorite local", JSON.stringify(ret))
+            console.log("Toggle tweet favorite local", JSON.stringify(ret), JSON.stringify(updatedUser))
             return { hasLiked: ret.hasLiked, count: ret.count }
         }
     } catch(e) {
@@ -55,12 +56,12 @@
     }
 
     // update favorites list within the tweet, then update the score of tweet in AppData
-    function toggleFavorite(
+    function toggleFavoriteOfTweet(
         userId,     // appUser who favorites/w the tweet 
         authorId,   // author of the tweet
         tweetId, 
     ) {
-        // try {
+        try {
             const authSid = lapi.BELoginAsAuthor()
             const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
             const isFavorite = lapi.Hget(tweetSid, FAVORITE_LIST, userId) ? true : false
@@ -80,9 +81,9 @@
             // return current favorite count and favorite status by userId (appUser).
             const favoriteCount = lapi.Hlen(tweetSid, FAVORITE_LIST)
             return { hasLiked: !isFavorite, count: favoriteCount }
-        // } catch(e) {
-        //     console.error("Error toggle_favorite", JSON.stringify(request), e)
-        // }    
+        } catch(e) {
+            console.error("Error toggle_favorite", JSON.stringify(request), e)
+        }    
     }
 
     function getUser(mid) {
