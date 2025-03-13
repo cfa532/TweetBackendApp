@@ -19,7 +19,7 @@
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             const userData = lapi.RunMApp("toggle_favorite_by_user",
                 { aid: APP_ID, ver: "last",
-                    nid: hostId, sid: systemSid,
+                    nid: user.hostIds[0], sid: systemSid,
                     userid: userId, mid: tweetId }, []
             )
             console.log("toggle_favorite_by_user remote ret=", JSON.stringify(userData))
