@@ -12,7 +12,7 @@
     if (author.hostIds?.findIndex(id => id == nodeId) != 0) {
         // send the request to the remote host
         let ret = lapi.RunMApp("toggle_bookmark", {aid: APP_ID, ver: "last", 
-            nid: user.hostIds[0], sid: systemSid,
+            nid: author.hostIds[0], sid: systemSid,
             userid: userId, authorid: authorId, tweetid: tweetId}, []
         )
         console.log("Toggle bookmark remote ret=", nodeId, JSON.stringify(ret))

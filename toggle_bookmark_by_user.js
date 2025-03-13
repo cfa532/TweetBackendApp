@@ -33,8 +33,9 @@
                 lapi.MiMeiSync(authSid, "", tweetId, {})
                 lapi.MiMeiProvide(authSid, "", tweetId)
             } else {
-                lapi.MiMeiUnprovide(authSid, "", tweetId)
-                lapi.MMDelVers(authSid, tweetId)
+                // TODO: prevent the tweet from being deleted if it is on the same node
+                // lapi.MiMeiUnprovide(authSid, "", tweetId)
+                // lapi.MMDelVers(authSid, tweetId)
             }
             console.log("After toggleBookmark by user")
             const userSid = lapi.MMOpen("", userId, "last")

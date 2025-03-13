@@ -6,8 +6,8 @@
  * the tweet by the appUser by updating favorite list in the tweet.
  * Then update the favorite tweet list of the appUser by calling another function.
  * 
- * Toggle the favorite status of a user in Tweet's list. Use the result to update user's
- * favorite tweet list, so that keep them in sync.
+ * Toggle the favorite status of a user in the tweet's list. Use the result to update user's
+ * favorite tweet list, so both the tweet and the usser's record of favorite list in sync.
  * 
  * @tweetId MimeiId of the tweet
  * @authorId author of the tweet
@@ -29,7 +29,7 @@
         // current node is not the author's host, where tweet is published.
         // send the request to that remote host that published the tweet.
         let ret = lapi.RunMApp("toggle_favorite", {aid: APP_ID, ver: "last",
-            nid: user.hostIds[0], sid: systemSid,
+            nid: author.hostIds[0], sid: systemSid,
             userid: userId, authorid: authorId, tweetid: tweetId}, []
         )
         // ret = {user: user, hasLiked: hasLiked, count: count}
