@@ -4,15 +4,19 @@
  */
 ((request, args)=>{
     const OWNER_DATA_KEY = "data_of_author"
+    const BOOKMARK_LIST = "bookmark_list"
     const APP_ID = request["aid"]
     const userId = request["userid"]
+
     try {
+        const tweetId = request["tweetid"]  // tweetID that appUser bookmarked
+        /**
+         * Boolean value is converted to string in the request.
+         */
+        const isBookmarked = request["isbookmarked"] == "true" ? true : false
         const user = getUser(userId)
-        const tweetId = request["tweetid"]  // tweetID that appUser bookmarked or favored
-        const isBookmarked = request["isbookmarked"]
     
         const nodeId = lapi.GetVar("", "hostid")    // current node id
-    
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             const userData = lapi.RunMApp("toggle_bookmark_by_user",
@@ -20,35 +24,10 @@
                     nid: user.hostIds[0], sid: systemSid,
                     userid: userId, mid: tweetId, isbookmarked: isBookmarked}, []
             )
-            console.log("Toggle bookmark by remote user", isBookmarked, user.hostIds[0], nodeId, tweetId, userId)
+            console.log("Toggle bookmark of remote user", isBookmarked)
             return userData
         } else {
-            toggleBookmarkByUser(tweetId, userId, isBookmarked)
-            const authSid = lapi.BELoginAsAuthor();
-            if (isBookmarked) {
-                lapi.MiMeiSync(authSid, "", tweetId, {})
-                lapi.MiMeiProvide(authSid, "", tweetId)
-            } else {
-                // TODO: prevent the tweet from being deleted if it is on the same node
-                // lapi.MiMeiUnprovide(authSid, "", tweetId)
-                // lapi.MMDelVers(authSid, tweetId)
-            }
-            const userSid = lapi.MMOpen("", userId, "last")
-            const userData = lapi.Get(userSid, OWNER_DATA_KEY)
-            console.log("Toggle bookmark by user", isBookmarked, user.hostIds[0], nodeId, tweetId, userId)
-            return userData
-        }
-    } catch(e) {
-        console.error("toggle user bookmark error", e)
-        const userSid = lapi.MMOpen("", userId, "last")
-        return lapi.Get(userSid, OWNER_DATA_KEY)
-    }
-
-    function toggleBookmarkByUser(
-        tweetId, userId, isBookmarked
-    ) {
-        try {
-            const BOOKMARK_LIST = "bookmark_list"
+            console.log("Toggle bookmark of local user", JSON.stringify(request))
             const authSid = lapi.BELoginAsAuthor()
             const userSid = lapi.MMOpen(authSid, userId, "cur")
             if (isBookmarked) {
@@ -57,13 +36,27 @@
             else {
                 lapi.Hdel(userSid, BOOKMARK_LIST, tweetId)
             }
-            // update the score of the user in AppData
-            lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last", userid: userId, mid: userId}, [])
             lapi.MMBackup(userSid, userId, "", "delref=true")
             lapi.MiMeiPublish(userSid, "", userId)
-        } catch(e) {
-            console.error("Error toggleBookmarkByUser()", JSON.stringify(request), e)
+            
+            if (isBookmarked) {
+                lapi.MiMeiSync(authSid, "", tweetId, {})
+                lapi.MiMeiProvide(authSid, "", tweetId)
+            } else {
+                // TODO: prevent the tweet from being deleted if it is on the same node
+                // lapi.MiMeiUnprovide(authSid, "", tweetId)
+                // lapi.MMDelVers(authSid, tweetId)
+            }
+            const updatedUser = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
+                userid: userId}, []
+            )
+            console.log("Toggle bookmark of user", userId, isBookmarked)
+            return updatedUser
         }
+    } catch(e) {
+        console.error("toggle user bookmark error", e)
+        const userSid = lapi.MMOpen("", userId, "last")
+        return lapi.Get(userSid, OWNER_DATA_KEY)
     }
 
     function getUser(mid) {

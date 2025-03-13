@@ -1,34 +1,49 @@
+/**
+ * Toggle the bookmark status of a tweet by appUser. First, toggle the bookmark status of
+ * the tweet by the appUser by updating bookmark list in the tweet.
+ * Then update the bookmark tweet list of the appUser by calling another function.
+ * 
+ * Toggle the bookmark status of a user in the tweet's list. Use the result to update user's
+ * bookmark tweet list, so both the tweet and the usser's record of bookmark list in sync.
+ * 
+ */
 ((request, args)=>{
     const BOOKMARK_LIST = "tweet_bookmark_list"
     const APP_ID = request["aid"]
     const userId = request["userid"]    // appUser who is bookmarking the tweet
     const tweetId = request["tweetid"]
-
     const authorId = request["authorid"] // author of the tweet
-    const author = getUser(authorId)
-    const nodeId = lapi.GetVar("", "hostid")    // current node id
-    const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
+    const userHostId = request["userhostid"]    // host id of the appUser
 
-    if (author.hostIds?.findIndex(id => id == nodeId) != 0) {
-        // send the request to the remote host
-        let ret = lapi.RunMApp("toggle_bookmark", {aid: APP_ID, ver: "last", 
-            nid: author.hostIds[0], sid: systemSid,
-            userid: userId, authorid: authorId, tweetid: tweetId}, []
-        )
-        console.log("Toggle bookmark remote ret=", nodeId, JSON.stringify(ret))
-        return ret
-    } else {
-        let ret = toggleBookmark(userId, authorId, tweetId)
-        console.log("Toggle bookmark ret=", JSON.stringify(ret))
+    try {
+        const author = getUser(authorId)
+        const nodeId = lapi.GetVar("", "hostid")    // current node id
 
-        // toggle the bookmark of the tweet in appUser's node.
-        const user = lapi.RunMApp("toggle_bookmark_by_user", {aid: APP_ID, ver: "last",
-            nid: request["userhostid"], sid: systemSid,
-            userid: userId, tweetid: tweetId, isbookmarked: ret.hasBookmarked}, [])
-        return {user: user, hasBookmarked: ret.hasBookmarked, count: ret.count}
+        if (author.hostIds?.findIndex(id => id == nodeId) != 0) {
+            const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
+            let ret = lapi.RunMApp("toggle_bookmark", {aid: APP_ID, ver: "last", 
+                nid: author.hostIds[0], sid: systemSid, userhostid: userHostId,
+                userid: userId, authorid: authorId, tweetid: tweetId}, []
+            )
+            console.log("Toggle bookmark remote ret=", JSON.stringify(ret))
+            return ret
+        } else {
+            let ret = toggleBookmarkOfTweet(userId, authorId, tweetId)
+    
+            // toggle the bookmark of the tweet in appUser's node.
+            const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
+            const updatedUser = lapi.RunMApp("toggle_bookmark_by_user", {aid: APP_ID, ver: "last",
+                nid: userHostId, sid: systemSid,
+                userid: userId, tweetid: tweetId, isbookmarked: ret.hasBookmarked}, []
+            )
+            console.log("Toggle bookmark of local tweet", JSON.stringify(ret), JSON.stringify(updatedUser))
+            return {user: updatedUser, hasBookmarked: ret.hasBookmarked, count: ret.count}
+        }
+    } catch(e) {
+        console.error("Error toggle_bookmark", e, JSON.stringify(request))
     }
 
-    function toggleBookmark(
+    function toggleBookmarkOfTweet(
         userId,     // appUser who favorites/w the tweet 
         authorId,   // author of the tweet
         tweetId, 
@@ -39,7 +54,6 @@
             const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
             const hasMarked = lapi.Hget(tweetSid, BOOKMARK_LIST, userId) ? true : false
             if (hasMarked) {
-                // If the user has bookmarked, remove the bookmark
                 lapi.Hdel(tweetSid, BOOKMARK_LIST, userId)
             } 
             else {
@@ -50,9 +64,10 @@
     
             // update the score of the user in AppData
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
-                userid: authorId, mid: tweetId}, [])
+                userid: authorId, mid: tweetId}, []
+            )
             const bookmarkCount = lapi.Hlen(tweetSid, BOOKMARK_LIST)
-            return {hasBookmarked: hasMarked ? false : true, count: bookmarkCount}
+            return {hasBookmarked: !hasMarked, count: bookmarkCount}
         } catch(e) {
             console.error("Error toggle_bookmark", JSON.stringify(request), e)
         }    

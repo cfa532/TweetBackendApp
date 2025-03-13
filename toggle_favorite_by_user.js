@@ -10,7 +10,10 @@
     const userId = request["userid"]
 
     try {
-        const tweetId = request["tweetid"]  // tweetID that appUser bookmarked or favored
+        const tweetId = request["tweetid"]  // tweetID that appUser favored
+        /**
+         * Boolean value is converted to string in the request.
+         */
         const isFavorite = request["isfavorite"] == "true" ? true : false
         const user = getUser(userId)
     
@@ -22,18 +25,16 @@
                     nid: user.hostIds[0], sid: systemSid,
                     userid: userId, mid: tweetId, isfavorite: isFavorite }, []
             )
-            console.log("Toggle favorite of remote user", isFavorite, JSON.stringify(userData))
+            console.log("Toggle favorite of remote user", isFavorite)
             return userData     // user local data will be updated by Leither
         } else {
             console.log("Toggle favorite of local user", JSON.stringify(request))
             const authSid = lapi.BELoginAsAuthor()
             const userSid = lapi.MMOpen(authSid, userId, "cur")
             if (isFavorite) {
-                console.log("Add favorite of local user", tweetId, isFavorite)
                 lapi.Hset(userSid, FAVORITE_LIST, tweetId, Date.now())
             } 
             else {
-                console.log("Remove favorite of local user", tweetId, isFavorite)
                 lapi.Hdel(userSid, FAVORITE_LIST, tweetId)
             }
             lapi.MMBackup(userSid, userId, "", "delref=true")
@@ -50,7 +51,7 @@
             const updatedUser = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
                 userid: userId}, []
             )
-            console.log("Toggle favorite by user", isFavorite, JSON.stringify(updatedUser))
+            console.log("Toggle favorite of user", userId, isFavorite)
             return updatedUser
         }
     } catch(e) {

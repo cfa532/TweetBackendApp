@@ -75,8 +75,8 @@
     
             // update the score of the user in AppData
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
-                userid: authorId, mid: tweetId}, [])
-
+                userid: authorId, mid: tweetId}, []
+            )
             // return current favorite count and favorite status by userId (appUser).
             const favoriteCount = lapi.Hlen(tweetSid, FAVORITE_LIST)
             return { hasLiked: !isFavorite, count: favoriteCount }
