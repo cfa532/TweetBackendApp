@@ -11,7 +11,7 @@
     const mmsid = lapi.BEOpenAppDataNode("cur", APP_ID)
 
     try {
-        req = {aid: APP_ID, ver: request.ver, userid: userId, mid: tweetId,
+        req = { aid: APP_ID, ver: request.ver, userid: userId, mid: tweetId,
             nid: hostId,    // remote host id
             sid: mmsid,     // necessary to prove the user's authenticity.
         }
@@ -39,7 +39,7 @@
             })
         }
     } catch(e) {
-        lapi.Zaddwithseq(mmsid, userId, tweetId)    // update the score
+        lapi.Zaddwithseq(mmsid, userId, tweetId)    // update the score if it is missing.
         console.error("Error node_update_tweet", e, JSON.stringify(request))
     }
 

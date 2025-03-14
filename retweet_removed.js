@@ -34,7 +34,7 @@
       )
     }
   } catch (e) {
-    console.error("Error toggle_likes", JSON.stringify(request), e)
+    console.error("Error retweet_removed", JSON.stringify(request), e)
   }
 
   function getUser(mid) {

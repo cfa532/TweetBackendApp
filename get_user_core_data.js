@@ -12,8 +12,10 @@
         let userId = request["userid"]
         let mmsid = lapi.MMOpen("", userId, "last")
         let user = lapi.Get(mmsid, OWNER_DATA_KEY)
-        if (!user)
+        if (!user) {
+            console.warn("User", userId, "not found on node", lapi.GetVar("", "hostid"))
             return null
+        }
 
         user["tweetCount"] = lapi.Zcard(mmsid, TWT_LIST_KEY) + lapi.Hlen(mmsid, RETWEET_LIST)
         user["followingCount"] = lapi.Hlen(mmsid, FOLLOWINGS_LIST)

@@ -1,21 +1,20 @@
 /**
  * Update the user's bookmark list by adding or removing the tweetId.
  * @isBookmarked indicates if the tweetId should be added to bookmark list or not.
+ * @return the updated user data.
  */
 ((request, args)=>{
-    const OWNER_DATA_KEY = "data_of_author"
     const BOOKMARK_LIST = "bookmark_list"
     const APP_ID = request["aid"]
     const userId = request["userid"]
+    const tweetId = request["tweetid"]  // tweetID that appUser bookmarked
+    const isBookmarked = request["isbookmarked"] == "true" ? true : false
 
     try {
-        const tweetId = request["tweetid"]  // tweetID that appUser bookmarked
         /**
          * Boolean value is converted to string in the request.
          */
-        const isBookmarked = request["isbookmarked"] == "true" ? true : false
         const user = getUser(userId)
-    
         const nodeId = lapi.GetVar("", "hostid")    // current node id
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
@@ -55,8 +54,9 @@
         }
     } catch(e) {
         console.error("toggle user bookmark error", e)
-        const userSid = lapi.MMOpen("", userId, "last")
-        return lapi.Get(userSid, OWNER_DATA_KEY)
+        return lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
+            userid: userId}, []
+        )
     }
 
     function getUser(mid) {

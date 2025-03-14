@@ -10,13 +10,13 @@
     const RETWEET_LIST = "tweet_retweet_list"
     const COMMENT_LIST = "comment_list_key"
 
+    // Needed to find out if appUser has liked or bookmarked the tweet.
+    const appUserId = request["appuserid"]
+    const tweetId = request["tweetid"]
+    const hostId = request["hostid"]  // main host of the tweet's author
+    const authorId = request["userid"]  // author of the tweet
+
     try {
-        // Need to find out if appUser has liked or bookmarked the tweet.
-        const appUserId = request["appuserid"]
-        const tweetId = request["tweetid"]
-        const hostId = request["hostid"]  // main host of the tweet's author
-        const authorId = request["userid"]  // author of the tweet
-        
         const nodeId = lapi.GetVar("", "hostid")
         if (nodeId != hostId) {
             console.log("Refresh tweet from a different host", hostId, nodeId, authorId, tweetId)
@@ -25,7 +25,6 @@
             lapi.RunMApp("node_update_tweet", {aid: request["aid"], ver:"last",
                 hostid: hostId, userid: authorId, tweetid: tweetId}, [])
         }
-
         const tweetSid = lapi.MMOpen("", tweetId, "last")
         const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
         if (!tweet)
@@ -60,6 +59,6 @@
             ret["content"] = tweet.content  // prevent null from becoming empty string.
         return ret
     } catch(e) {
-        console.error("Error refresh_tweet", JSON.stringify(request), e)
+        console.error("Error refresh_tweet", e, JSON.stringify(request))
     }
 })(request, args)
