@@ -1,5 +1,8 @@
+/**
+ * Compare the score of the given tweet's MimeiId. If it is out of date, sync it.
+ * 
+ *  */
 ((request, args)=>{
-    // Compare the score of the given MimeiId. If it is out of date, sync it.
     const COMMENT_LIST = "comment_list_key"
     const APP_ID = request["aid"]
     const hostId = request["hostid"]
