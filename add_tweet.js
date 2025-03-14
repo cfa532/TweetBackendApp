@@ -2,11 +2,11 @@
  * Add a new tweet to the local host.
  */
 ((request, args)=>{
+    let tweetId = ""; // Initialize tweetId outside the try block
     try {
         const APP_EXT = "com.example.twitterclone"
         const TWT_CONTENT_KEY = "core_data_of_tweet"
         const TWT_LIST_KEY = "list_of_tweets_mid"
-
         const APP_ID = request["aid"]
         const hostId = request["hostid"]
 
@@ -14,19 +14,19 @@
         if (nodeId != hostId) {
             // send the request to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            const tweetID = lapi.RunMApp("add_tweet", {aid: APP_ID, ver: "last",
+            tweetId = lapi.RunMApp("add_tweet", {aid: APP_ID, ver: "last",
                 nid: hostId, sid: systemSid,
                 hostid: hostId, tweet: request["tweet"]}, []
             )
-            console.log("add_tweet remote", tweetID)
             // tweet is created in remote host, sync it here.
-            // lapi.MiMeiSync(systemSid, "", tweet.mid, {})
+            console.log("add_tweet remote", tweetId)
+            lapi.MiMeiSync(systemSid, "", tweetId, {})
 
-            return tweetID
+            return tweetId
         } else {
             const tweet = JSON.parse(request['tweet'])
             const authSid = lapi.BELoginAsAuthor()
-            const tweetId = lapi.MMCreate(authSid, APP_ID, APP_EXT, "{{auto}}", 2, 0x07276704)
+            tweetId = lapi.MMCreate(authSid, APP_ID, APP_EXT, "{{auto}}", 2, 0x07276704)
             const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
             tweet["mid"] = tweetId
             tweet["timestamp"] = Date.now()    
@@ -50,15 +50,10 @@
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
                 userid: tweet.authorId, mid: tweetId}, [])
             return tweetId
-
-            // Now sync the original tweet to the current node
-            // if (tweet.originalTweetId) {
-            //     lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
-            //     lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
-            // }
         }
     } catch(e) {
-        console.error("Error add_tweet", JSON.stringify(request), e)
+        console.error("Error add_tweet", e, JSON.stringify(request))
+        return tweetId; // Return tweetId even if there's an error
     }
 
     function getScorePair(mid) {
