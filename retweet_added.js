@@ -1,12 +1,10 @@
 /**
- * Update the record of the original tweet, after retweeting it.
+ * Update retweet list in the original tweet, after retweeting it.
  */
-
 ((request, args) => {
   try {
     const RETWEET_LIST = "tweet_retweet_list"
     const APP_ID = request["aid"]
-
     const retweetId = request["retweetid"]  // the retweed Id created by the follower
     const tweetId = request["tweetid"]      // original tweetId
     const fansId = request["userid"]        // user who made the retweet
@@ -16,10 +14,10 @@
     const nodeId = lapi.GetVar("", "hostid")
     if (author.hostIds?.findIndex(id => id == nodeId) != 0) {
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-        let ret = lapi.RunMApp("retweet_removed", {aid: APP_ID, ver: "last",
-          nid: author.hostIds[0], sid: systemSid, authorid: authorId,
-          tweetid: tweetId, userid: userId, retweetid: retweetId
-        }, [])
+        let ret = lapi.RunMApp("retweet_added", {aid: APP_ID, ver: "last",
+          nid: author.hostIds[0], sid: systemSid,
+          authorid: authorId, tweetid: tweetId, userid: fansId, retweetid: retweetId}, []
+        )
         return ret
     } else {
       const authSid = lapi.BELoginAsAuthor()
