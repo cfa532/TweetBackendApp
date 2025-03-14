@@ -3,7 +3,11 @@
  */
 ((request, args)=>{
     try {
-        const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
+        const APP_EXT = "com.example.twitterclone"
+        const TWT_CONTENT_KEY = "core_data_of_tweet"
+        const TWT_LIST_KEY = "list_of_tweets_mid"
+
+        const APP_ID = request["aid"]
         const hostId = request["hostid"]
 
         let nodeId = lapi.GetVar("", "hostid")    // current node id
@@ -20,18 +24,12 @@
 
             return tweetID
         } else {
-            const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
-            const APP_EXT = "com.example.twitterclone"
-            const TWT_CONTENT_KEY = "core_data_of_tweet"
-            const TWT_LIST_KEY = "list_of_tweets_mid"
-    
             const tweet = JSON.parse(request['tweet'])
             const authSid = lapi.BELoginAsAuthor()
             const tweetId = lapi.MMCreate(authSid, APP_ID, APP_EXT, "{{auto}}", 2, 0x07276704)
-            tweet["mid"] = tweetId
-            tweet["timestamp"] = Date.now()
-    
             const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
+            tweet["mid"] = tweetId
+            tweet["timestamp"] = Date.now()    
             lapi.Set(tweetSid, TWT_CONTENT_KEY, tweet)
     
             tweet.attachments?.forEach(element => {
