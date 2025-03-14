@@ -50,6 +50,12 @@
             // update the score of the new tweet in AppData
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
                 userid: tweet.authorId, mid: tweetId}, [])
+
+            // if the tweet is a retweet of an original tweet, sync the original tweet here.
+            if (tweet.originalTweetId) {
+                lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
+                lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
+            }
             return tweetId
         }
     } catch(e) {

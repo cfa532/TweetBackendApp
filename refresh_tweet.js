@@ -27,9 +27,10 @@
         }
         const tweetSid = lapi.MMOpen("", tweetId, "last")
         const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
-        if (!tweet)
+        if (!tweet) {
+            console.log("Tweet not found", tweetId)
             return null
-
+        }
         // check if the appUser has bookmarked or liked the tweet
         const hasFavored = lapi.Hget(tweetSid, LIKE_LIST, appUserId)
         const hasBookmarked = lapi.Hget(tweetSid, BOOKMARK_LIST, appUserId)
