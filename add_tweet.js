@@ -13,12 +13,16 @@
             const tweetId = lapi.RunMApp("add_tweet_host", {aid: APP_ID, ver: "last",
                 nid: hostId, sid: systemSid, tweet: request["tweet"]}, []
             )
+            console.log("add_tweet remote", tweetId)
             // tweet is created in remote host, sync it here.
             lapi.MiMeiSync(systemSid, "", tweetId, {})
+            
             return tweetId
         } else {
             const req = {aid: APP_ID, ver: "last", tweet: request["tweet"]}
-            return lapi.RunMApp("add_tweet_host", req, [])
+            let ret = lapi.RunMApp("add_tweet_host", req, [])
+            console.log("add_tweet local", ret)
+            return ret
         }
     } catch(e) {
         console.error("Error add_tweet", JSON.stringify(request), e)

@@ -16,12 +16,12 @@
         const TWT_CONTENT_KEY = "core_data_of_tweet"
         const TWT_LIST_KEY = "list_of_tweets_mid"
 
-        let tweet = JSON.parse(request['tweet'])
-        let authSid = lapi.BELoginAsAuthor()
-        let tweetId = lapi.MMCreate(authSid, APP_ID, APP_EXT, "{{auto}}", 2, 0x07276704)
+        const tweet = JSON.parse(request['tweet'])
+        const authSid = lapi.BELoginAsAuthor()
+        const tweetId = lapi.MMCreate(authSid, APP_ID, APP_EXT, "{{auto}}", 2, 0x07276704)
         tweet["mid"] = tweetId
 
-        let tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
+        const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
         lapi.Set(tweetSid, TWT_CONTENT_KEY, tweet)
 
         tweet.attachments?.forEach(element => {
@@ -30,8 +30,8 @@
         lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
         lapi.MiMeiPublish(tweetSid, "", tweetId)     // publish the tweet ID.
 
-        let authorId = tweet["authorId"]
-        let userSid = lapi.MMOpen(authSid, authorId, "cur")
+        const authorId = tweet["authorId"]
+        const userSid = lapi.MMOpen(authSid, authorId, "cur")
         lapi.Zadd(userSid, TWT_LIST_KEY, getScorePair(tweetId))
         lapi.MMAddRef(userSid, authorId, tweetId)
         lapi.MMBackup(userSid, authorId, "", "delref=true")
@@ -43,9 +43,9 @@
             lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
         }
 
-        // update the score of the user in AppData
+        // update the score of the new tweet in AppData
         lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
-            userid: tweet.authorId, mid: tweet.authorId}, [])
+            userid: tweet.authorId, mid: tweet.mid}, [])
         tweetId
     } catch(e) {
         console.error("Error add_tweet_host", JSON.stringify(request), e)
