@@ -19,9 +19,10 @@
                 hostid: hostId, tweet: request["tweet"]}, []
             )
             // tweet is created in remote host, sync it here.
-            console.log("add_tweet remote", tweetId)
             lapi.MiMeiSync(systemSid, "", tweetId, {})
+            lapi.MiMeiProvide(systemSid, "", tweetId)
 
+            console.log("add_tweet remote", tweetId)
             return tweetId
         } else {
             const tweet = JSON.parse(request['tweet'])
