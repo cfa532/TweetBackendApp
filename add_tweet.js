@@ -19,7 +19,7 @@
                 hostid: hostId, tweet: request["tweet"]}, []
             )
             // tweet is created in remote host, sync it here.
-            lapi.MiMeiSync(systemSid, "", tweetId, {})
+            // lapi.MiMeiSync(systemSid, "", tweetId, {})   // TODO: remote tweet not ready yet.
             lapi.MiMeiProvide(systemSid, "", tweetId)
 
             console.log("add_tweet remote", tweetId)
@@ -34,18 +34,19 @@
             lapi.Set(tweetSid, TWT_CONTENT_KEY, tweet)
     
             tweet.attachments?.forEach(element => {
-                lapi.MMAddRef(tweetSid, tweetId, element.mid)
+                lapi.MMAddRef(authSid, tweetId, element.mid)
             });
-            lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
-            lapi.MiMeiPublish(tweetSid, "", tweetId)     // publish the tweet ID.
+            lapi.MMBackup(authSid, tweetId, "", "delref=true")
+            lapi.MiMeiPublish(authSid, "", tweetId)     // publish the tweet ID.
     
             const authorId = tweet.authorId
             const userSid = lapi.MMOpen(authSid, authorId, "cur")
             lapi.Zadd(userSid, TWT_LIST_KEY, getScorePair(tweetId))
     
-            lapi.MMAddRef(userSid, authorId, tweetId)
-            lapi.MMBackup(userSid, authorId, "", "delref=true")
-            lapi.MiMeiPublish(userSid, "", authorId)
+            lapi.MMAddRef(authSid, authorId, tweetId)
+            lapi.MMBackup(authSid, authorId, "", "delref=true")
+            console.log("add_tweet local", tweetId)
+            lapi.MiMeiPublish(authSid, "", authorId)
     
             // update the score of the new tweet in AppData
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
@@ -53,7 +54,7 @@
 
             // if the tweet is a retweet of an original tweet, sync the original tweet here.
             if (tweet.originalTweetId) {
-                lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
+                // lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
                 lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
             }
             return tweetId

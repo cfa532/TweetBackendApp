@@ -67,7 +67,7 @@
         // provide or unprovide the tweet object
         if (operationType == "bookmark" || operationType == "favorite") {
             if (ret.hasValue) {
-                lapi.MiMeiSync(systemSid, "", tweetId, {})
+                // lapi.MiMeiSync(systemSid, "", tweetId, {})
                 lapi.MiMeiProvide(systemSid, "", tweetId)
             } else {
                 lapi.MiMeiUnprovide(systemSid, "", tweetId)

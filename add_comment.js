@@ -1,6 +1,6 @@
 ((request, args)=>{
 /**
- * Deputy function to add a comment to a specific tweet.
+ * Add a comment to a tweet.
  *
  * @param {string} tweetId - The ID of the tweet to which the comment is being added.
  * @param {string} comment - The comment object, which is a Tweet object itself.
@@ -24,13 +24,13 @@
                 hostid: hostId, userid: userId, tweetid: tweetId, comment: request["comment"]}, []
             )
             // sync tweet to node from where appUser is being loaded.
-            lapi.MiMeiSync(systemSid, "", tweetId, {})
+            lapi.MiMeiProvide(systemSid, "", tweetId)
 
             // sync all comments of the tweet to local node
             const tweetSid = lapi.MMOpen("", tweetId, "last")
             lapi.Zrange(tweetSid, COMMENT_LIST, 0, -1).forEach(element => {
                 if (!lapi.MFIsExist("", element.Member))
-                    lapi.MiMeiSync(systemSid, "", element.Member, {})
+                    lapi.MiMeiProvide(systemSid, "", element.Member)
             })
             return ret
         } else {

@@ -35,7 +35,7 @@
                 userid: userId, authorid: authorId, tweetid: tweetId}, []
             )
             // new sync the tweet from the remote host.
-            lapi.MiMeiSync(systemSid, "", tweetId, {})
+            // lapi.MiMeiSync(systemSid, "", tweetId, {})
             lapi.MiMeiProvide(systemSid, "", tweetId)
 
             // ret = {user: user, hasLiked: hasLiked, count: count}

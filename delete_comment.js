@@ -9,7 +9,6 @@
         // add new comment to the tweet
         const APP_ID = request["aid"]
         const userId = request["userid"]
-        const user = getUser(userId)
         const tweetId = request["tweetid"]
         const commentId = request["commentid"]
         const hostId = request["hostid"]
@@ -22,7 +21,7 @@
                 userid: userId, tweetid: tweetId, commentid: commentId}
             let ret = lapi.RunMApp("delete_comment_host", req, [])
 
-            lapi.MiMeiSync(systemSid, "", tweetId, {})
+            lapi.MiMeiProvide(systemSid, "", tweetId)
             return ret
         } else {
             const req = {aid: APP_ID, ver: "last",

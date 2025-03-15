@@ -25,14 +25,13 @@
                 nid: author.hostIds[0], sid: systemSid, userhostid: userHostId,
                 userid: userId, authorid: authorId, tweetid: tweetId}, []
             )
-            // new sync the tweet from the remote host.
-            lapi.MiMeiSync(systemSid, "", tweetId, {})
+            // now sync the tweet from the remote host.
+            // lapi.MiMeiSync(systemSid, "", tweetId, {})
             lapi.MiMeiProvide(systemSid, "", tweetId)
             console.log("Toggle bookmark remote ret=", JSON.stringify(ret))
             return ret
         } else {
             let ret = toggleBookmarkOfTweet(userId, authorId, tweetId)
-    
             // toggle the bookmark of the tweet in appUser's node.
             const updatedUser = lapi.RunMApp("toggle_bookmark_by_user", {aid: APP_ID, ver: "last",
                 nid: userHostId, sid: systemSid,

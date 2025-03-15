@@ -41,7 +41,7 @@
             } else {
                 lapi.Hset(userSid, FOLLOWINGS_LIST, otherId, Date.now())
                 if (hostOfOtherId && hostOfOtherId != nodeId) {
-                    lapi.MiMeiSync(authSid, "", otherId, {})
+                    // lapi.MiMeiSync(authSid, "", otherId, {})
                     lapi.MiMeiProvide(authSid, "", otherId)
                 }
             }

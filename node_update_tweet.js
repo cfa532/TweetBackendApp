@@ -21,7 +21,7 @@
         const oldScore = lapi.Zscore(mmsid, userId, tweetId)
 
         if (newScore != oldScore) {
-            console.log("new and old score", newScore, oldScore, userId, tweetId)
+            console.log("New and old score of tweet", tweetId, newScore, oldScore, userId)
             lapi.MiMeiSync(mmsid, "", tweetId, {})
             sp = new ScorePair
             sp.Score = newScore ? newScore : 0
@@ -34,7 +34,7 @@
             lapi.Zrevrange(tweetSid, COMMENT_LIST, 0, -1).forEach(sp => {
                 // sync comment one by one
                 if (!lapi.MFIsExist(mmsid, sp.Member)) {
-                    lapi.MiMeiSync(mmsid, "", sp.Member, {})
+                    lapi.MiMeiProvide(mmsid, "", sp.Member)
                 }
             })
         }

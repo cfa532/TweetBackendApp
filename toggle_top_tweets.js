@@ -18,6 +18,7 @@
                 tweetid: tweetId, userid: userId}, []
             )
             // user mimei will be updated by system.
+            console.log("Toggle top tweets remote ret=", JSON.stringify(ret))
             return ret
         } else {
             const userSid = lapi.MMOpen(authSid, userId, "cur")
