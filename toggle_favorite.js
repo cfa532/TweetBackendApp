@@ -39,7 +39,7 @@
             lapi.MiMeiProvide(systemSid, "", tweetId)
 
             // ret = {user: user, isFavorite: isFavorite, count: count}
-            console.log("Toggle favorite of remote tweet", JSON.stringify(ret))
+            console.log("Toggle favorite of remote tweet", JSON.stringify(ret), userId, tweetId)
             return ret
         } else {
             // current node is the author's host, where tweet is published.
@@ -50,7 +50,7 @@
                 nid: userHostId, sid: systemSid,
                 userid: userId, tweetid: tweetId, isfavorite: ret.isFavorite}, []
             )
-            console.log("Toggle favorite of local tweet", JSON.stringify(ret))
+            console.log("Toggle favorite of local tweet", JSON.stringify(ret), userId, tweetId)
             return {user: updatedUser, isFavorite: ret.isFavorite, count: ret.count }
         }
     } catch(e) {
