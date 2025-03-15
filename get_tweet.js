@@ -23,8 +23,8 @@
             return null
 
         // check if the appUser has bookmarked or liked the tweet
-        const hasLiked = lapi.Hget(mmsid, FAVORITE_LIST, appUserId)
-        const hasBookmarked = lapi.Hget(mmsid, BOOKMARK_LIST, appUserId)
+        const isFavorite = lapi.Hget(mmsid, FAVORITE_LIST, appUserId)
+        const isBookmarked = lapi.Hget(mmsid, BOOKMARK_LIST, appUserId)
         const hasRetweeted = lapi.Hget(mmsid, RETWEET_LIST, appUserId)
         let ret = {
             // tweet core data
@@ -38,12 +38,12 @@
             "originalAuthorId": tweet.originalAuthorId,
             "timestamp": tweet.timestamp,
             "bookmarkCount": lapi.Hlen(mmsid, BOOKMARK_LIST),
-            "likeCount": lapi.Hlen(mmsid, FAVORITE_LIST),
+            "favoriteCount": lapi.Hlen(mmsid, FAVORITE_LIST),
             "commentCount": lapi.Zcard(mmsid, COMMENT_LIST),
             "retweetCount": lapi.Hlen(mmsid, RETWEET_LIST),
             "favorites": [
-                hasLiked ? true : false,
-                hasBookmarked ? true : false,
+                isFavorite ? true : false,
+                isBookmarked ? true : false,
                 hasRetweeted ? true : false,
             ],
         }

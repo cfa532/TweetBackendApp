@@ -38,7 +38,7 @@
             // lapi.MiMeiSync(systemSid, "", tweetId, {})
             lapi.MiMeiProvide(systemSid, "", tweetId)
 
-            // ret = {user: user, hasLiked: hasLiked, count: count}
+            // ret = {user: user, isFavorite: isFavorite, count: count}
             console.log("Toggle favorite of remote tweet", JSON.stringify(ret))
             return ret
         } else {
@@ -48,10 +48,10 @@
             // toggle the favorite status of the tweet in appUser's node.
             const updatedUser = lapi.RunMApp("toggle_favorite_by_user", {aid: APP_ID, ver: "last",
                 nid: userHostId, sid: systemSid,
-                userid: userId, tweetid: tweetId, isfavorite: ret.hasLiked}, []
+                userid: userId, tweetid: tweetId, isfavorite: ret.isFavorite}, []
             )
             console.log("Toggle favorite of local tweet", JSON.stringify(ret))
-            return {user: updatedUser, hasLiked: ret.hasLiked, count: ret.count }
+            return {user: updatedUser, isFavorite: ret.isFavorite, count: ret.count }
         }
     } catch(e) {
         console.error("Error toggle_favorite", e, JSON.stringify(request))
@@ -82,7 +82,7 @@
             )
             // return current favorite count and favorite status by userId (appUser).
             const favoriteCount = lapi.Hlen(tweetSid, FAVORITE_LIST)
-            return { hasLiked: !isFavorite, count: favoriteCount }
+            return { isFavorite: !isFavorite, count: favoriteCount }
         } catch(e) {
             console.error("Error toggle_favorite", JSON.stringify(request), e)
         }    

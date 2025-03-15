@@ -7,7 +7,7 @@
     const OWNER_DATA_KEY = "data_of_author"
     const FAVORITE_LIST = "favorite_list"
     const APP_ID = request["aid"]
-    const userId = request["userid"]
+    const userId = request["userid"]    // appUser id
 
     try {
         const tweetId = request["tweetid"]  // tweetID that appUser favored
@@ -23,9 +23,9 @@
             const userData = lapi.RunMApp("toggle_favorite_by_user",
                 { aid: APP_ID, ver: "last",
                     nid: user.hostIds[0], sid: systemSid,
-                    userid: userId, mid: tweetId, isfavorite: isFavorite }, []
+                    userid: userId, tweetid: tweetId, isfavorite: isFavorite }, []
             )
-            console.log("Toggle favorite of remote user", isFavorite)
+            console.log("Toggle favorite of remote user", JSON.stringify(request))
             return userData     // user local data will be updated by Leither
         } else {
             console.log("Toggle favorite of local user", JSON.stringify(request))
@@ -55,7 +55,7 @@
             return updatedUser
         }
     } catch(e) {
-        console.error("toggle user favorite error", e)
+        console.error("toggle user favorite error", e, JSON.stringify(request))
         const userSid = lapi.MMOpen("", userId, "last")
         return lapi.Get(userSid, OWNER_DATA_KEY)
     }

@@ -21,9 +21,9 @@
             const userData = lapi.RunMApp("toggle_bookmark_by_user",
                 { aid: APP_ID, ver: "last",
                     nid: user.hostIds[0], sid: systemSid,
-                    userid: userId, mid: tweetId, isbookmarked: isBookmarked}, []
+                    userid: userId, tweetid: tweetId, isbookmarked: isBookmarked}, []
             )
-            console.log("Toggle bookmark of remote user", isBookmarked)
+            console.log("Toggle bookmark of remote user", JSON.stringify(request))
             return userData
         } else {
             console.log("Toggle bookmark of local user", JSON.stringify(request))
@@ -49,11 +49,10 @@
             const updatedUser = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
                 userid: userId}, []
             )
-            console.log("Toggle bookmark of user", userId, isBookmarked)
             return updatedUser
         }
     } catch(e) {
-        console.error("toggle user bookmark error", e)
+        console.error("Toggle user bookmark error", e, JSON.stringify(request))
         return lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
             userid: userId}, []
         )

@@ -28,12 +28,12 @@
         const tweetSid = lapi.MMOpen("", tweetId, "last")
         const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
         if (!tweet) {
-            console.log("Tweet not found", tweetId)
+            console.warn("Tweet", tweetId, "not found on node", lapi.GetVar("", "hostid") )
             return null
         }
         // check if the appUser has bookmarked or liked the tweet
-        const hasFavored = lapi.Hget(tweetSid, LIKE_LIST, appUserId)
-        const hasBookmarked = lapi.Hget(tweetSid, BOOKMARK_LIST, appUserId)
+        const isFavorite = lapi.Hget(tweetSid, LIKE_LIST, appUserId)
+        const isBookmarked = lapi.Hget(tweetSid, BOOKMARK_LIST, appUserId)
         const hasRetweeted = lapi.Hget(tweetSid, RETWEET_LIST, appUserId)
         let ret = {
             // tweet core data
@@ -47,12 +47,12 @@
             "originalAuthorId": tweet.originalAuthorId,
             "timestamp": tweet.timestamp,
             "bookmarkCount": lapi.Hlen(tweetSid, BOOKMARK_LIST),
-            "likeCount": lapi.Hlen(tweetSid, LIKE_LIST),
+            "favoriteCount": lapi.Hlen(tweetSid, LIKE_LIST),
             "commentCount": lapi.Zcard(tweetSid, COMMENT_LIST),
             "retweetCount": lapi.Hlen(tweetSid, RETWEET_LIST),
             "favorites": [
-                hasFavored ? true : false,
-                hasBookmarked ? true : false,
+                isFavorite ? true : false,
+                isBookmarked ? true : false,
                 hasRetweeted ? true : false,
             ],
         }

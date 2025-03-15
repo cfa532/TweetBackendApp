@@ -25,12 +25,14 @@
 
             const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
             const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
-            tweet.attachments?.forEach(element => {
-                lapi.MMDelRef(tweetSid, tweetId, element.mid)
-            });
-            lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
-            lapi.MiMeiUnpublish(authSid, "", tweetId)
-            lapi.MMDelVers(authSid, tweetId)
+            if (tweet) {
+                tweet.attachments?.forEach(element => {
+                    lapi.MMDelRef(tweetSid, tweetId, element.mid)
+                });
+                lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
+                lapi.MiMeiUnpublish(authSid, "", tweetId)
+                lapi.MMDelVers(authSid, tweetId)
+            }
 
             const userSid = lapi.MMOpen(authSid, userId, "cur")
             lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)

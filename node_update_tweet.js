@@ -23,6 +23,7 @@
         if (newScore != oldScore) {
             console.log("New and old score of tweet", tweetId, newScore, oldScore, userId)
             lapi.MiMeiSync(mmsid, "", tweetId, {})
+            // lapi.MiMeiProvide(mmsid, "", tweetId)
             sp = new ScorePair
             sp.Score = newScore ? newScore : 0
             sp.Member = tweetId
@@ -39,8 +40,18 @@
             })
         }
     } catch(e) {
-        lapi.Zaddwithseq(mmsid, userId, tweetId)    // update the score if it is missing.
+        // if the tweet is never synced before, there is no score in the node data.
+        // which will cuase the exception. Initialize the score here and sync the tweet.
         console.error("Error node_update_tweet", e, JSON.stringify(request))
+        lapi.Zaddwithseq(mmsid, userId, tweetId)    // update the score if it is missing.
+        lapi.MiMeiSync(mmsid, "", tweetId, {})
+        const tweetSid = lapi.MMOpen("", tweetId, "last")
+        lapi.Zrevrange(tweetSid, COMMENT_LIST, 0, -1).forEach(sp => {
+            // sync comment one by one
+            if (!lapi.MFIsExist(mmsid, sp.Member)) {
+                lapi.MiMeiProvide(mmsid, "", sp.Member)
+            }
+        })
     }
 
     function ScorePair() {}
