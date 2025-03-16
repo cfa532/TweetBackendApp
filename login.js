@@ -1,13 +1,14 @@
 ((request, args)=>{
-    try {
-        const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
-        const APP_EXT = "com.example.twitterclone"
-        const OWNER_DATA_KEY = "data_of_author"
+    const APP_EXT = "com.example.twitterclone"
+    const OWNER_DATA_KEY = "data_of_author"
+    const APP_ID = request["aid"]
+    let user = null
 
-        let authSid = lapi.BELoginAsAuthor()
-        let userId = lapi.MMCreate(authSid, APP_ID, APP_EXT, request["username"], 2, 0x07276704)
-        let mmsid = lapi.MMOpen(authSid, userId, "cur")
-        let user = lapi.Get(mmsid, OWNER_DATA_KEY)
+    try {
+        const authSid = lapi.BELoginAsAuthor()
+        const userId = lapi.MMCreate(authSid, APP_ID, APP_EXT, request["username"], 2, 0x07276704)
+        const userSid = lapi.MMOpen(authSid, userId, "cur")
+        user = lapi.Get(userSid, OWNER_DATA_KEY)
         if (!user) {
             console.error("User does not exist.", request["username"])
             return {status: "failure", reason: "User does not exist"}
@@ -23,12 +24,12 @@
                 // current node is not the writable host of the user data.
                 // update last login time on the remost host.
                 let systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-                let req = {aid: APP_ID, ver: "last", userid: userId, 
-                    nid: user.hostIds[0], sid: systemSid}
-                lapi.RunMApp("update_login_time", req, [])
+                lapi.RunMApp("update_login_time", {aid: APP_ID, ver: "last",
+                    userid: userId, nid: user.hostIds[0], sid: systemSid}, []
+                )
             } else {
                 user["lastLogin"] = Date.now()
-                lapi.Set(mmsid, OWNER_DATA_KEY, user)
+                lapi.Set(userSid, OWNER_DATA_KEY, user)
                 lapi.MMBackup(authSid, user.mid, "", "delref=true")
                 lapi.MiMeiPublish(authSid, "", user.mid)
             }
