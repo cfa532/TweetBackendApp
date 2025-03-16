@@ -12,8 +12,7 @@
         const mid = request["mid"]
         const mmsid = lapi.BEOpenAppDataNode("cur", APP_ID)
         let ret = lapi.Zaddwithseq(mmsid, userId, mid)
-        console.log("update score", lapi.Zscore(mmsid, userId, mid), ret, userId, mid)
     } catch(e) {
-        console.error("Error node_update_score", JSON.stringify(request), e)
+        console.error("Error node_update_score", e, JSON.stringify(request))
     }
 })(request, args)
