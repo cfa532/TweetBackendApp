@@ -2,21 +2,23 @@
     const APP_EXT = "com.example.twitterclone"
     const OWNER_DATA_KEY = "data_of_author"
     const APP_ID = request["aid"]
+    const username = request["username"]
+    const password = request["password"]
     let user = null
 
     try {
         const authSid = lapi.BELoginAsAuthor()
-        const userId = lapi.MMCreate(authSid, APP_ID, APP_EXT, request["username"], 2, 0x07276704)
+        const userId = lapi.MMCreate(authSid, APP_ID, APP_EXT, username, 2, 0x07276704)
         const userSid = lapi.MMOpen(authSid, userId, "cur")
         user = lapi.Get(userSid, OWNER_DATA_KEY)
         if (!user) {
-            console.error("User does not exist.", request["username"])
+            console.error("User does not exist.", username)
             return {status: "failure", reason: "User does not exist"}
         }
         // return {user: JSON.stringify(user), status: "success"}
 
         // need to check hashed password
-        if (user.password == lapi.MMCreate(authSid, APP_ID, APP_EXT, request["password"], 1, 0x07276704)) {
+        if (user.password == lapi.MMCreate(authSid, APP_ID, APP_EXT, password, 1, 0x07276704)) {
             // lapi.MiMeiSync(authSid, "", userId, {})
             // if enable Sync after login, remember to update hostIds of User data obj.
             let nodeId = lapi.GetVar("", "hostid")
