@@ -70,7 +70,7 @@
             const bookmarkCount = lapi.Hlen(tweetSid, BOOKMARK_LIST)
             return {hasBookmarked: !hasMarked, count: bookmarkCount}
         } catch(e) {
-            console.error("Error toggle_bookmark", JSON.stringify(request), e)
+            console.error("Error toggleBookmarkOfTweet", JSON.stringify(request), e)
         }    
     }
 
