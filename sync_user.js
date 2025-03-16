@@ -5,6 +5,6 @@
         lapi.MiMeiSync(authSid, "", userId, {})
         lapi.MiMeiProvide(authSid, "", userId)
     } catch(e) {
-        console.error("Error get_userid:", JSON.stringify(request), e)
+        console.error("Error sync_user:", JSON.stringify(request), e)
     }
 })(request, args)

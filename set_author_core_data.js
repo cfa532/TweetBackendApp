@@ -19,6 +19,9 @@
                 nid: userInDB.hostIds[0], sid: systemSid, user: request["user"]}, []
             )
         } else {
+            /**
+             * If user update without providing hostIds, keep the old ones.
+             */
             if (!user.hostIds || user.hostIds.length == 0) {
                 user.hostIds = userInDB.hostIds
             }
@@ -37,7 +40,8 @@
             if (user.hostIds[0] != userInDB.hostIds[0]) {
                 // user has changed hostId, make sure user mimei is available on the new hostId
                 lapi.RunMApp("sync_user", {aid: APP_ID, ver: "last",
-                    nid: user.hostIds[0], sid: systemSid, mid: user.mid}, [])
+                    nid: user.hostIds[0], sid: systemSid, mid: user.mid}, []
+                )
             }
             delete user.password
             return {user: JSON.stringify(user), status: "success"}
