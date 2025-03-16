@@ -2,7 +2,7 @@
     try {
         const TWT_LIST_KEY = "list_of_tweets_mid"
         const TWT_CONTENT_KEY = "core_data_of_tweet"
-        const TOP_TWEETS = "top_tweet_list"
+        const PINNED_TWEETS = "top_tweet_list"
         const tweetId = request["tweetid"]    // tweet Id to be removed
         const userId = request["authorid"]
         const authSid = lapi.BELoginAsAuthor()
@@ -18,7 +18,7 @@
 
         const userSid = lapi.MMOpen(authSid, userId, "cur")
         lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
-        lapi.Hdel(userSid, TOP_TWEETS, tweetId)   // remove it from pinned list
+        lapi.Hdel(userSid, PINNED_TWEETS, tweetId)   // remove it from pinned list
         lapi.MMBackup(userSid, userId, "", "delref=true")
 
         lapi.MMDelRef(userSid, userId, tweetId)

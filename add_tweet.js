@@ -21,7 +21,7 @@
             )
             // tweet is created in remote host, sync it here.
             // lapi.MiMeiSync(systemSid, "", tweetId, {})   // TODO: remote tweet not ready yet.
-            lapi.MiMeiProvide(systemSid, "", tweetId)
+            // lapi.MiMeiProvide(systemSid, "", tweetId)
 
             console.log("add_tweet remote", tweetId)
             return tweetId

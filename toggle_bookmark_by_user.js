@@ -14,6 +14,7 @@
         /**
          * Boolean value is converted to string in the request.
          */
+        const authSid = lapi.BELoginAsAuthor()
         const user = getUser(userId)
         const nodeId = lapi.GetVar("", "hostid")    // current node id
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
@@ -27,7 +28,6 @@
             return userData
         } else {
             console.log("Toggle bookmark of local user", JSON.stringify(request))
-            const authSid = lapi.BELoginAsAuthor()
             const userSid = lapi.MMOpen(authSid, userId, "cur")
             if (isBookmarked) {
                 lapi.Hset(userSid, BOOKMARK_LIST, tweetId, Date.now())

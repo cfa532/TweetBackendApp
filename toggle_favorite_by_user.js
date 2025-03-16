@@ -4,19 +4,18 @@
  */
 
 ((request, args)=>{
-    const OWNER_DATA_KEY = "data_of_author"
     const FAVORITE_LIST = "favorite_list"
     const APP_ID = request["aid"]
     const userId = request["userid"]    // appUser id
+    const tweetId = request["tweetid"]  // tweetID that appUser favored
+    const isFavorite = request["isfavorite"] == "true" ? true : false
 
     try {
-        const tweetId = request["tweetid"]  // tweetID that appUser favored
         /**
          * Boolean value is converted to string in the request.
          */
-        const isFavorite = request["isfavorite"] == "true" ? true : false
+        const authSid = lapi.BELoginAsAuthor()
         const user = getUser(userId)
-    
         const nodeId = lapi.GetVar("", "hostid")    // current node id
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
@@ -29,7 +28,6 @@
             return userData     // user local data will be updated by Leither
         } else {
             console.log("Toggle favorite of local user", JSON.stringify(request))
-            const authSid = lapi.BELoginAsAuthor()
             const userSid = lapi.MMOpen(authSid, userId, "cur")
             if (isFavorite) {
                 lapi.Hset(userSid, FAVORITE_LIST, tweetId, Date.now())
@@ -51,13 +49,13 @@
             const updatedUser = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
                 userid: userId}, []
             )
-            console.log("Toggle favorite of user", userId, isFavorite)
             return updatedUser
         }
     } catch(e) {
         console.error("toggle user favorite error", e, JSON.stringify(request))
-        const userSid = lapi.MMOpen("", userId, "last")
-        return lapi.Get(userSid, OWNER_DATA_KEY)
+        return lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
+            userid: userId}, []
+        )
     }
 
     function getUser(mid) {

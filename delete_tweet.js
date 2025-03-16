@@ -1,7 +1,7 @@
 ((request, args)=>{
     const TWT_LIST_KEY = "list_of_tweets_mid"
     const TWT_CONTENT_KEY = "core_data_of_tweet"
-    const TOP_TWEETS = "top_tweet_list"
+    const PINNED_TWEETS = "top_tweet_list"
     const tweetId = request["tweetid"]    // tweet Id to be removed
     const userId = request["authorid"]
     const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
@@ -9,7 +9,6 @@
     try {
         const user = getUser(userId)
         const nodeId = lapi.GetVar("", "hostid")    // current node id
-
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
             // send the request to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
@@ -22,24 +21,23 @@
             // If there are attachments, delete all of the references.
             // If not referred, attachments will be deleted by garbage collector
             const authSid = lapi.BELoginAsAuthor()
-
             const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
             const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
             if (tweet) {
                 tweet.attachments?.forEach(element => {
                     lapi.MMDelRef(tweetSid, tweetId, element.mid)
                 });
-                lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
+                lapi.MMBackup(authSid, tweetId, "", "delref=true")
                 lapi.MiMeiUnpublish(authSid, "", tweetId)
                 lapi.MMDelVers(authSid, tweetId)
             }
 
             const userSid = lapi.MMOpen(authSid, userId, "cur")
             lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
-            lapi.Hdel(userSid, TOP_TWEETS, tweetId)   // remove it from pinned list
+            lapi.Hdel(userSid, PINNED_TWEETS, tweetId)   // remove it from pinned list
             lapi.MMDelRef(userSid, userId, tweetId)
-            lapi.MMBackup(userSid, userId, "", "delref=true")
-            lapi.MiMeiPublish(userSid, "", userId)
+            lapi.MMBackup(authSid, userId, "", "delref=true")
+            lapi.MiMeiPublish(authSid, "", userId)
 
             console.log("Delete tweet ", JSON.stringify(tweet))
     
