@@ -33,7 +33,9 @@
                 lapi.Hset(userSid, BOOKMARK_LIST, tweetId, Date.now())
             } 
             else {
-                lapi.Hdel(userSid, BOOKMARK_LIST, tweetId)
+                if (lapi.Hget(userSid, BOOKMARK_LIST, tweetId)) {
+                    lapi.Hdel(userSid, BOOKMARK_LIST, tweetId)
+                }
             }
             lapi.MMBackup(userSid, userId, "", "delref=true")
             lapi.MiMeiPublish(userSid, "", userId)
