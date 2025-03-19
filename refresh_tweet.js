@@ -19,7 +19,7 @@
     try {
         const nodeId = lapi.GetVar("", "hostid")
         if (nodeId != hostId) {
-            console.log("Refresh tweet from a different host", hostId, nodeId, authorId, tweetId)
+            console.log("Refresh tweet", tweetId, "on", nodeId, "from host", hostId)
             // loading tweet from a node other than author's host,
             // make sure the current node is up to date.
             lapi.RunMApp("node_update_tweet", {aid: request["aid"], ver:"last",

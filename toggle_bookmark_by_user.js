@@ -29,15 +29,22 @@
         } else {
             console.log("Toggle bookmark of local user", JSON.stringify(request))
             const userSid = lapi.MMOpen(authSid, userId, "cur")
-            if (isBookmarked) {
-                lapi.Hset(userSid, BOOKMARK_LIST, tweetId, Date.now())
-            } 
-            else {
-                if (lapi.Hget(userSid, BOOKMARK_LIST, tweetId)) {
-                    lapi.Hdel(userSid, BOOKMARK_LIST, tweetId)
+            try {
+                lapi.Begin(userSid, 2)
+                if (isBookmarked) {
+                    lapi.Hset(userSid, BOOKMARK_LIST, tweetId, Date.now())
+                } 
+                else {
+                    if (lapi.Hget(userSid, BOOKMARK_LIST, tweetId)) {
+                        lapi.Hdel(userSid, BOOKMARK_LIST, tweetId)
+                    }
                 }
+                lapi.Commit(userSid)
+                lapi.MMBackup(userSid, userId, "", "delref=true")
+            } catch(e) {
+                lapi.Rollback(userSid)
+                throw e
             }
-            lapi.MMBackup(userSid, userId, "", "delref=true")
             lapi.MiMeiPublish(userSid, "", userId)
             
             if (isBookmarked) {

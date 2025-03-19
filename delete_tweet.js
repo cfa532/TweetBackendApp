@@ -33,10 +33,17 @@
             }
 
             const userSid = lapi.MMOpen(authSid, userId, "cur")
-            lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
-            lapi.Hdel(userSid, PINNED_TWEETS, tweetId)   // remove it from pinned list
-            lapi.MMDelRef(userSid, userId, tweetId)
-            lapi.MMBackup(authSid, userId, "", "delref=true")
+            try {
+                lapi.Begin(userSid, 2)
+                lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
+                lapi.Hdel(userSid, PINNED_TWEETS, tweetId)   // remove it from pinned list
+                lapi.Commit(userSid)
+                lapi.MMDelRef(userSid, userId, tweetId)
+                lapi.MMBackup(userSid, userId, "", "delref=true")
+            } catch(e) {
+                lapi.Rollback(userSid)
+                throw e
+            }
             lapi.MiMeiPublish(authSid, "", userId)
 
             console.log("Delete tweet ", JSON.stringify(tweet))
@@ -48,7 +55,7 @@
             return tweetId
         }
     } catch(e) {
-        console.error("Error delete_tweet", JSON.stringify(request), e)
+        console.error("Error delete_tweet", e, JSON.stringify(request))
     }
 
     function getUser(mid) {

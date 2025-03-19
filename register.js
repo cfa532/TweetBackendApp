@@ -29,6 +29,7 @@
             }
             user["mid"] = userMid
             user["password"] = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)
+            user["timestamp"] = user["timestamp"] ? user["timestamp"] : Date.now()
             lapi.Set(userSid, OWNER_DATA_KEY, user)      // create default user data area
     
             user["followingList"]?.forEach(mid => {
