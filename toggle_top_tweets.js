@@ -5,7 +5,6 @@
     try {
         const PINNED_TWEETS = "top_tweet_list"
         const APP_ID = request["aid"]
-        const authSid = lapi.BELoginAsAuthor()
         const tweetId = request["tweetid"]
         const userId = request["userid"]
         const user = getUser(userId)
@@ -13,7 +12,7 @@
         const nodeId = lapi.GetVar("", "hostid")
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            let ret = lapi.RunMApp("toggle_top_tweet", {aid: APP_ID, ver: "last",
+            let ret = lapi.RunMApp("toggle_top_tweets", {aid: APP_ID, ver: "last",
                 nid: user.hostIds[0], sid: systemSid,
                 tweetid: tweetId, userid: userId}, []
             )
@@ -21,6 +20,7 @@
             console.log("Toggle top tweets remote ret=", JSON.stringify(ret))
             return ret
         } else {
+            const authSid = lapi.BELoginAsAuthor()
             const userSid = lapi.MMOpen(authSid, userId, "cur")
             const pinned = lapi.Hget(userSid, PINNED_TWEETS, tweetId)
             if (pinned) {
@@ -30,13 +30,9 @@
             }
             lapi.MMBackup(authSid, userId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", userId)
-    
-            // update the score of the user in AppData
-            lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
-                userid: userId, mid: userId}, [])
             
             return lapi.RunMApp("get_top_tweets", {aid: request["aid"], ver:"last",
-                userid: userId}, [])    
+                userid: userId}, [])
         }
     } catch(e) {
         console.error("Error toggle_top_tweets", JSON.stringify(request), e)
