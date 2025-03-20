@@ -6,8 +6,8 @@
     const RETWEET_LIST = "tweet_retweet_list"
     const APP_ID = request["aid"]
     const tweetId = request["tweetid"]      // original tweetId
-    const userId = request["userid"]        // original tweet author
-    const user = getUser(userId)
+    const authorId = request["authorid"]        // original tweet author
+    const user = getUser(authorId)
     const retweetId = request["retweetid"]    // retweet Id, removed here.
 
     const nodeId = lapi.GetVar("", "hostid")
@@ -15,7 +15,7 @@
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
         let ret = lapi.RunMApp("retweet_removed", {aid: APP_ID, ver: "last",
             nid: user.hostIds[0], sid: systemSid,
-            tweetid: tweetId, userid: userId, retweetid: retweetId}, []
+            tweetid: tweetId, authorid: authorId, retweetid: retweetId}, []
         )
         return ret
     } else {
@@ -27,10 +27,10 @@
   
       // update the score of the original tweet in AppData
       lapi.RunMApp("node_update_score", { aid: request["aid"], ver: "last",
-        userid: userId, mid: tweetId}, []
+        userid: authorId, mid: tweetId}, []
       )
       return lapi.RunMApp("get_tweet", {aid: request["aid"], ver: "last",
-        userid: userId, tweetid: tweetId}, []
+        userid: authorId, tweetid: tweetId}, []
       )
     }
   } catch (e) {

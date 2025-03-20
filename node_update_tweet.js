@@ -21,7 +21,8 @@
         const oldScore = lapi.Zscore(mmsid, userId, tweetId)
 
         if (newScore != oldScore) {
-            console.log("New and old score of tweet", tweetId, newScore, oldScore, userId)
+            console.log("New and old score of tweet", tweetId, newScore, oldScore,
+                "of user", userId)
             lapi.MiMeiSync(mmsid, "", tweetId, {})
             // lapi.MiMeiProvide(mmsid, "", tweetId)
             sp = new ScorePair

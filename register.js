@@ -25,7 +25,7 @@
     
             if (lapi.Get(userSid, OWNER_DATA_KEY)) {
                 console.warn("User register failed. Existing user", userMid)
-                // return {status: "failure", reason: "Username is taken"}
+                return {status: "failure", reason: "Username is taken"}
             }
             user["mid"] = userMid
             user["password"] = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)
