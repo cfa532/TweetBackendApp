@@ -14,9 +14,18 @@
         const nodeId = lapi.GetVar("", "hostid")
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
 
-        if (userInDB.hostIds?.findIndex(id => id == nodeId) != 0) {
+
+        // If user has changed hostId, make sure user mimei is available on the new hostId.
+        // The code below will throw an error if the new hostId is invalid.
+        if (user.hostIds[0] != userInDB.hostIds[0]) {
+            lapi.RunMApp("sync_user", {aid: APP_ID, ver: "last",
+                nid: user.hostIds[0], sid: systemSid, mid: user.mid}, []
+            )
+        }
+
+        if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
             return lapi.RunMApp("set_author_core_data", {aid: APP_ID, ver: "last",
-                nid: userInDB.hostIds[0], sid: systemSid, user: request["user"]}, []
+                nid: user.hostIds[0], sid: systemSid, user: request["user"]}, []
             )
         } else {
             /**
@@ -37,12 +46,7 @@
             lapi.Set(userSid, OWNER_DATA_KEY, user)
             lapi.MMBackup(userSid, user.mid, "", "delref=true")
             lapi.MiMeiPublish(userSid, "", user.mid)
-            if (user.hostIds[0] != userInDB.hostIds[0]) {
-                // user has changed hostId, make sure user mimei is available on the new hostId
-                lapi.RunMApp("sync_user", {aid: APP_ID, ver: "last",
-                    nid: user.hostIds[0], sid: systemSid, mid: user.mid}, []
-                )
-            }
+
             delete user.password
             return {user: JSON.stringify(user), status: "success"}
         }
