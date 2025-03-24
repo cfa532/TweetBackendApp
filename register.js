@@ -21,17 +21,17 @@
             // register it on current node
             const authSid = lapi.BELoginAsAuthor()
             const userMid = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.username, 2, 0x07276704)
-            const userSid = lapi.MMOpen(authSid, userMid, "cur")
     
             // result of GetVar is a string literal "[]", we need to parse it to an array.
             const userProvs = JSON.parse(lapi.GetVar("", "mmprovsips", userMid))
             if (userProvs.length > 0) {
                 console.warn("User register failed. Existing user", JSON.stringify(userProvs))
-                // return {status: "failure", reason: "Username is taken"}
+                return {status: "failure", reason: "Username is taken"}
             }
             user["mid"] = userMid
             user["password"] = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)
             user["timestamp"] = user["timestamp"] ? user["timestamp"] : Date.now()
+            const userSid = lapi.MMOpen(authSid, userMid, "cur")
             lapi.Set(userSid, OWNER_DATA_KEY, user)      // create default user data area
     
             user["followingList"]?.forEach(mid => {
