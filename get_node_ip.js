@@ -1,3 +1,6 @@
+/**
+ * Given a node Id, return a IP address list
+ */
 ((request, args)=>{
     try {
         let ips = lapi.GetVar("", "ips", request["nodeid"])

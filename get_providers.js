@@ -1,8 +1,8 @@
+/**
+ * Given a mimei Id, return a list of IP addresses of providers
+ */
 ((request, args)=>{
     try {
-        /**
-         * Given a mimei Id, return a list of IP addresses of providers
-         */
         let mid = request["mid"]
         let providers = lapi.GetVar("", "mmprovsips", mid)
         providers = JSON.parse(providers)
