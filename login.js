@@ -5,6 +5,7 @@
     const username = request["username"]
     const password = request["password"]
     let user = null
+    let loginOK = false
 
     try {
         const authSid = lapi.BELoginAsAuthor()
@@ -19,8 +20,9 @@
 
         // need to check hashed password
         if (user.password == lapi.MMCreate(authSid, APP_ID, APP_EXT, password, 1, 0x07276704)) {
-            // lapi.MiMeiSync(authSid, "", userId, {})
-            // if enable Sync after login, remember to update hostIds of User data obj.
+            // login success
+            loginOK = true
+            // update last login time
             let nodeId = lapi.GetVar("", "hostid")
             if (user.hostIds?.length > 0 && user.hostIds?.indexOf(nodeId) != 0) {
                 // current node is not the writable host of the user data.
@@ -45,5 +47,9 @@
         }
     } catch(e) {
         console.error("Error login", JSON.stringify(request), e)
+        if (loginOK)
+            return {user: JSON.stringify(user), status: "success"}
+        else
+            return {status: "failure", reason: "Unknown error"}
     }
 })(request, args)

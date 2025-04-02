@@ -11,7 +11,6 @@
     
         let arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, startRank, endRank)
             .map(sp => sp.Member)
-        console.log("get_tweet_list_by_rank", startRank, endRank, userId, JSON.stringify(arr))
         return arr
     } catch(e) {
         console.error("Error get_tweet_list_by_rank", JSON.stringify(request), e)
