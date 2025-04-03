@@ -27,7 +27,7 @@
                 }
             } else {
                 if (t.timestamp < lastScore) {
-                    lastScore = t.timestamp     // get earliest tweet's timestamp
+                    lastScore = t.timestamp     // get the earliest (smallest) tweet's timestamp
                 }
             }
             return t

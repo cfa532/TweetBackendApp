@@ -1,5 +1,5 @@
 /**
- * Given user Id, get its tweet by rank span.
+ * Given user Id, get its tweets of the given range.
  */
 ((request, args)=>{
     try {
