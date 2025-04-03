@@ -1,3 +1,6 @@
+/**
+ * Given user Id, get its tweet by rank span.
+ */
 ((request, args)=>{
     try {
         const TWT_LIST_KEY = "list_of_tweets_mid"
