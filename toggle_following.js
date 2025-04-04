@@ -9,6 +9,7 @@
  */
 
 ((request, args)=>{
+    const OWNER_DATA_KEY = "data_of_author"
     const FOLLOWINGS_TWEETS = "followings_tweets"
     const APP_ID = request["aid"]
     const userId = request["userid"]      // initiator of the follow or unfollow action
@@ -16,12 +17,13 @@
     const hostOfOtherId = request["otherhostid"]    // host of the otherId.
 
     try {
+        const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
         const nodeId = lapi.GetVar("", "hostid")    // current node id
         const user = getUser(userId)
+        // const provs = lapi.MiMeiFindProvs(systemSid, "", userId, 3)
 
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
             // send the request to the remote host
-            const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             let ret = lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
                 nid: user.hostIds[0], sid: systemSid,
                 userid: userId, otherid: otherId, otherhostid: hostOfOtherId}, []
@@ -51,15 +53,27 @@
             } else {
                 // Follow the otherId and provide for all of its tweet
                 lapi.Hset(userSid, FOLLOWINGS_LIST, otherId, Date.now())
-                if (hostOfOtherId && hostOfOtherId != nodeId) {
-                    // lapi.MiMeiSync(authSid, "", otherId, {}) // throw error if otherId has one copy and on the same node
-                    lapi.MiMeiProvide(authSid, "", otherId) // content of the otherId will be synced.
-                }
-                const ts = lapi.RunMApp("get_tweet_list", {aid: APP_ID, ver: "last", userid: otherId}, [])
+
+                const ts = lapi.RunMApp("get_tweet_list", {aid: APP_ID, ver: "last",
+                    nid: hostOfOtherId, sid: systemSid, userid: otherId
+                }, [])
                 lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...ts)
-                ts.forEach(element => {
-                    lapi.MiMeiProvide(authSid, "", element.Member)
-                })
+
+                const otherSid = lapi.MMOpen("", otherId, "last")
+                if (!lapi.Get(otherSid, OWNER_DATA_KEY)) {
+                    try {
+                        // sync user id
+                        lapi.MiMeiSync(authSid, "", otherId, {}) // throw error if otherId has one copy and on the same node
+                        lapi.MiMeiProvide(authSid, "", otherId) // content of the otherId will be synced.
+                        ts.forEach(element => {
+                            // sync tweet id
+                            lapi.MiMeiSync(authSid, "", element.Member, {})
+                            lapi.MiMeiProvide(authSid, "", element.Member)
+                        })
+                    } catch(e) {
+                        console.log("Error toggle_followings", userId, otherId, e)
+                    }
+                }
             }
             lapi.MMBackup(userSid, userId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", userId)
@@ -69,7 +83,7 @@
                 userid: userId, mid: userId}, [])
             
             // return the updated following status on the otherid,
-            console.log("Toggle following", !isFollowing, userId, otherId, hostOfOtherId, nodeId)
+            console.log(userId, "following", !isFollowing, otherId, hostOfOtherId, nodeId)
             return !isFollowing
         }
     } catch(e) {
