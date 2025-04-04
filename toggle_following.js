@@ -39,15 +39,15 @@
                 // Unfollow the user and remove it tweets
                 const ts = lapi.RunMApp("get_tweet_list", {aid: APP_ID, ver: "last", userid: otherId}, [])
                     .map(element => {
-                        lapi.MiMeiUnprovide(authSid, "", element.Member)
+                        // lapi.MiMeiUnprovide(authSid, "", element.Member)
                         return element.Member
                     })
+                // if (hostOfOtherId && hostOfOtherId != nodeId) {
+                //     lapi.MiMeiUnprovide(authSid, "", otherId)
+                //     lapi.MMDelVers(authSid, otherId)
+                // }
                 lapi.Zrem(userSid, FOLLOWINGS_TWEETS, ...ts)
                 lapi.Hdel(userSid, FOLLOWINGS_LIST, otherId)
-                if (hostOfOtherId && hostOfOtherId != nodeId) {
-                    lapi.MiMeiUnprovide(authSid, "", otherId)
-                    lapi.MMDelVers(authSid, otherId)
-                }
             } else {
                 // Follow the otherId and provide for all of its tweet
                 lapi.Hset(userSid, FOLLOWINGS_LIST, otherId, Date.now())

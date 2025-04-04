@@ -17,13 +17,12 @@
         .map(sp => {
             let t = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
                 userid: visitorId, tweetid: sp.Member}, [])
-            console.log("get_tweets", JSON.stringify(t))
             if (!t) {
                 let authSid = lapi.BELoginAsAuthor()
                 try {
                     lapi.MiMeiSync(authSid, "", sp.Member, {})
                 } catch(e) {
-                    console.error("Error get_tweets", sp.Member, e)
+                    console.error("Error get_tweet_feed", sp.Member, e)
                 }
             } else {
                 if (t.timestamp < lastScore) {
@@ -31,17 +30,29 @@
                 }
             }
             return t
-        }).filter(e=> e)
+        })
 
         /**
          * Retrieve the tweets of appUser during the same time span of the followings tweets
          */
-        return lapi.Zrangebyscore(mmsid, TWT_LIST_KEY, lastScore, Date.now(), 0, 100)
+        let selfTweets = lapi.Zrangebyscore(mmsid, TWT_LIST_KEY, lastScore, Date.now(), 0, 100)
         .map(sp => {
             return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
                 userid: visitorId, tweetid: sp.Member}, [])
-        }).concat(arr)
+        })
+        if (selfTweets.length > 0) {
+            arr = arr.concat(selfTweets)
+        } else {
+            // if there is no self tweets in the range, get a few anyway
+            const ts = lapi.Zrevrange(mmsid, TWT_LIST_KEY, startRank, startRank+5)
+            .map(sp => {
+                return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
+                    userid: visitorId, tweetid: sp.Member}, [])
+            })
+            arr = arr.concat(ts)
+        }
+        return arr.filter(e=> e)
     } catch(e) {
-        console.error("Error get_tweets", JSON.stringify(request), e)
+        console.error("Error get_tweet_feed", JSON.stringify(request), e)
     }
 })(request, args)
