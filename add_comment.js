@@ -24,14 +24,23 @@
                 hostid: hostId, userid: userId, tweetid: tweetId, comment: request["comment"]}, []
             )
             // sync tweet to node from where appUser is being loaded.
-            lapi.MiMeiProvide(systemSid, "", tweetId)
-
-            // sync all comments of the tweet to local node
-            const tweetSid = lapi.MMOpen("", tweetId, "last")
-            lapi.Zrange(tweetSid, COMMENT_LIST, 0, -1).forEach(element => {
-                if (!lapi.MFIsExist("", element.Member))
-                    lapi.MiMeiProvide(systemSid, "", element.Member)
-            })
+            try {
+                if (!lapi.MFIsExist("", tweetId)) {
+                    lapi.MiMeiSync(systemSid, "", tweetId, {})
+                    lapi.MiMeiProvide(systemSid, "", tweetId)
+                }
+                // sync all comments of the tweet to local node
+                const tweetSid = lapi.MMOpen("", tweetId, "last")
+                lapi.Zrange(tweetSid, COMMENT_LIST, 0, -1).forEach(element => {
+                    if (!lapi.MFIsExist("", element.Member)) {
+                        lapi.MiMeiSync(systemSid, "", element.Member, {})
+                        lapi.MiMeiProvide(systemSid, "", element.Member)
+                    }
+                })
+            } catch(e) {
+                console.error("add_comment: Error sync tweet to node", e)
+            }
+            console.log("add_comment remote: comment count", JSON.stringify(ret), nodeId)
             return ret
         } else {
             // create a new tweet for the comment, which is a tweet object too.
@@ -68,6 +77,7 @@
     
             // return comment mid and number of comments on the tweet.
             const commentCount = lapi.Zcard(tweetSid, COMMENT_LIST)
+            console.log("add_comment local: comment count", commentCount, nodeId)
             return {commentId: commentId, count: commentCount}
         }
     } catch(e) {

@@ -28,7 +28,7 @@
         const tweetSid = lapi.MMOpen("", tweetId, "last")
         const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
         if (!tweet) {
-            console.warn("Tweet", tweetId, "not found on node", lapi.GetVar("", "hostid") )
+            console.warn("refresh_tweet: Tweet", tweetId, "not found on node", lapi.GetVar("", "hostid") )
             return null
         }
         // check if the appUser has bookmarked or liked the tweet

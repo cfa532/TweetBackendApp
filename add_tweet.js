@@ -19,10 +19,15 @@
                 nid: hostId, sid: systemSid,
                 hostid: hostId, tweet: request["tweet"]}, []
             )
-            // tweet is created in remote host, sync it here.
-            // lapi.MiMeiSync(systemSid, "", tweetId, {})   // TODO: remote tweet not ready yet.
-            // lapi.MiMeiProvide(systemSid, "", tweetId)
-
+            // tweet is created on remote host, sync it here.
+            try {
+                if (tweetId) {
+                    lapi.MiMeiSync(systemSid, "", tweetId, {})
+                    lapi.MiMeiProvide(systemSid, "", tweetId)
+                }
+            } catch(e) {
+                console.error("add_tweet: remote not ready. tweetid=", tweetId, e)
+            }
             console.log("add_tweet remote", tweetId)
             return tweetId
         } else {
@@ -51,7 +56,6 @@
     
             lapi.MMAddRef(authSid, authorId, tweetId)
             lapi.MMBackup(authSid, authorId, "", "delref=true")
-            console.log("add_tweet local", tweetId)
             lapi.MiMeiPublish(authSid, "", authorId)
     
             // update the score of the new tweet in AppData
@@ -60,9 +64,16 @@
 
             // if the tweet is a retweet of an original tweet, sync the original tweet here.
             if (tweet.originalTweetId) {
-                // lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
-                lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
+                try {
+                    if (!lapi.MFIsExist("", tweet.originalTweetId)) {
+                        lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
+                        lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
+                    }
+                } catch(e) {
+                    console.error("add_tweet: Error sync original tweet", e, JSON.stringify(tweet))
+                }
             }
+            console.log("add_tweet local", tweetId)
             return tweetId
         }
     } catch(e) {

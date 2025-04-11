@@ -63,12 +63,16 @@
                 if (!lapi.Get(otherSid, OWNER_DATA_KEY)) {
                     try {
                         // sync user id
-                        lapi.MiMeiSync(authSid, "", otherId, {}) // throw error if otherId has one copy and on the same node
-                        lapi.MiMeiProvide(authSid, "", otherId) // content of the otherId will be synced.
+                        if (!lapi.MFIsExist("", otherId)) {
+                            lapi.MiMeiSync(authSid, "", otherId, {}) // throw error if otherId has one copy and on the same node
+                            lapi.MiMeiProvide(authSid, "", otherId) // content of the otherId will be synced.
+                        }
                         ts.forEach(element => {
                             // sync tweet id
-                            lapi.MiMeiSync(authSid, "", element.Member, {})
-                            lapi.MiMeiProvide(authSid, "", element.Member)
+                            if (!lapi.MFIsExist("", element.Member)) {
+                                lapi.MiMeiSync(authSid, "", element.Member, {})
+                                lapi.MiMeiProvide(authSid, "", element.Member)
+                            }
                         })
                     } catch(e) {
                         console.log("Error toggle_followings", userId, otherId, e)

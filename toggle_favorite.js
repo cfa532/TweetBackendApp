@@ -35,9 +35,14 @@
                 userid: userId, authorid: authorId, tweetid: tweetId}, []
             )
             // new sync the tweet from the remote host.
-            // lapi.MiMeiSync(systemSid, "", tweetId, {})
-            lapi.MiMeiProvide(systemSid, "", tweetId)
-
+            try {
+                if (!lapi.MFIsExist("", tweetId)) {
+                    lapi.MiMeiSync(systemSid, "", tweetId, {})
+                    lapi.MiMeiProvide(systemSid, "", tweetId)
+                }
+            } catch(e) {
+                console.error("toggle_favorite Error sync tweet", e, JSON.stringify(ret))
+            }
             // ret = {user: user, isFavorite: isFavorite, count: count}
             console.log("Toggle favorite of remote tweet", JSON.stringify(ret), userId, tweetId)
             return ret

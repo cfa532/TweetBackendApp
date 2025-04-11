@@ -26,8 +26,14 @@
                 userid: userId, authorid: authorId, tweetid: tweetId}, []
             )
             // now sync the tweet from the remote host.
-            // lapi.MiMeiSync(systemSid, "", tweetId, {})
-            lapi.MiMeiProvide(systemSid, "", tweetId)
+            try {
+                if (!lapi.MFIsExist("", tweetId)) {
+                    lapi.MiMeiSync(systemSid, "", tweetId, {})
+                    lapi.MiMeiProvide(systemSid, "", tweetId)
+                }
+            } catch(e) {
+                console.error("toggle_bookmark Error provide tweet", e, JSON.stringify(ret))
+            }
             console.log("Toggle bookmark remote ret=", JSON.stringify(ret))
             return ret
         } else {

@@ -18,6 +18,7 @@
             let t = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
                 userid: visitorId, tweetid: sp.Member}, [])
             if (!t) {
+                //  if the tweet is not available locally, sync it.
                 let authSid = lapi.BELoginAsAuthor()
                 try {
                     lapi.MiMeiSync(authSid, "", sp.Member, {})

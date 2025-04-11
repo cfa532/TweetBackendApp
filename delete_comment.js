@@ -20,8 +20,14 @@
             const req = {aid: APP_ID, ver: "last", nid: hostId, sid: systemSid,
                 userid: userId, tweetid: tweetId, commentid: commentId}
             let ret = lapi.RunMApp("delete_comment_host", req, [])
-
-            lapi.MiMeiProvide(systemSid, "", tweetId)
+            try {
+                if (!lapi.MFIsExist("", tweetId)) {
+                    lapi.MiMeiSync(systemSid, "", tweetId, {})
+                    lapi.MiMeiProvide(systemSid, "", tweetId)
+                }
+            } catch(e) {
+                console.error("delete_comment Error sync tweet", e, JSON.stringify(ret))
+            }
             return ret
         } else {
             const req = {aid: APP_ID, ver: "last",

@@ -48,8 +48,10 @@
             lapi.MiMeiPublish(userSid, "", userId)
             
             if (isBookmarked) {
-                // lapi.MiMeiSync(authSid, "", tweetId, {})
-                lapi.MiMeiProvide(authSid, "", tweetId)
+                if (!lapi.MFIsExist("", tweetId)) {
+                    lapi.MiMeiSync(authSid, "", tweetId, {})
+                    lapi.MiMeiProvide(authSid, "", tweetId)
+                }
             } else {
                 // TODO: prevent the tweet from being deleted if it is on the same node
                 // lapi.MiMeiUnprovide(authSid, "", tweetId)
