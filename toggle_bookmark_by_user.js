@@ -33,8 +33,7 @@
                 lapi.Begin(userSid, 2)
                 if (isBookmarked) {
                     lapi.Hset(userSid, BOOKMARK_LIST, tweetId, Date.now())
-                } 
-                else {
+                } else {
                     if (lapi.Hget(userSid, BOOKMARK_LIST, tweetId)) {
                         lapi.Hdel(userSid, BOOKMARK_LIST, tweetId)
                     }
@@ -63,7 +62,7 @@
             return updatedUser
         }
     } catch(e) {
-        console.error("Toggle user bookmark error", e, JSON.stringify(request))
+        console.error("Toggle user bookmark error:", e, JSON.stringify(request))
         return lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
             userid: userId}, []
         )
