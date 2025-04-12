@@ -11,12 +11,14 @@
     const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
 
     try {
-        req = { aid: APP_ID, ver: request.ver, userid: userId, mid: tweetId,
+        // get new score from the remote host
+        const newScore = lapi.RunMApp("node_get_score", { aid: APP_ID, ver: request.ver,
+            userid: userId, mid: tweetId,
             nid: hostId,        // remote host id
             sid: systemSid,     // necessary to prove the user's authenticity.
-        }
-        const newScore = lapi.RunMApp("node_get_score", req, [])    // get new score from the remote host
-        const oldScore = lapi.Zscore(systemSid, userId, tweetId)    // get old score from node data.
+        }, [])
+        // get old score from current node data.
+        const oldScore = lapi.Zscore(systemSid, userId, tweetId)
 
         if (newScore != oldScore) {
             console.log("New and old score of tweet", tweetId, newScore, oldScore, "of user", userId)
