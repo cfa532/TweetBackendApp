@@ -4,7 +4,7 @@
  * 
  * Toggle favorite status of a tweet by appUser. First, toggle the favorite status of
  * the tweet by the appUser by updating favorite list in the tweet.
- * Then update the favorite tweet list of the appUser by calling another function.
+ * Then update the favorite tweet list of the appUser by calling toggle_favorite_by_user.
  * 
  * Toggle the favorite status of a user in the tweet's list. Use the result to update user's
  * favorite tweet list, so both the tweet and the usser's record of favorite list in sync.
@@ -44,7 +44,7 @@
                 console.error("toggle_favorite Error sync tweet", e, JSON.stringify(ret))
             }
             // ret = {user: user, isFavorite: isFavorite, count: count}
-            console.log("Toggle favorite of remote tweet", JSON.stringify(ret), userId, tweetId)
+            console.log("toggle_favorite remote tweet", JSON.stringify(ret), userId, tweetId)
             return ret
         } else {
             // current node is the author's host, where tweet is published.
@@ -55,7 +55,7 @@
                 nid: userHostId, sid: systemSid,
                 userid: userId, tweetid: tweetId, isfavorite: ret.isFavorite}, []
             )
-            console.log("Toggle favorite of local tweet", JSON.stringify(ret), userId, tweetId)
+            console.log("toggle_favorite local tweet", JSON.stringify(ret), userId, tweetId)
             return {user: updatedUser, isFavorite: ret.isFavorite, count: ret.count }
         }
     } catch(e) {

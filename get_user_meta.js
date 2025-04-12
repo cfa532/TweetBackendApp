@@ -2,24 +2,44 @@
     /**
      * Get bookmarks, favorites and comments list of a user.
      */
+    const COMMENT_LIST = "comment_list"
+    const BOOKMARK_LIST = "bookmark_list"
+    const FAVORITE_LIST = "favorite_list"
+    const userId = request["userid"]
     try {
-        const COMMENT_LIST = "comment_list"
-        const BOOKMARK_LIST = "bookmark_list"
-        const FAVORITE_LIST = "favorite_list"
-
-        let userId = request["userid"]
-        let mmsid = lapi.MMOpen("", userId, "last")
-
-        let key
         if (request["type"] == "comment") {
-            key = COMMENT_LIST
+            const mmsid = lapi.MMOpen("", userId, "last")
+            return lapi.Hgetall(mmsid, COMMENT_LIST)
         } else if (request["type"] == "bookmark") {
-            key = BOOKMARK_LIST
+            return getTweets(BOOKMARK_LIST)
         } else if (request["type"] == "favorite") {
-            key = FAVORITE_LIST
+            return getTweets(FAVORITE_LIST)
         }
-        return lapi.Hgetall(mmsid, key)
     } catch(e) {
         console.error("Error get_user_meta", JSON.stringify(request), e)
+    }
+
+    function getTweets(dataType) {
+        const mmsid = lapi.MMOpen("", userId, "last")
+        const arr = lapi.Hgetall(mmsid, dataType)
+        .sort((a, b) => b.Value - a.Value)      // const timestamp = fv.Value
+        .map(fv => {
+            const tweetId = fv.Field
+            let tweet = lapi.RunMApp("get_tweet", {aid: request.aid, ver:"last",
+                userid: userId, tweetid: tweetId}, [])
+            if (tweet == null) {
+                const authSid = lapi.BELoginAsAuthor()
+                try {
+                    lapi.MiMeiSync(authSid, "", tweetId, {})
+                    lapi.MiMeiProvide(authSid, "", tweetId)
+                    tweet = lapi.RunMApp("get_tweet", {aid: request.aid, ver:"last",
+                        userid: userId, tweetid: tweetId}, [])    
+                } catch(e) {
+                    console.error("Error get_user_meta sync", tweetId, e)
+                }
+            }
+            return tweet
+        }).filter(t => t)
+        return arr
     }
 })(request, args)

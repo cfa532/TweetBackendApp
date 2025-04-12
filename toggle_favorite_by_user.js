@@ -24,10 +24,9 @@
                     nid: user.hostIds[0], sid: systemSid,
                     userid: userId, tweetid: tweetId, isfavorite: isFavorite }, []
             )
-            console.log("Toggle favorite of remote user", JSON.stringify(request))
+            console.log("toggle_favorite_by_user remote", JSON.stringify(userData))
             return userData     // user local data will be updated by Leither
         } else {
-            console.log("Toggle favorite of local user", JSON.stringify(request))
             const userSid = lapi.MMOpen(authSid, userId, "cur")
             try {
                 lapi.Begin(userSid, 2)
@@ -60,10 +59,11 @@
             const updatedUser = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
                 userid: userId}, []
             )
+            console.log("toggle_favorite_by_user local", JSON.stringify(updatedUser))
             return updatedUser
         }
     } catch(e) {
-        console.error("toggle user favorite error", e, JSON.stringify(request))
+        console.error("toggle_favorite_by_user error", e, JSON.stringify(request))
         return lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
             userid: userId}, []
         )
