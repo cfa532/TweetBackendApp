@@ -3,7 +3,6 @@
  * 
  *  */
 ((request, args)=>{
-    const COMMENT_LIST = "comment_list_key"
     const APP_ID = request["aid"]
     const hostId = request["hostid"]
     const userId = request["userid"]
