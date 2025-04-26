@@ -17,5 +17,6 @@
         }).filter(e=> e)
     } catch(e) {
         console.error("Error get_tweets_by_rank", JSON.stringify(request), e)
+        return []
     }
 })(request, args)
