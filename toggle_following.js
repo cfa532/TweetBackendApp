@@ -1,16 +1,17 @@
 /**
  * This function toggles the following status of a user.
  * It first checks if the user is on the local node.
- * If not, it sends the request to the remote host.
  * If yes, it toggles the following status locally.
+ * If not, it sends the request to the remote host.
  * When following an user, copy its mids and sync all of its tweets locally.
- * When unfollowing, remove them. Do not add ref, so that Garbage collector
+ * When unfollowing, remove its tweets' mid and ref, so that Garbage collector
  * will remove unfollowed tweets.
  */
 
 ((request, args)=>{
     const OWNER_DATA_KEY = "data_of_author"
     const FOLLOWINGS_TWEETS = "followings_tweets"
+    const FOLLOWINGS_LIST = "list_of_followings_mid"
     const APP_ID = request["aid"]
     const userId = request["userid"]      // initiator of the follow or unfollow action
     const otherId = request["otherid"]     // userId to follow or unfollow
@@ -31,7 +32,6 @@
             console.log("Toggle following remote", ret, userId, otherId, hostOfOtherId, nodeId)
             return ret
         } else {
-            const FOLLOWINGS_LIST = "list_of_followings_mid"
             const authSid = lapi.BELoginAsAuthor()
             const userSid = lapi.MMOpen(authSid, userId, "cur")
     
@@ -62,7 +62,7 @@
                 const otherSid = lapi.MMOpen("", otherId, "last")
                 if (!lapi.Get(otherSid, OWNER_DATA_KEY)) {
                     try {
-                        // sync user id
+                        // sync the followed user to local node.
                         if (!lapi.MFIsExist("", otherId)) {
                             lapi.MiMeiSync(authSid, "", otherId, {}) // throw error if otherId has one copy and on the same node
                             lapi.MiMeiProvide(authSid, "", otherId) // content of the otherId will be synced.
