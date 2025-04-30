@@ -18,21 +18,25 @@
         let lastScore = Date.now()
         let arr = lapi.Zrevrange(mmsid, FOLLOWINGS_TWEETS, startRank, endRank)
         .map(sp => {
+            const tweetId = sp.Member
             let tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
-                userid: visitorId, tweetid: sp.Member}, [])
+                userid: visitorId, tweetid: tweetId}, [])
             if (!tweet) {
                 //  if the tweet is not available locally, sync it.
-                let authSid = lapi.BELoginAsAuthor()
                 try {
-                    lapi.MiMeiSync(authSid, "", sp.Member, {})
-                    tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
-                        userid: visitorId, tweetid: sp.Member}, [])
+                    const authSid = lapi.BELoginAsAuthor()
+                    if (!lapi.MFIsExist("", tweetId)) {
+                        lapi.MiMeiSync(authSid, "", tweetId, {})
+                        lapi.MiMeiProvide(authSid, "", tweetId)
+                        tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
+                            userid: visitorId, tweetid: tweetId}, [])
+                    }
                 } catch(e) {
-                    console.error("Error get_tweet_feed", sp.Member, e)
+                    console.error("Error get_tweet_feed", tweetId, e)
                 }
             } else {
                 if (tweet.timestamp < lastScore) {
-                    lastScore = tweet.timestamp     // get the earliest (smallest) tweet's timestamp
+                    lastScore = tweet.timestamp     // get the earliest tweet's timestamp (smallest)
                 }
             }
             return tweet

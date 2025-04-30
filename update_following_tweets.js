@@ -16,8 +16,9 @@
         const userSid = lapi.MMOpen(authSid, userId, "cur")
         const followings = lapi.Hkeys(userSid, FOLLOWINGS_LIST) // mid list of followings
 
-        let followingsTweetsUpdate = false
+        let followingsTweetsUpdated = false
         followings.forEach(uid => {
+            console.log("check uid", uid)
             const mmsid = lapi.MMOpen("", uid, "last")  // each uid should have been synced locally.
             const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, 0, -1)
             for (const i in arr) {
@@ -25,9 +26,11 @@
                 const tweetId = element.Member
                 try {
                     lapi.Zscore(userSid, FOLLOWINGS_TWEETS, tweetId)    // Zscore will throw exception
+                    break
                 } catch(e) {
+                    console.log("add new tweet", tweetId, e)
                     lapi.Zadd(userSid, FOLLOWINGS_TWEETS, element)
-                    followingsTweetsUpdate = true
+                    followingsTweetsUpdated = true
                     if (!lapi.MFIsExist("", tweetId)) {
                         lapi.MiMeiSync(userSid, "", tweetId, {})
                         lapi.MiMeiProvide(userSid, "", tweetId)
@@ -40,7 +43,7 @@
                 }
             }
         })
-        if (followingsTweetsUpdate) {
+        if (followingsTweetsUpdated) {
             lapi.MMBackup(authSid, userId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", userId)
         }
