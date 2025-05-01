@@ -2,15 +2,15 @@
  * Add a new tweet to the local host.
  */
 ((request, args)=>{
+    const APP_EXT = "com.example.twitterclone"
+    const TWT_CONTENT_KEY = "core_data_of_tweet"
+    const TWT_LIST_KEY = "list_of_tweets_mid"
+    const FOLLOWINGS_TWEETS = "followings_tweets"
     const APP_ID = request["aid"]
     const hostId = request["hostid"]
     let tweetId = ""; // Initialize tweetId outside the try block
 
     try {
-        const APP_EXT = "com.example.twitterclone"
-        const TWT_CONTENT_KEY = "core_data_of_tweet"
-        const TWT_LIST_KEY = "list_of_tweets_mid"
-
         let nodeId = lapi.GetVar("", "hostid")    // current node id
         if (nodeId != hostId) {
             // send the request to the remote host
@@ -19,10 +19,15 @@
                 nid: hostId, sid: systemSid,
                 hostid: hostId, tweet: request["tweet"]}, []
             )
-            // tweet is created in remote host, sync it here.
-            // lapi.MiMeiSync(systemSid, "", tweetId, {})   // TODO: remote tweet not ready yet.
-            // lapi.MiMeiProvide(systemSid, "", tweetId)
-
+            // tweet is created on remote host, sync it here.
+            try {
+                if (tweetId) {
+                    lapi.MiMeiSync(systemSid, "", tweetId, {})
+                    lapi.MiMeiProvide(systemSid, "", tweetId)
+                }
+            } catch(e) {
+                console.error("add_tweet: remote not ready. tweetid=", tweetId, e)
+            }
             console.log("add_tweet remote", tweetId)
             return tweetId
         } else {
@@ -47,11 +52,12 @@
     
             const authorId = tweet.authorId
             const userSid = lapi.MMOpen(authSid, authorId, "cur")
-            lapi.Zadd(userSid, TWT_LIST_KEY, getScorePair(tweetId))
+            const sp = getScorePair(tweetId)
+            lapi.Zadd(userSid, TWT_LIST_KEY, sp)
+            lapi.Zadd(userSid, FOLLOWINGS_TWEETS, sp)
     
             lapi.MMAddRef(authSid, authorId, tweetId)
             lapi.MMBackup(authSid, authorId, "", "delref=true")
-            console.log("add_tweet local", tweetId)
             lapi.MiMeiPublish(authSid, "", authorId)
     
             // update the score of the new tweet in AppData
@@ -60,9 +66,16 @@
 
             // if the tweet is a retweet of an original tweet, sync the original tweet here.
             if (tweet.originalTweetId) {
-                // lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
-                lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
+                try {
+                    if (!lapi.MFIsExist("", tweet.originalTweetId)) {
+                        lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
+                        lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
+                    }
+                } catch(e) {
+                    console.error("add_tweet: Error sync original tweet", e, JSON.stringify(tweet))
+                }
             }
+            console.log("add_tweet local", tweetId)
             return tweetId
         }
     } catch(e) {

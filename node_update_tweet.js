@@ -3,58 +3,45 @@
  * 
  *  */
 ((request, args)=>{
-    const COMMENT_LIST = "comment_list_key"
     const APP_ID = request["aid"]
     const hostId = request["hostid"]
     const userId = request["userid"]
     const tweetId = request["tweetid"]
-    const mmsid = lapi.BEOpenAppDataNode("cur", APP_ID)
+    const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
 
     try {
-        req = { aid: APP_ID, ver: request.ver, userid: userId, mid: tweetId,
-            nid: hostId,    // remote host id
-            sid: mmsid,     // necessary to prove the user's authenticity.
-        }
         // get new score from the remote host
-        const newScore = lapi.RunMApp("node_get_score", req, [])
-        // get old score from node data.
-        const oldScore = lapi.Zscore(mmsid, userId, tweetId)
+        const newScore = lapi.RunMApp("node_get_score", { aid: APP_ID, ver: request.ver,
+            nid: hostId,        // remote host id
+            sid: systemSid,     // necessary to prove the user's authenticity.
+            userid: userId, mid: tweetId,
+        }, [])
+        // get old score from current node data.
+        const oldScore = lapi.Zscore(systemSid, userId, tweetId)
 
         if (newScore != oldScore) {
-            console.log("New and old score of tweet", tweetId, newScore, oldScore,
-                "of user", userId)
-            lapi.MiMeiSync(mmsid, "", tweetId, {})
-            // lapi.MiMeiProvide(mmsid, "", tweetId)
-            sp = new ScorePair
-            sp.Score = newScore ? newScore : 0
-            sp.Member = tweetId
-            lapi.Zadd(mmsid, userId, sp)    // update the score of tweet
-            
-            // Now tweet core data has been synced, update comments of the tweet.
-            // comment list is a Redis Zset
-            const tweetSid = lapi.MMOpen("", tweetId, "last")
-            lapi.Zrevrange(tweetSid, COMMENT_LIST, 0, -1).forEach(sp => {
-                // sync comment one by one
-                if (!lapi.MFIsExist(mmsid, sp.Member)) {
-                    lapi.MiMeiProvide(mmsid, "", sp.Member)
-                }
-            })
+            console.log("New and old score of tweet", tweetId, newScore, oldScore, "of user", userId)
+            // Only sync the tweet itself. Update comments when viewing tweet details.
+            lapi.MiMeiSync(systemSid, "", tweetId, {})
+            lapi.MiMeiProvide(systemSid, "", tweetId)
+            const sp = getScorePair(newScore, tweetId)
+            lapi.Zadd(systemSid, userId, sp)
         }
     } catch(e) {
         // if the tweet is never synced before, there is no score in the node data.
         // which will cuase the exception. Initialize the score here and sync the tweet.
         console.error("Error node_update_tweet", e, JSON.stringify(request))
-        lapi.Zaddwithseq(mmsid, userId, tweetId)    // update the score if it is missing.
-        lapi.MiMeiSync(mmsid, "", tweetId, {})
-        const tweetSid = lapi.MMOpen("", tweetId, "last")
-        lapi.Zrevrange(tweetSid, COMMENT_LIST, 0, -1).forEach(sp => {
-            // sync comment one by one
-            if (!lapi.MFIsExist(mmsid, sp.Member)) {
-                lapi.MiMeiProvide(mmsid, "", sp.Member)
-            }
-        })
+        lapi.Zaddwithseq(systemSid, userId, tweetId)    // update the score if it is missing.
+        lapi.MiMeiSync(systemSid, "", tweetId, {})
+        lapi.MiMeiProvide(systemSid, "", tweetId)
     }
 
-    function ScorePair() {}
+    function getScorePair(score, member) {
+        function ScorePair() {}
+        sp = new ScorePair
+        sp.Score = score ? score : 0
+        sp.Member = member
+        return sp
+    }
 
 })(request, args)

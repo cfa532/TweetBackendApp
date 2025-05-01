@@ -67,18 +67,25 @@
         // provide or unprovide the tweet object
         if (operationType == "bookmark" || operationType == "favorite") {
             if (ret.hasValue) {
-                // lapi.MiMeiSync(systemSid, "", tweetId, {})
-                lapi.MiMeiProvide(systemSid, "", tweetId)
+                try {
+                    if (!lapi.MFIsExist("", tweetId)) {
+                        lapi.MiMeiSync(systemSid, "", tweetId, {})
+                        lapi.MiMeiProvide(systemSid, "", tweetId)
+                    }
+                } catch(e) {
+                    console.error("toggle_meta_by_user Error provide tweet", e, JSON.stringify(ret))
+                }
             } else {
-                lapi.MiMeiUnprovide(systemSid, "", tweetId)
-                lapi.MMDelVers(systemSid, tweetId)
+                // someone else might providing them.
+                // lapi.MiMeiUnprovide(systemSid, "", tweetId)
+                // lapi.MMDelVers(systemSid, tweetId)
             }
         }
         // user local data will be updated by Leither
         return ret
     } else {
         let ret = toggleUserMeta(tweetId, userId, operationType, APP_ID)
-        console.log("Toggle user meta ret=", JSON.stringify(ret))
+        console.log("toggle_meta_by_user ret=", JSON.stringify(ret))
         return ret
     }
 

@@ -1,6 +1,7 @@
 ((request, args)=>{
     const TWT_LIST_KEY = "list_of_tweets_mid"
     const TWT_CONTENT_KEY = "core_data_of_tweet"
+    const FOLLOWINGS_TWEETS = "followings_tweets"
     const PINNED_TWEETS = "top_tweet_list"
     const tweetId = request["tweetid"]    // tweet Id to be removed
     const userId = request["authorid"]
@@ -36,6 +37,7 @@
             try {
                 lapi.Begin(userSid, 2)
                 lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
+                lapi.Zrem(userSid, FOLLOWINGS_TWEETS, tweetId)
                 lapi.Hdel(userSid, PINNED_TWEETS, tweetId)   // remove it from pinned list
                 lapi.Commit(userSid)
                 lapi.MMDelRef(userSid, userId, tweetId)

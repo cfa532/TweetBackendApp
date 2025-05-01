@@ -8,9 +8,9 @@
         const BOOKMARK_LIST = "bookmark_list"
         const FAVORITE_LIST = "favorite_list"
 
-        let userId = request["userid"]
-        let mmsid = lapi.MMOpen("", userId, "last")
-        let user = lapi.Get(mmsid, OWNER_DATA_KEY)
+        const userId = request["userid"]
+        const mmsid = lapi.MMOpen("", userId, "last")
+        const user = lapi.Get(mmsid, OWNER_DATA_KEY)
         if (!user) {
             console.warn("User", userId, "not found on node", lapi.GetVar("", "hostid"))
             return null

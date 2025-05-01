@@ -26,9 +26,15 @@
                 userid: userId, authorid: authorId, tweetid: tweetId}, []
             )
             // now sync the tweet from the remote host.
-            // lapi.MiMeiSync(systemSid, "", tweetId, {})
-            lapi.MiMeiProvide(systemSid, "", tweetId)
-            console.log("Toggle bookmark remote ret=", JSON.stringify(ret))
+            try {
+                if (!lapi.MFIsExist("", tweetId)) {
+                    lapi.MiMeiSync(systemSid, "", tweetId, {})
+                    lapi.MiMeiProvide(systemSid, "", tweetId)
+                }
+            } catch(e) {
+                console.error("toggle_bookmark Error provide tweet", e, JSON.stringify(ret))
+            }
+            console.log("toggle_bookmark remote ret=", JSON.stringify(ret))
             return ret
         } else {
             let ret = toggleBookmarkOfTweet(userId, authorId, tweetId)
@@ -37,11 +43,11 @@
                 nid: userHostId, sid: systemSid,
                 userid: userId, tweetid: tweetId, isbookmarked: ret.hasBookmarked}, []
             )
-            console.log("Toggle bookmark of local tweet", JSON.stringify(ret), JSON.stringify(updatedUser))
+            console.log("toggle_bookmark local tweet", JSON.stringify(ret), JSON.stringify(updatedUser))
             return {user: updatedUser, hasBookmarked: ret.hasBookmarked, count: ret.count}
         }
     } catch(e) {
-        console.error("Error toggle_bookmark", e, JSON.stringify(request))
+        console.error("toggle_bookmark error", e, JSON.stringify(request))
     }
 
     function toggleBookmarkOfTweet(

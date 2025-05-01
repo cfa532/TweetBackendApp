@@ -17,10 +17,9 @@
             nid: user.hostIds[0], sid: systemSid,
             userid: userId, otherid: otherId, isfollower: isFollower}, []
         )
-        console.log("Toggle follower remote isFollower=", isFollower, userId, otherId)
     } else {
         toggleFollower(userId, otherId, isFollower)
-        console.log("Toggle follower isFollower=", isFollower, userId, otherId)
+        console.log(userId, "follower", isFollower, otherId)
     }
 
     function toggleFollower(
