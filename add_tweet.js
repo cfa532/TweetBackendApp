@@ -2,15 +2,15 @@
  * Add a new tweet to the local host.
  */
 ((request, args)=>{
+    const APP_EXT = "com.example.twitterclone"
+    const TWT_CONTENT_KEY = "core_data_of_tweet"
+    const TWT_LIST_KEY = "list_of_tweets_mid"
+    const FOLLOWINGS_TWEETS = "followings_tweets"
     const APP_ID = request["aid"]
     const hostId = request["hostid"]
     let tweetId = ""; // Initialize tweetId outside the try block
 
     try {
-        const APP_EXT = "com.example.twitterclone"
-        const TWT_CONTENT_KEY = "core_data_of_tweet"
-        const TWT_LIST_KEY = "list_of_tweets_mid"
-
         let nodeId = lapi.GetVar("", "hostid")    // current node id
         if (nodeId != hostId) {
             // send the request to the remote host
@@ -52,7 +52,9 @@
     
             const authorId = tweet.authorId
             const userSid = lapi.MMOpen(authSid, authorId, "cur")
-            lapi.Zadd(userSid, TWT_LIST_KEY, getScorePair(tweetId))
+            const sp = getScorePair(tweetId)
+            lapi.Zadd(userSid, TWT_LIST_KEY, sp)
+            lapi.Zadd(userSid, FOLLOWINGS_TWEETS, sp)
     
             lapi.MMAddRef(authSid, authorId, tweetId)
             lapi.MMBackup(authSid, authorId, "", "delref=true")
