@@ -30,13 +30,6 @@
                     console.error("Error get_tweet_feed", tweetId, e)
                 }
             }
-            
-            if (tweet) {
-                // user object is synced locally
-                const u = lapi.RunMApp("get_user_core_data", {aid: request["aid"], ver:"last",
-                    userid: tweet.authorId}, [])
-                tweet["author"] = u
-            }
             return tweet
         }).filter(e=> e)
         return arr
