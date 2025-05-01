@@ -20,12 +20,10 @@
                 //  if the tweet is not available locally, sync it.
                 try {
                     const authSid = lapi.BELoginAsAuthor()
-                    if (!lapi.MFIsExist("", tweetId)) {
-                        lapi.MiMeiSync(authSid, "", tweetId, {})
-                        lapi.MiMeiProvide(authSid, "", tweetId)
-                        tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
-                            userid: visitorId, tweetid: tweetId}, [])
-                    }
+                    lapi.MiMeiSync(authSid, "", tweetId, {})
+                    lapi.MiMeiProvide(authSid, "", tweetId)
+                    tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
+                        userid: visitorId, tweetid: tweetId}, [])
                 } catch(e) {
                     console.error("Error get_tweet_feed", tweetId, e)
                 }

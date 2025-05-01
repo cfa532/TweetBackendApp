@@ -43,10 +43,8 @@
                         lapi.Zadd(userSid, FOLLOWINGS_TWEETS, element)
                         followingsTweetsUpdated = true
 
-                        if (!lapi.MFIsExist("", tweetId)) {
-                            lapi.MiMeiSync(userSid, "", tweetId, {})
-                            lapi.MiMeiProvide(userSid, "", tweetId)
-                        }
+                        lapi.MiMeiSync(userSid, "", tweetId, {})
+                        lapi.MiMeiProvide(userSid, "", tweetId)
                         const tweet = lapi.RunMApp("get_tweet", {aid: APP_ID, ver:"last",
                             userid: userId, tweetid: tweetId}, [])
                         return tweet
