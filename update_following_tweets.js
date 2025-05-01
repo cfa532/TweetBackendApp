@@ -29,8 +29,7 @@
             const followings = lapi.Hkeys(userSid, FOLLOWINGS_LIST) // mid list of followings
     
             let followingsTweetsUpdated = false
-            followings.forEach(uid => {
-                console.log("check uid", uid)
+            const arr = followings.map(uid => {
                 const mmsid = lapi.MMOpen("", uid, "last")  // each uid should have been synced locally.
                 const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, 0, -1)
                 for (const i in arr) {
@@ -40,20 +39,17 @@
                         lapi.Zscore(userSid, FOLLOWINGS_TWEETS, tweetId)    // Zscore will throw exception
                         break   // the newest tweet of the user is in followings' tweet already. No new tweet.
                     } catch(e) {
-                        console.log("update followings' new tweet", element, e)
+                        console.log("update followings' new tweet", element.Member, e)
                         lapi.Zadd(userSid, FOLLOWINGS_TWEETS, element)
-
                         followingsTweetsUpdated = true
+
                         if (!lapi.MFIsExist("", tweetId)) {
                             lapi.MiMeiSync(userSid, "", tweetId, {})
                             lapi.MiMeiProvide(userSid, "", tweetId)
-    
-                            const tweet = lapi.RunMApp("get_tweet", {aid: APP_ID, ver:"last",
-                                userid: userId, tweetid: tweetId}, [])
-                            if (tweet) {
-                                res.push(tweet)
-                            }
                         }
+                        const tweet = lapi.RunMApp("get_tweet", {aid: APP_ID, ver:"last",
+                            userid: userId, tweetid: tweetId}, [])
+                        return tweet
                     }
                 }
             })
@@ -61,7 +57,7 @@
                 lapi.MMBackup(authSid, userId, "", "delref=true")
                 lapi.MiMeiPublish(authSid, "", userId)
             }
-            return res
+            return arr.filter(e=> e)
         }
     } catch(e) {
         console.error("Error update_following_tweets", JSON.stringify(request), e)
