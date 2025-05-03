@@ -11,7 +11,6 @@
     const APP_ID = request["aid"]
     const userId = request["gid"]    // appUser
     const hostId = request["hostid"]
-    const res = []
     try {
         let nodeId = lapi.GetVar("", "hostid")    // current node id
         if (nodeId != hostId) {
@@ -39,21 +38,23 @@
                     if (rank > -1) {
                         break   // the newest tweet of the user is in followings' tweet already. No new tweet.
                     } else {
-                        console.log("update followings' new tweet", element.Member, rank)
                         lapi.Zadd(userSid, FOLLOWINGS_TWEETS, element)
                         followingsTweetsUpdated = true
-
-                        lapi.MiMeiSync(userSid, "", tweetId, {})
-                        lapi.MiMeiProvide(userSid, "", tweetId)
+                        if (!lapi.MFIsExist("", tweetId)) {
+                            lapi.MiMeiSync(userSid, "", tweetId, {})
+                            lapi.MiMeiProvide(userSid, "", tweetId)
+                        }
                         const tweet = lapi.RunMApp("get_tweet", {aid: APP_ID, ver:"last",
                             userid: userId, tweetid: tweetId}, [])
+                        console.log("update followings' new tweet", element.Member, rank, userId)
                         return tweet
                     }
                 }
             })
+            
             if (followingsTweetsUpdated) {
-                lapi.MMBackup(authSid, userId, "", "delref=true")
-                lapi.MiMeiPublish(authSid, "", userId)
+                lapi.MMBackup(userSid, userId, "", "delref=true")
+                lapi.MiMeiPublish(userSid, "", userId)
             }
             return arr.filter(e=> e)
         }
