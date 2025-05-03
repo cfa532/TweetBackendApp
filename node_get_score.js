@@ -9,6 +9,7 @@
             // score not exist, assign the global sequence number as score of the mid
             lapi.Zaddwithseq(mmsid, userId, mid)
         }
+        // Zscore will throw exception if the scorepair does not exist.
         return lapi.Zscore(mmsid, userId, mid)
     } catch(e) {
         console.error("Error node_get_score", e, JSON.stringify(request))
