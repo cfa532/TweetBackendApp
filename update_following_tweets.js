@@ -35,11 +35,11 @@
                 for (const i in arr) {
                     const element = arr[i]
                     const tweetId = element.Member
-                    try {
-                        lapi.Zscore(userSid, FOLLOWINGS_TWEETS, tweetId)    // Zscore will throw exception
+                    const rank = lapi.Zrank(userSid, FOLLOWINGS_TWEETS, tweetId)
+                    if (rank > -1) {
                         break   // the newest tweet of the user is in followings' tweet already. No new tweet.
-                    } catch(e) {
-                        console.log("update followings' new tweet", element.Member, e)
+                    } else {
+                        console.log("update followings' new tweet", element.Member, rank)
                         lapi.Zadd(userSid, FOLLOWINGS_TWEETS, element)
                         followingsTweetsUpdated = true
 
