@@ -10,11 +10,16 @@
     try {
         const authSid = lapi.BELoginAsAuthor()
         const userSid = lapi.MMOpen(authSid, user.mid, "cur")
-        const userInDB = lapi.Get(userSid, OWNER_DATA_KEY)    
+        let userInDB = lapi.Get(userSid, OWNER_DATA_KEY)    
         const nodeId = lapi.GetVar("", "hostid")
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-
-
+        let isPublisher = true
+        if (!userInDB) {
+            isPublisher = false
+            lapi.MiMeiSync(authSid, "", user.mid, {})
+            userInDB = lapi.Get(userSid, OWNER_DATA_KEY)
+            // lapi.MiMeiProvide(authSid, "", user.mid)
+        }
         // If user has changed hostId, make sure user mimei is available on the new hostId.
         // The code below will throw an error if the new hostId is invalid.
         if (user.hostIds[0] != userInDB.hostIds[0]) {
@@ -45,7 +50,11 @@
 
             lapi.Set(userSid, OWNER_DATA_KEY, user)
             lapi.MMBackup(userSid, user.mid, "", "delref=true")
-            lapi.MiMeiPublish(userSid, "", user.mid)
+            if (!isPublisher) {
+                lapi.MiMeiProvide(authSid, "", user.mid)
+            } else {
+                lapi.MiMeiPublish(authSid, "", user.mid)
+            }
 
             delete user.password
             return {user: JSON.stringify(user), status: "success"}

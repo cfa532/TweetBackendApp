@@ -58,6 +58,8 @@
                 lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...ts)
 
                 // temp solution to check if the otherId is provided by current node.
+                const providers = lapi.MiMeiFindProvs(authSid, "", otherId, 300)
+                console.log("Find providers", JSON.stringify(providers), otherId)
                 const followedUser = getUser(otherId)
                 if (!followedUser) {
                     try {
