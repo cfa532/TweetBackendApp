@@ -68,10 +68,10 @@
         if (operationType == "bookmark" || operationType == "favorite") {
             if (ret.hasValue) {
                 try {
-                    if (!lapi.MFIsExist("", tweetId)) {
+                    // if (!lapi.MFIsExist("", tweetId)) {
                         lapi.MiMeiSync(systemSid, "", tweetId, {})
                         lapi.MiMeiProvide(systemSid, "", tweetId)
-                    }
+                    // }
                 } catch(e) {
                     console.error("toggle_meta_by_user Error provide tweet", e, JSON.stringify(ret))
                 }

@@ -58,19 +58,20 @@
                 lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...ts)
 
                 // temp solution to check if the otherId is provided by current node.
-                const providers = lapi.MiMeiFindProvs(authSid, "", otherId, 300)
-                console.log("Find providers", JSON.stringify(providers), otherId)
-                const followedUser = getUser(otherId)
-                if (!followedUser) {
-                    try {
-                        // sync the followed user to local node.
-                        lapi.MiMeiSync(authSid, "", otherId, {}) // throw error if otherId has one copy and on the same node
-                    } catch(e) {
-                        console.log("Error toggle_followings sync", userId, otherId, e)
-                    } finally {
-                        console.log("Provide", otherId)
-                        lapi.MiMeiProvide(authSid, "", otherId) // content of the otherId will be synced.
-                    }
+                // const providers = lapi.MiMeiFindProvs(authSid, "", otherId, 3)
+                // console.log("Find providers", JSON.stringify(providers), otherId)
+                lapi.MiMeiSync(authSid, "", otherId, {}) // throw error if otherId has one copy and on the same node
+                lapi.MiMeiProvide(authSid, "", otherId) // content of the otherId will be synced.
+                // const followedUser = getUser(otherId)
+                // if (!followedUser) {
+                    // try {
+                        // lapi.MiMeiSync(authSid, "", otherId, {}) // throw error if otherId has one copy and on the same node
+                    // } catch(e) {
+                    //     console.log("Error toggle_followings sync", userId, otherId, e)
+                    // } finally {
+                    //     console.log("Provide", otherId)
+                    //     lapi.MiMeiProvide(authSid, "", otherId) // content of the otherId will be synced.
+                    // }
                     // takes too long when there are many tweet.
                     // ts.forEach(element => {
                     //     // sync tweet id
@@ -82,7 +83,7 @@
                     //         lapi.MiMeiProvide(authSid, "", element.Member)
                     //     }
                     // })
-                }
+                // }
             }
             lapi.MMBackup(userSid, userId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", userId)

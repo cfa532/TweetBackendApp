@@ -22,7 +22,7 @@
             // tweet is created on remote host, sync it here.
             try {
                 if (tweetId) {
-                    lapi.MiMeiSync(systemSid, "", tweetId, {})
+                    lapi.MiMeiSync(systemSid, "", tweetId, {})  // Get new tweet right away.
                     lapi.MiMeiProvide(systemSid, "", tweetId)
                 }
             } catch(e) {
@@ -67,10 +67,10 @@
             // if the tweet is a retweet of an original tweet, sync the original tweet here.
             if (tweet.originalTweetId) {
                 try {
-                    if (!lapi.MFIsExist("", tweet.originalTweetId)) {
+                    // if (!lapi.MFIsExist("", tweet.originalTweetId)) {
                         lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
                         lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
-                    }
+                    // }
                 } catch(e) {
                     console.error("add_tweet: Error sync original tweet", e, JSON.stringify(tweet))
                 }

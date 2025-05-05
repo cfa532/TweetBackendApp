@@ -17,8 +17,8 @@
         if (!userInDB) {
             isPublisher = false
             lapi.MiMeiSync(authSid, "", user.mid, {})
+            lapi.MiMeiProvide(authSid, "", user.mid)
             userInDB = lapi.Get(userSid, OWNER_DATA_KEY)
-            // lapi.MiMeiProvide(authSid, "", user.mid)
         }
         // If user has changed hostId, make sure user mimei is available on the new hostId.
         // The code below will throw an error if the new hostId is invalid.

@@ -27,10 +27,10 @@
             )
             // now sync the tweet from the remote host.
             try {
-                if (!lapi.MFIsExist("", tweetId)) {
+                // if (!lapi.MFIsExist("", tweetId)) {
                     lapi.MiMeiSync(systemSid, "", tweetId, {})
                     lapi.MiMeiProvide(systemSid, "", tweetId)
-                }
+                // }
             } catch(e) {
                 console.error("toggle_bookmark Error provide tweet", e, JSON.stringify(ret))
             }

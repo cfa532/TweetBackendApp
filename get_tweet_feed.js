@@ -18,11 +18,13 @@
                 userid: visitorId, tweetid: tweetId}, [])
             if (!tweet) {
                 // if tweet is not synced locally, try it again.
+                console.log("get_tweet_feed, tweetId", tweetId)
                 const authSid = lapi.BELoginAsAuthor()
                 lapi.MiMeiSync(authSid, "", tweetId, {})
                 lapi.MiMeiProvide(authSid, "", tweetId)
                 tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
                     userid: visitorId, tweetid: tweetId}, [])
+                console.log("get_tweet_feed, tweet", JSON.stringify(tweet))
             }
             return tweet
         }).filter(e=> e)
