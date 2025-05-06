@@ -93,7 +93,7 @@
                 userid: userId, mid: userId}, [])
             
             // return the updated following status on the otherid,
-            console.log(userId, "following", !isFollowing, otherId, hostOfOtherId, nodeId)
+            console.log(userId, "following", otherId, !isFollowing, hostOfOtherId, nodeId)
             return !isFollowing
         }
     } catch(e) {

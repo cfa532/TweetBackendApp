@@ -19,7 +19,7 @@
         )
     } else {
         toggleFollower(userId, otherId, isFollower)
-        console.log(userId, "follower", isFollower, otherId)
+        console.log(userId, "with follower", otherId, isFollower)
     }
 
     function toggleFollower(
