@@ -17,6 +17,14 @@
         } else {
             const authSid = lapi.BELoginAsAuthor()
             const mid = lapi.MMCreate(authSid, APP_ID, APP_EXT, file.path, 1, 0x07276704)
+            const userSid = lapi.MMOpen(authSid, userId, "cur")
+
+            // if the mid exists, it has been shared, just return it.
+            const sharedObj = lapi.Hget(userSid, USER_SHARE_MID, mid)
+            if (sharedObj) {
+                return mid
+            }
+
             const fsid = lapi.MMOpen(authSid, mid, "cur")
             lapi.MFSetObject(fsid, {
                 userId: userId,
@@ -28,9 +36,8 @@
             })
             lapi.MMBackup(fsid, mid, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", mid)
-            console.log("mid", mid)
+            console.log("shared mid", mid)
     
-            const userSid = lapi.MMOpen(authSid, userId, "cur")
             lapi.Hset(userSid, USER_SHARE_MID, mid, {
                 downloadCount: 0,   // how many times the file has been downloaded
                 authorizedFor: null,    // anybody can see it
