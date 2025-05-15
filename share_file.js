@@ -22,6 +22,7 @@
             // if the mid exists, it has been shared, just return it.
             const sharedObj = lapi.Hget(userSid, USER_SHARE_MID, mid)
             if (sharedObj) {
+                console.log("shared file", JSON.stringify(sharedObj))
                 return mid
             }
 
@@ -36,7 +37,7 @@
             })
             lapi.MMBackup(fsid, mid, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", mid)
-            console.log("shared mid", mid)
+            console.log("shared file", mid, JSON.stringify(file))
     
             lapi.Hset(userSid, USER_SHARE_MID, mid, {
                 downloadCount: 0,   // how many times the file has been downloaded
