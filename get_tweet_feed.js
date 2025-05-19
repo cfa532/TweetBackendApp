@@ -19,15 +19,15 @@
             if (!tweet) {
                 // if tweet is not synced locally, try it again.
                 console.log("get_tweet_feed: null tweetId", tweetId)
-                const authSid = lapi.BELoginAsAuthor()
-                try {
-                    lapi.MiMeiSync(authSid, "", tweetId, {})
-                    lapi.MiMeiProvide(authSid, "", tweetId)
-                    tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
-                        userid: visitorId, tweetid: tweetId}, [])
-                } catch(e) {
-                    console.log("Error get_tweet_feed", JSON.stringify(request), e)
-                }
+                // const authSid = lapi.BELoginAsAuthor()
+                // try {
+                //     lapi.MiMeiSync(authSid, "", tweetId, {})
+                //     lapi.MiMeiProvide(authSid, "", tweetId)
+                //     tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
+                //         userid: visitorId, tweetid: tweetId}, [])
+                // } catch(e) {
+                //     console.log("Error get_tweet_feed", JSON.stringify(request), e)
+                // }
             }
             return tweet
         }).filter(e=> e)
