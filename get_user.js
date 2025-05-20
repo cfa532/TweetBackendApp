@@ -4,7 +4,7 @@
  */
 ((request, args)=>{
     try {
-        const userId = request["mid"]
+        const userId = request["userid"]
 
         // try to get the user's data from local DB
         const user = lapi.RunMApp("get_user_core_data", {aid: request.aid, ver:"last",
@@ -14,8 +14,9 @@
         } else {
             // if not found, try to get the user's data from remote DB
             const providers = lapi.GetVar("", "mmprovsips", userId)
+            console.log("providers", providers)
             providers = JSON.parse(providers)
-            let ip
+            let ip, mini = null
             providers.forEach(element => {
                 // iterate providers
                 element.forEach(element2 => {

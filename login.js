@@ -11,6 +11,7 @@
         const authSid = lapi.BELoginAsAuthor()
         const userId = lapi.MMCreate(authSid, APP_ID, APP_EXT, username, 2, 0x07276704)
         const userSid = lapi.MMOpen(authSid, userId, "cur")
+
         user = lapi.Get(userSid, OWNER_DATA_KEY)
         if (!user) {
             console.error("User does not exist.", username)
@@ -28,9 +29,8 @@
                 // current node is not the writable host of the user data.
                 // update last login time on the remost host.
                 let systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-                lapi.RunMApp("update_login_time", {aid: APP_ID, ver: "last",
-                    userid: userId, nid: user.hostIds[0], sid: systemSid}, []
-                )
+                return lapi.RunMApp("update_login_time", {aid: APP_ID, ver: "last",
+                    userid: userId, nid: user.hostIds[0], sid: systemSid}, [])
             } else {
                 user["lastLogin"] = Date.now()
                 lapi.Set(userSid, OWNER_DATA_KEY, user)
@@ -40,6 +40,8 @@
             /**
              * Make sure to remove password from user data right before sending it back to client.
              */
+            user = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver: "last",
+                userid: userId}, [])
             delete user.password
             return {user: JSON.stringify(user), status: "success"}
         } else {
