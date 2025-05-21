@@ -43,14 +43,14 @@
             user = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver: "last",
                 userid: userId}, [])
             delete user.password
-            return {user: JSON.stringify(user), status: "success"}
+            return {user: user, status: "success"}
         } else {
             return {status: "failure", reason: "Wrong password"}
         }
     } catch(e) {
         console.error("Error login", JSON.stringify(request), e)
         if (loginOK)
-            return {user: JSON.stringify(user), status: "success"}
+            return {user: user, status: "success"}
         else
             return {status: "failure", reason: "Unknown error"}
     }

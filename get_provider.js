@@ -5,8 +5,8 @@
     try {
         let mid = request["mid"]
         let providers = lapi.GetVar("", "mmprovsips", mid)
-        console.log("providers", providers)
         providers = JSON.parse(providers)
+        
         let ip, mini = null
         providers.forEach(element => {
             // iterate providers
