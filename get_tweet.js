@@ -32,14 +32,13 @@
             "authorId": tweet.authorId,
             "title": tweet.title,
             "attachments": tweet.attachments?.map(a => {
-                a.timestamp = Math.round(a.timestamp)
                 return a
             }),
             "isPrivate": tweet.isPrivate,           // viewable by author only.
             "downloadable": tweet.downloadable,     // if the attachment is downloadable
             "originalTweetId": tweet.originalTweetId,
             "originalAuthorId": tweet.originalAuthorId,
-            "timestamp": Math.round(tweet.timestamp),
+            "timestamp": tweet.timestamp,
             "bookmarkCount": lapi.Hlen(mmsid, BOOKMARK_LIST),
             "favoriteCount": lapi.Hlen(mmsid, FAVORITE_LIST),
             "commentCount": lapi.Zcard(mmsid, COMMENT_LIST),

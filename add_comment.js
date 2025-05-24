@@ -47,14 +47,14 @@
             const authSid = lapi.BELoginAsAuthor()
             const commentId = lapi.MMCreate(authSid, APP_ID, APP_EXT, "{{auto}}", 2, 0x07276704)
             comment["mid"] = commentId
-            comment["timestamp"] = comment["timestamp"] ? comment["timestamp"] : Date.now()
+            comment["timestamp"] = Date.now()
     
             const commentSid = lapi.MMOpen(authSid, commentId, "cur")
             lapi.Set(commentSid, TWT_CONTENT_KEY, comment)
             comment.attachments?.forEach(element => {
                 // add attachment's reference to comment mid
                 lapi.MMAddRef(commentSid, commentId, element.mid)
-                element.timestamp = Math.round(element.timestamp)
+                element.timestamp = Number(element.timestamp)
             });
             lapi.MMBackup(commentSid, commentId, "", "delref=true")
             lapi.MiMeiPublish(commentSid, "", commentId)     // publish the comment object as a tweet
