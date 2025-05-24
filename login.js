@@ -34,7 +34,7 @@
                     username: username, password: password,
                 }, [])
             } else {
-                user["lastLogin"] = Double(Date.now())
+                user["lastLogin"] = Double(Date.now())  // otherwise it will be converted to string.
                 lapi.Set(userSid, OWNER_DATA_KEY, user)
                 lapi.MMBackup(authSid, user.mid, "", "delref=true")
                 lapi.MiMeiPublish(authSid, "", user.mid)
