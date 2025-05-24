@@ -34,25 +34,28 @@
                     username: username, password: password,
                 }, [])
             } else {
-                user["lastLogin"] = Double(Date.now())  // otherwise it will be converted to string.
-                lapi.Set(userSid, OWNER_DATA_KEY, user)
-                lapi.MMBackup(authSid, user.mid, "", "delref=true")
-                lapi.MiMeiPublish(authSid, "", user.mid)
                 /**
                  * Make sure to remove password from user data right before sending it back to client.
                  */
                 user = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver: "last",
                     userid: userId}, [])
                 delete user.password
+
+                user["lastLogin"] = Double(Date.now())  // otherwise it will be converted to string.
+                lapi.Set(userSid, OWNER_DATA_KEY, user)
+                lapi.MMBackup(authSid, user.mid, "", "delref=true")
+                lapi.MiMeiPublish(authSid, "", user.mid)
                 return {user: user, status: "success"}
             }
         } else {
             return {status: "failure", reason: "Wrong password"}
         }
     } catch(e) {
-        console.error("Error login", JSON.stringify(request), e)
-        if (loginOK)
+        console.error("Error login OK", loginOK, JSON.stringify(request), e)
+        if (loginOK) {
+            delete user.password
             return {user: user, status: "success"}
+        }
         else
             return {status: "failure", reason: "Unknown error"}
     }
