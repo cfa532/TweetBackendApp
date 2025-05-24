@@ -29,21 +29,23 @@
                 // current node is not the writable host of the user data.
                 // update last login time on the remost host.
                 let systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-                return lapi.RunMApp("update_login_time", {aid: APP_ID, ver: "last",
-                    userid: userId, nid: user.hostIds[0], sid: systemSid}, [])
+                return lapi.RunMApp("login", {aid: APP_ID, ver: "last",
+                    nid: user.hostIds[0], sid: systemSid,
+                    username: username, password: password,
+                }, [])
             } else {
-                user["lastLogin"] = Date.now()
+                user["lastLogin"] = Double(Date.now())
                 lapi.Set(userSid, OWNER_DATA_KEY, user)
                 lapi.MMBackup(authSid, user.mid, "", "delref=true")
                 lapi.MiMeiPublish(authSid, "", user.mid)
+                /**
+                 * Make sure to remove password from user data right before sending it back to client.
+                 */
+                user = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver: "last",
+                    userid: userId}, [])
+                delete user.password
+                return {user: user, status: "success"}
             }
-            /**
-             * Make sure to remove password from user data right before sending it back to client.
-             */
-            user = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver: "last",
-                userid: userId}, [])
-            delete user.password
-            return {user: user, status: "success"}
         } else {
             return {status: "failure", reason: "Wrong password"}
         }

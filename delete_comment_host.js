@@ -21,7 +21,8 @@
         lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
             userid: userId, mid: tweetId}, [])
 
-        lapi.Zcard(tweetSid, COMMENT_LIST)      // return the number of comments
+        // lapi.Zcard(tweetSid, COMMENT_LIST)      // return the number of comments
+        commentId   // return the deleted commentId
     } catch(e) {
         console.error("Error delete_comment_host", JSON.stringify(request), e)
     }

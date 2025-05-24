@@ -7,7 +7,7 @@
     const APP_ID = request["aid"]
     const retweetId = request["retweetid"]  // the retweed Id created by the follower
     const tweetId = request["tweetid"]      // original tweetId
-    const fansId = request["userid"]        // user who made the retweet
+    const fansId = request["userid"]        // appUser who made the retweet
     const authorId = request["authorid"]    // author of the original tweet
     const author = getUser(authorId)
 
@@ -25,6 +25,15 @@
   
       // use retweetId as index because one user can retweet many times.
       lapi.Hset(tweetSid, RETWEET_LIST, retweetId, fansId)
+      
+      // remember the number of retweets by the appUser
+      let numberOfRetweets = lapi.Hget(tweetSid, RETWEET_LIST, fansId)
+      if (!numberOfRetweets)
+        numberOfRetweets = 1
+      numberOfRetweets++
+      lapi.Hset(tweetSid, RETWEET_LIST, fansId, numberOfRetweets)
+
+      lapi.Hset(tweetSid, RETWEET_LIST, tweetId, numberOfRetweets)
       lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
       lapi.MiMeiPublish(tweetSid, "", tweetId)
   
