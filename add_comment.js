@@ -54,6 +54,7 @@
             comment.attachments?.forEach(element => {
                 // add attachment's reference to comment mid
                 lapi.MMAddRef(commentSid, commentId, element.mid)
+                element.timestamp = Math.round(element.timestamp)
             });
             lapi.MMBackup(commentSid, commentId, "", "delref=true")
             lapi.MiMeiPublish(commentSid, "", commentId)     // publish the comment object as a tweet

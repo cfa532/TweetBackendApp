@@ -45,6 +45,7 @@
             lapi.Set(tweetSid, TWT_CONTENT_KEY, tweet)
     
             tweet.attachments?.forEach(element => {
+                element.timestamp = Math.round(element.timestamp)
                 lapi.MMAddRef(authSid, tweetId, element.mid)
             });
             lapi.MMBackup(authSid, tweetId, "", "delref=true")
