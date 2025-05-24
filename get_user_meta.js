@@ -42,7 +42,8 @@
                 }
             }
             return tweet
-        }).filter(t => t)
+        })
+        .filter(t => t)
         return arr
     }
 })(request, args)
