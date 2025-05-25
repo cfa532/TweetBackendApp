@@ -20,7 +20,7 @@
                 hostid: hostId, userid: authorId, tweetid: tweetId}, [])
         }
         const tweet = lapi.RunMApp("get_tweet", {aid: request.aid, ver:"last",
-            userid: appUserId, tweetid: tweetId}, [])
+            appuserid: appUserId, tweetid: tweetId}, [])
         return tweet
     } catch(e) {
         console.error("Error refresh_tweet", e, JSON.stringify(request))

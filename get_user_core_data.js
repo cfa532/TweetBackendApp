@@ -26,6 +26,6 @@
         delete user.password
         return user
     } catch(e) {
-        console.error("ERROR get_user_core", JSON.stringify(request), e)
+        console.error("ERROR get_user_core_data", JSON.stringify(request), e)
     }
 })(request, args)

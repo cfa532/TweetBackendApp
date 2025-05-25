@@ -5,7 +5,7 @@
         const startRank = parseInt(request["start"], 10)
         const endRank = request["end"] = parseInt(request["end"], 10)
         const userId = request["userid"]
-        const visitorId = request["gid"]  // app user who is accessing the tweets
+        const appUserId = request["gid"]  // app user who is accessing the tweets
         const mmsid = lapi.MMOpen("", userId, "last")
     
         /**
@@ -15,7 +15,7 @@
         .map(sp => {
             const tweetId = sp.Member
             let tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
-                userid: visitorId, tweetid: tweetId}, [])
+                appuserid: appUserId, tweetid: tweetId}, [])
             if (!tweet) {
                 // if tweet is not synced locally, try it again.
                 console.log("get_tweet_feed: null tweetId", tweetId)

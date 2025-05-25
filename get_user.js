@@ -35,6 +35,7 @@
                     }
                 })
             });
+            console.log("get_user: new ip", ip)
             return ip
         }
     } catch(e) {

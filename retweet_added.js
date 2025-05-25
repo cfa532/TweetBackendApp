@@ -7,7 +7,7 @@
     const APP_ID = request["aid"]
     const retweetId = request["retweetid"]  // the retweed Id created by the follower
     const tweetId = request["tweetid"]      // original tweetId
-    const fansId = request["userid"]        // appUser who made the retweet
+    const appUserId = request["appuserid"]        // appUser who made the retweet
     const authorId = request["authorid"]    // author of the original tweet
     const author = getUser(authorId)
 
@@ -16,7 +16,7 @@
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
         let ret = lapi.RunMApp("retweet_added", {aid: APP_ID, ver: "last",
           nid: author.hostIds[0], sid: systemSid,
-          authorid: authorId, tweetid: tweetId, userid: fansId, retweetid: retweetId}, []
+          authorid: authorId, tweetid: tweetId, userid: appUserId, retweetid: retweetId}, []
         )
         return ret
     } else {
@@ -24,14 +24,14 @@
       const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
   
       // use retweetId as index because one user can retweet many times.
-      lapi.Hset(tweetSid, RETWEET_LIST, retweetId, fansId)
+      lapi.Hset(tweetSid, RETWEET_LIST, retweetId, appUserId)
       
       // remember the number of retweets by the appUser
-      let numberOfRetweets = lapi.Hget(tweetSid, RETWEET_LIST, fansId)
+      let numberOfRetweets = lapi.Hget(tweetSid, RETWEET_LIST, appUserId)
       if (!numberOfRetweets)
         numberOfRetweets = 1
       numberOfRetweets++
-      lapi.Hset(tweetSid, RETWEET_LIST, fansId, numberOfRetweets)
+      lapi.Hset(tweetSid, RETWEET_LIST, appUserId, numberOfRetweets)
 
       lapi.Hset(tweetSid, RETWEET_LIST, tweetId, numberOfRetweets)
       lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
@@ -43,7 +43,7 @@
   
       // retrieve the original tweet after updating it.
       return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
-        userid: fansId, tweetid: tweetId}, [])
+        appuserid: appUserId, tweetid: tweetId}, [])
     }
   } catch (e) {
     console.error("Error retweet_add", JSON.stringify(request), e)

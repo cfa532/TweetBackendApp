@@ -8,14 +8,13 @@
     const BOOKMARK_LIST = "bookmark_list"
     const FAVORITE_LIST = "favorite_list"
     const userId = request["userid"]
+    const appUserId = request["appuserid"]
     try {
-        if (request["type"] == "comment") {
+        if (request["type"] == COMMENT_LIST) {
             const mmsid = lapi.MMOpen("", userId, "last")
             return lapi.Hgetall(mmsid, COMMENT_LIST)    // return list of field-value
-        } else if (request["type"] == "bookmark") {
-            return getTweets(BOOKMARK_LIST)
-        } else if (request["type"] == "favorite") {
-            return getTweets(FAVORITE_LIST)
+        } else {
+            return getTweets(request["type"])
         }
     } catch(e) {
         console.error("Error get_user_meta", JSON.stringify(request), e)
@@ -28,7 +27,7 @@
         .map(fv => {
             const tweetId = fv.Field
             let tweet = lapi.RunMApp("get_tweet", {aid: request.aid, ver:"last",
-                userid: userId, tweetid: tweetId}, [])
+                appuserid: appUserId, tweetid: tweetId}, [])
             if (tweet == null) {
                 // Double check the tweet has been synced anyway.
                 const authSid = lapi.BELoginAsAuthor()
@@ -36,7 +35,7 @@
                     lapi.MiMeiSync(authSid, "", tweetId, {})
                     lapi.MiMeiProvide(authSid, "", tweetId)
                     tweet = lapi.RunMApp("get_tweet", {aid: request.aid, ver:"last",
-                        userid: userId, tweetid: tweetId}, [])    
+                        appuserid: appUserId, tweetid: tweetId}, [])    
                 } catch(e) {
                     console.error("Error get_user_meta sync", tweetId, e)
                 }

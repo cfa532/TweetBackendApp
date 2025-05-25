@@ -9,6 +9,7 @@
     const authorId = request["authorid"]        // original tweet author
     const user = getUser(authorId)
     const retweetId = request["retweetid"]    // retweet Id, removed here.
+    const appUserId = request["appuserid"]
 
     const nodeId = lapi.GetVar("", "hostid")
     if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
@@ -39,7 +40,7 @@
       )
       // retrieve the original tweet after updating it.
       return lapi.RunMApp("get_tweet", {aid: request["aid"], ver: "last",
-        userid: authorId, tweetid: tweetId}, []
+        appuserid: appUserId, tweetid: tweetId}, []
       )
     }
   } catch (e) {

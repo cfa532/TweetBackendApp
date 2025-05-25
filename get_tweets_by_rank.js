@@ -13,7 +13,7 @@
         let arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, startRank, endRank)
         return arr.map(sp => {
             let tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
-                userid: visitorId, tweetid: sp.Member}, [])
+                appuserid: visitorId, tweetid: sp.Member}, [])
             if (!tweet) {
                 //  if the tweet is not available locally, sync it.
                 // try {
