@@ -5,7 +5,7 @@
         const startRank = parseInt(request["start"], 10)
         const endRank = request["end"] = parseInt(request["end"], 10)
         const userId = request["userid"]
-        const appUserId = request["gid"]  // app user who is accessing the tweets
+        const appUserId = request["appuserid"]  // app user who is accessing the tweets
         const mmsid = lapi.MMOpen("", userId, "last")
     
         /**
@@ -30,7 +30,9 @@
                 // }
             }
             return tweet
-        }).filter(e=> e)
+        })
+        // return all tweets, including null. Enable client to check the end of the feed.
+        // .filter(e=> e)
         return arr
     } catch(e) {
         console.error("Error get_tweet_feed", JSON.stringify(request), e)

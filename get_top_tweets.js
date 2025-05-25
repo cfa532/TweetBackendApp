@@ -4,8 +4,9 @@
          * Get list of pinned tweet IDs from a hash set.
          */
         const PINNED_TWEETS = "top_tweet_list"
-        const appUserId = request["gid"]
-        const mmsid = lapi.MMOpen("", request["userid"], "last")
+        const appUserId = request["appuserid"]
+        const userId = request["userid"]
+        const mmsid = lapi.MMOpen("", userId, "last")
 
         return lapi.Hkeys(mmsid, PINNED_TWEETS).map(tweetId => {
             let ts = lapi.Hget(mmsid, PINNED_TWEETS, tweetId).toString()

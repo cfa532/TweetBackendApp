@@ -7,13 +7,13 @@
         let startRank = parseInt(request["start"], 10)  // smaller
         let endRank = parseInt(request["end"], 10)      // larger
         let userId = request["userid"]
-        let visitorId = request["gid"]
+        let appUserId = request["appuserid"]
         let mmsid = lapi.MMOpen("", userId, "last")
         
         let arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, startRank, endRank)
         return arr.map(sp => {
             let tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
-                appuserid: visitorId, tweetid: sp.Member}, [])
+                appuserid: appUserId, tweetid: sp.Member}, [])
             if (!tweet) {
                 //  if the tweet is not available locally, sync it.
                 // try {
