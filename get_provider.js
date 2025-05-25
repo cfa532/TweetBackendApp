@@ -2,12 +2,10 @@
  * Given a mimei Id, return a list of IP addresses of providers
  */
 ((request, args)=>{
+    const mid = request["mid"]
+    const providers = JSON.parse(lapi.GetVar("", "mmprovsips", mid))
     try {
-        let mid = request["mid"]
-        let providers = lapi.GetVar("", "mmprovsips", mid)
-        providers = JSON.parse(providers)
-        
-        let ip, mini = null
+        let ip = "", mini = null
         providers.forEach(element => {
             // iterate providers
             element.forEach(element2 => {
@@ -30,6 +28,6 @@
         });
         return ip
     } catch(e) {
-        console.error("Error get_provider:", JSON.stringify(request), e)
+        console.error("Error get_provider:", e, JSON.stringify(request), JSON.stringify(providers))
     }
 })(request, args)

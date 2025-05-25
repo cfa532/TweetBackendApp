@@ -3,10 +3,10 @@
  */
 ((request, args)=>{
     try {
-        let mid = request["mid"]
-        let providers = lapi.GetVar("", "mmprovsips", mid)
+        const mid = request["mid"]
+        const providers = lapi.GetVar("", "mmprovsips", mid)
         providers = JSON.parse(providers)
-        let ips = []
+        const ips = []
         providers.forEach(element => {
             // iterate providers
             element.forEach(element2 => {
@@ -21,6 +21,6 @@
         });
         return ips
     } catch(e) {
-        console.error("Error get_provider:", JSON.stringify(request), e)
+        console.error("Error get_providers:", JSON.stringify(request), e)
     }
 })(request, args)

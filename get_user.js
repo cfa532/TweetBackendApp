@@ -6,17 +6,15 @@
     try {
         const userId = request["userid"]
 
-        // try to get the user's data from local DB
+        // try to get the user's data from local node
         const user = lapi.RunMApp("get_user_core_data", {aid: request.aid, ver:"last",
             userid: userId}, [])
         if (user) {
             return user
         } else {
             // if not found, try to get the user's data from remote DB
-            const providers = lapi.GetVar("", "mmprovsips", userId)
-            console.log("providers", providers)
-            providers = JSON.parse(providers)
-            let ip, mini = null
+            const providers = JSON.parse(lapi.GetVar("", "mmprovsips", userId))
+            let ip = "", mini = null
             providers.forEach(element => {
                 // iterate providers
                 element.forEach(element2 => {
@@ -40,6 +38,6 @@
             return ip
         }
     } catch(e) {
-        console.error("Error get_provider:", JSON.stringify(request), e)
+        console.error("Error get_user:", JSON.stringify(request), e)
     }
 })(request, args)
