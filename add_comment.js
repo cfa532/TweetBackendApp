@@ -77,8 +77,9 @@
             //      userid: userId, commentid: commentId}, [])
     
             // return comment mid and number of comments on the tweet.
-            const commentCount = lapi.Zcard(tweetSid, COMMENT_LIST)
-            console.log("add_comment local: comment count", commentCount, nodeId)
+            let lastSid = lapi.MMOpen("", tweetId, "last")
+            const commentCount = lapi.Zcard(lastSid, COMMENT_LIST)
+            console.log("add_comment local: comment count", commentCount, commentId)
             return {commentId: commentId, count: commentCount}
         }
     } catch(e) {

@@ -22,7 +22,8 @@
             userid: userId, mid: tweetId}, [])
 
         // lapi.Zcard(tweetSid, COMMENT_LIST)      // return the number of comments
-        commentId   // return the deleted commentId
+        const commentCount = lapi.Zcard(tweetSid, COMMENT_LIST)
+        {commentId: commentId, count: commentCount}
     } catch(e) {
         console.error("Error delete_comment_host", JSON.stringify(request), e)
     }
