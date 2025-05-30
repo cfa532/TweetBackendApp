@@ -11,8 +11,8 @@
     const appUserId = request['appuserid'];
     const pageNumber = request['pn'];
     const pageSize = request['ps'];
-    const startRank = (pageNumber - 1) * pageSize;
-    const endRank = pageNumber * pageSize;
+    const startRank = pageNumber * pageSize;
+    const endRank = startRank + pageSize;
 
     try {
         if (request['type'] === COMMENT_LIST) {
@@ -34,25 +34,26 @@
                 const tweetId = fv.Field;
                 let tweet = lapi.RunMApp('get_tweet', { aid: request.aid, ver: 'last',
                     appuserid: appUserId, tweetid: tweetId }, []);
-                if (tweet == null) {
-                    // Double check the tweet has been synced anyway.
-                    const authSid = lapi.BELoginAsAuthor();
-                    try {
-                        lapi.MiMeiSync(authSid, '', tweetId, {});
-                        lapi.MiMeiProvide(authSid, '', tweetId);
-                        tweet = lapi.RunMApp('get_tweet', {
-                            aid: request.aid,
-                            ver: 'last',
-                            appuserid: appUserId,
-                            tweetid: tweetId
-                        }, []);
-                    } catch (e) {
-                        console.error('Error get_user_meta sync', tweetId, e);
-                    }
-                }
+                // if (tweet == null) {
+                //     // Double check the tweet has been synced anyway.
+                //     const authSid = lapi.BELoginAsAuthor();
+                //     try {
+                //         lapi.MiMeiSync(authSid, '', tweetId, {});
+                //         lapi.MiMeiProvide(authSid, '', tweetId);
+                //         tweet = lapi.RunMApp('get_tweet', {
+                //             aid: request.aid,
+                //             ver: 'last',
+                //             appuserid: appUserId,
+                //             tweetid: tweetId
+                //         }, []);
+                //     } catch (e) {
+                //         console.error('Error get_user_meta sync', tweetId, e);
+                //     }
+                // }
+                console.log("get_user_meta: tweet", tweetId, JSON.stringify(tweet))
                 return tweet;
             })
-            .filter(t => t); // Filter out any null tweets
+            // .filter(t => t); // Filter out any null tweets
 
         return arr;
     }

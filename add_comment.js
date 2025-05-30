@@ -10,7 +10,7 @@
     const TWT_CONTENT_KEY = "core_data_of_tweet"
     const APP_EXT = "com.example.twitterclone"
     const APP_ID = request["aid"]
-    const userId = request["userid"]    // appUser who makes the comment
+    const appUserId = request["appuserid"]    // appUser who makes the comment
     const tweetId = request["tweetid"]  // tweet commented to
     const hostId = request["hostid"]    // host where the tweet is published.
     const comment = JSON.parse(request['comment'])
@@ -21,7 +21,7 @@
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             let ret = lapi.RunMApp("add_comment", {aid: APP_ID, ver: "last",
                 nid: hostId, sid: systemSid,
-                hostid: hostId, userid: userId, tweetid: tweetId, comment: request["comment"]}, []
+                hostid: hostId, appuserid: appUserId, tweetid: tweetId, comment: request["comment"]}, []
             )
             // sync tweet to node from where appUser is being loaded.
             try {
@@ -70,7 +70,7 @@
             // update the score of the parent tweet in AppData,
             // so that any change in the tweet will be reflected in the AppData.
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
-                userid: userId, mid: tweetId}, [])
+                userid: appUserId, mid: tweetId}, [])
     
             // In future, add the comment to appUser's comment list here
             // lapi.RunMApp("add_comment_by_user", {aid: APP_ID, ver:"last",

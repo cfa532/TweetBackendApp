@@ -15,9 +15,9 @@
     if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
         let ret = lapi.RunMApp("retweet_removed", {aid: APP_ID, ver: "last",
-            nid: user.hostIds[0], sid: systemSid,
-            tweetid: tweetId, authorid: authorId, retweetid: retweetId}, []
-        )
+            nid: user.hostIds[0], sid: systemSid, appuserid: appUserId,
+            tweetid: tweetId, authorid: authorId, retweetid: retweetId},
+            [])
         return ret
     } else {
       const authSid = lapi.BELoginAsAuthor()

@@ -16,8 +16,8 @@
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
         let ret = lapi.RunMApp("retweet_added", {aid: APP_ID, ver: "last",
           nid: author.hostIds[0], sid: systemSid,
-          authorid: authorId, tweetid: tweetId, userid: appUserId, retweetid: retweetId}, []
-        )
+          authorid: authorId, tweetid: tweetId, appuserid: appUserId, retweetid: retweetId},
+          [])
         return ret
     } else {
       const authSid = lapi.BELoginAsAuthor()

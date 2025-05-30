@@ -17,7 +17,7 @@
 ((request, args)=>{
     const FAVORITE_LIST = "tweet_like_list"
     const APP_ID = request["aid"]
-    const userId = request["userid"]    // appUser who favorites the tweet
+    const appUserId = request["appuserid"]    // appUser who favorites the tweet
     const tweetId = request["tweetid"]
     const authorId = request["authorid"]
     const userHostId = request["userhostid"]    // host id of the appUser
@@ -32,7 +32,7 @@
             // send the request to that remote host that published the tweet.
             let ret = lapi.RunMApp("toggle_favorite", {aid: APP_ID, ver: "last",
                 nid: author.hostIds[0], sid: systemSid, userhostid: userHostId,
-                userid: userId, authorid: authorId, tweetid: tweetId}, []
+                userid: appUserId, authorid: authorId, tweetid: tweetId}, []
             )
             // new sync the tweet from the remote host.
             try {
@@ -44,18 +44,18 @@
                 console.error("toggle_favorite Error sync tweet", e, JSON.stringify(ret))
             }
             // ret = {user: user, isFavorite: isFavorite, count: count}
-            console.log("toggle_favorite remote tweet", JSON.stringify(ret), userId, tweetId)
+            console.log("toggle_favorite remote tweet", JSON.stringify(ret), appUserId, tweetId)
             return ret
         } else {
             // current node is the author's host, where tweet is published.
-            let ret = toggleFavoriteOfTweet(userId, authorId, tweetId)
+            let ret = toggleFavoriteOfTweet(appUserId, authorId, tweetId)
     
             // toggle the favorite status of the tweet in appUser's node.
             const updatedUser = lapi.RunMApp("toggle_favorite_by_user", {aid: APP_ID, ver: "last",
                 nid: userHostId, sid: systemSid,
-                userid: userId, tweetid: tweetId, isfavorite: ret.isFavorite}, []
+                userid: appUserId, tweetid: tweetId, isfavorite: ret.isFavorite}, []
             )
-            console.log("toggle_favorite local tweet", JSON.stringify(ret), userId, tweetId)
+            console.log("toggle_favorite local tweet", JSON.stringify(ret), appUserId, tweetId)
             return {user: updatedUser, isFavorite: ret.isFavorite, count: ret.count }
         }
     } catch(e) {

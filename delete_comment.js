@@ -1,8 +1,11 @@
+/**
+ * Delete a comment from a tweet. Both comment author and tweet author
+ * can delete the comment.
+ */
 ((request, args)=>{
     try {
-        // add new comment to the tweet
         const APP_ID = request["aid"]
-        const userId = request["userid"]
+        const appUserId = request["appuserid"]
         const tweetId = request["tweetid"]
         const commentId = request["commentid"]
         const hostId = request["hostid"]
@@ -11,9 +14,9 @@
         if (nodeId != hostId) {
             // send the request to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            const req = {aid: APP_ID, ver: "last", nid: hostId, sid: systemSid,
-                userid: userId, tweetid: tweetId, commentid: commentId}
-            let ret = lapi.RunMApp("delete_comment_host", req, [])
+            let ret = lapi.RunMApp("delete_comment_host", {aid: APP_ID, ver: "last",
+                nid: hostId, sid: systemSid,
+                appuserid: appUserId, tweetid: tweetId, commentid: commentId}, [])
             try {
                 // if (!lapi.MFIsExist("", tweetId)) {
                     lapi.MiMeiSync(systemSid, "", tweetId, {})
@@ -25,7 +28,7 @@
             return ret
         } else {
             const req = {aid: APP_ID, ver: "last",
-                userid: userId, tweetid: tweetId, commentid: commentId}
+                userid: appUserId, tweetid: tweetId, commentid: commentId}
             return lapi.RunMApp("delete_comment_host", req, [])
         }
     } catch(e) {

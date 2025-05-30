@@ -4,18 +4,18 @@
     const FOLLOWINGS_TWEETS = "followings_tweets"
     const PINNED_TWEETS = "top_tweet_list"
     const tweetId = request["tweetid"]    // tweet Id to be removed
-    const userId = request["authorid"]
+    const appUserId = request["appuserid"]
     const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
 
     try {
-        const user = getUser(userId)
+        const user = getUser(appUserId)
         const nodeId = lapi.GetVar("", "hostid")    // current node id
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
             // send the request to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             let ret = lapi.RunMApp("delete_tweet", {aid: APP_ID, ver: "last",
                 nid: user.hostIds[0], sid: systemSid,
-                tweetid: tweetId, authorid: userId}, []
+                tweetid: tweetId, authorid: appUserId}, []
             )
             return ret
         } else {
@@ -33,26 +33,26 @@
                 lapi.MMDelVers(authSid, tweetId)
             }
 
-            const userSid = lapi.MMOpen(authSid, userId, "cur")
+            const userSid = lapi.MMOpen(authSid, appUserId, "cur")
             try {
                 lapi.Begin(userSid, 2)
                 lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
                 lapi.Zrem(userSid, FOLLOWINGS_TWEETS, tweetId)
                 lapi.Hdel(userSid, PINNED_TWEETS, tweetId)   // remove it from pinned list
                 lapi.Commit(userSid)
-                lapi.MMDelRef(userSid, userId, tweetId)
-                lapi.MMBackup(userSid, userId, "", "delref=true")
+                lapi.MMDelRef(userSid, appUserId, tweetId)
+                lapi.MMBackup(userSid, appUserId, "", "delref=true")
             } catch(e) {
                 lapi.Rollback(userSid)
                 throw e
             }
-            lapi.MiMeiPublish(authSid, "", userId)
+            lapi.MiMeiPublish(authSid, "", appUserId)
 
             console.log("Delete tweet ", JSON.stringify(tweet))
     
             // update the score of the tweet in AppData
             lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
-                userid: userId, mid: tweetId}, [])
+                userid: appUserId, mid: tweetId}, [])
     
             return tweetId
         }
