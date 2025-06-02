@@ -23,14 +23,6 @@
       const authSid = lapi.BELoginAsAuthor()
       const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
       lapi.Hdel(tweetSid, RETWEET_LIST, retweetId)
-
-      // remember the number of retweets by the appUser
-      let numberOfRetweets = lapi.Hget(tweetSid, RETWEET_LIST, fansId)
-      if (numberOfRetweets) {
-        numberOfRetweets = Math.max(0, numberOfRetweets - 1)
-        lapi.Hset(tweetSid, RETWEET_LIST, fansId, numberOfRetweets)
-      }
-
       lapi.MMBackup(authSid, tweetId, "", "delref=true")
       lapi.MiMeiPublish(authSid, "", tweetId)
   

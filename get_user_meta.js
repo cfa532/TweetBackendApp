@@ -12,7 +12,7 @@
     const pageNumber = request['pn'];
     const pageSize = request['ps'];
     const startRank = pageNumber * pageSize;
-    const endRank = startRank + pageSize;
+    const endRank = startRank + pageSize - 1;
 
     try {
         if (request['type'] === COMMENT_LIST) {

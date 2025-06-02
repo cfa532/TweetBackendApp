@@ -25,15 +25,6 @@
   
       // use retweetId as index because one user can retweet many times.
       lapi.Hset(tweetSid, RETWEET_LIST, retweetId, appUserId)
-      
-      // remember the number of retweets by the appUser
-      let numberOfRetweets = lapi.Hget(tweetSid, RETWEET_LIST, appUserId)
-      if (!numberOfRetweets)
-        numberOfRetweets = 1
-      numberOfRetweets++
-      lapi.Hset(tweetSid, RETWEET_LIST, appUserId, numberOfRetweets)
-
-      lapi.Hset(tweetSid, RETWEET_LIST, tweetId, numberOfRetweets)
       lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
       lapi.MiMeiPublish(tweetSid, "", tweetId)
   
