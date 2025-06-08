@@ -45,6 +45,7 @@
     
             let lastSid = lapi.MMOpen("", tweetId, "last")
             const commentCount = lapi.Zcard(lastSid, COMMENT_LIST)
+            console.log("delete_comment local: ", commentCount, commentId)
             return {commentId: commentId, count: commentCount}
         }
     } catch(e) {

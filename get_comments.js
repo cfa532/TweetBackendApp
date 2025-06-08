@@ -11,11 +11,11 @@
         const mmsid = lapi.MMOpen("", tweetId, "last")
     
         const arr = lapi.Zrevrange(mmsid, COMMENT_LIST, startRank, endRank)
-        const ret = arr.map(sp => {
+        return arr.map(sp => {
             return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
                 appuserid: appUserId, tweetid: sp.Member}, [])
-        }).filter(e=> e)
-        return ret
+        })
+        // .filter(e=> e)
     } catch(e) {
         console.error("Error get_comments:", JSON.stringify(request), e)
     }

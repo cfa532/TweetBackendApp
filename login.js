@@ -17,7 +17,7 @@
             console.error("User does not exist.", username)
             return {status: "failure", reason: "User does not exist"}
         }
-        // return {user: JSON.stringify(user), status: "success"}
+        // return {user: user, status: "success"}
 
         // need to check hashed password
         if (user.password == lapi.MMCreate(authSid, APP_ID, APP_EXT, password, 1, 0x07276704)) {
@@ -39,19 +39,20 @@
                  */
                 user = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver: "last",
                     userid: userId}, [])
-                delete user.password
 
-                user["lastLogin"] = Double(Date.now())  // otherwise it will be converted to string.
+                user["lastLogin"] = Date.now() // otherwise it will be converted to string.
                 lapi.Set(userSid, OWNER_DATA_KEY, user)
                 lapi.MMBackup(authSid, user.mid, "", "delref=true")
                 lapi.MiMeiPublish(authSid, "", user.mid)
+
+                delete user.password
                 return {user: user, status: "success"}
             }
         } else {
             return {status: "failure", reason: "Wrong password"}
         }
     } catch(e) {
-        console.error("Error login OK", loginOK, JSON.stringify(request), e)
+        console.error("Error login", loginOK, JSON.stringify(request), e)
         if (loginOK) {
             delete user.password
             return {user: user, status: "success"}
