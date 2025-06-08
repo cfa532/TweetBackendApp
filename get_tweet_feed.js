@@ -18,11 +18,12 @@
             const tweetId = sp.Member
             const tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
                 appuserid: appUserId, tweetid: tweetId}, [])
-            if (!tweet) {
-                return { tid: tweetId, tweet: null }
-            } else {
-                return { tid: tweetId, tweet: tweet }
-            }
+            // if (!tweet) {
+            //     return { tid: tweetId, tweet: null }
+            // } else {
+            //     return { tid: tweetId, tweet: tweet }
+            // }
+            return tweet
         })
         // return all tweets, including null. Enable client to check the end of the feed.
         // .filter(e=> e)

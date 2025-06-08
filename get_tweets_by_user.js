@@ -17,11 +17,12 @@
             const tweetId = sp.Member
             const tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
                 appuserid: appUserId, tweetid: tweetId}, [])
-            if (!tweet) {
-                return { tid: tweetId, tweet: null }
-            } else {
-                return { tid: tweetId, tweet: tweet }
-            }
+            // if (!tweet) {
+            //     return { tid: tweetId, tweet: null }
+            // } else {
+            //     return { tid: tweetId, tweet: tweet }
+            // }
+            return tweet
         })
     } catch(e) {
         console.error("Error get_tweets_by_rank", JSON.stringify(request), e)
