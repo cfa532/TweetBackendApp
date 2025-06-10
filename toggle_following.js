@@ -4,7 +4,7 @@
  * If yes, it toggles the following status locally.
  * If not, it sends the request to the remote host.
  * When following an user, copy its mids and sync all of its tweets locally.
- * When unfollowing, remove its tweets' mid and ref, so that Garbage collector
+ * When unfollowing, remove its tweets' mid and ref, and Garbage collector
  * will remove unfollowed tweets.
  */
 
@@ -38,7 +38,7 @@
             const isFollowing = lapi.Hget(userSid, FOLLOWINGS_LIST, otherId) ? true : false
             if (isFollowing) {
                 // Unfollow the user and remove it tweets
-                const ts = lapi.RunMApp("get_tweet_list", {aid: APP_ID, ver: "last", userid: otherId}, [])
+                const ts = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last", userid: otherId}, [])
                     .map(element => {
                         // lapi.MiMeiUnprovide(authSid, "", element.Member)
                         return element.Member
@@ -49,10 +49,16 @@
                 // }
                 lapi.Zrem(userSid, FOLLOWINGS_TWEETS, ...ts)
                 lapi.Hdel(userSid, FOLLOWINGS_LIST, otherId)
+                lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
+                    userid: otherId, otherid: userId, isfollower: false
+                }, [])
             } else {
                 // Follow the otherId and provide for all of its tweet
                 lapi.Hset(userSid, FOLLOWINGS_LIST, otherId, Date.now())
-                const ts = lapi.RunMApp("get_tweet_list", {aid: APP_ID, ver: "last",
+                lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
+                    userid: otherId, otherid: userId, isfollower: true
+                }, [])
+                const ts = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
                     nid: hostOfOtherId, sid: systemSid, userid: otherId
                 }, [])
                 lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...ts)

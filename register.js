@@ -7,9 +7,11 @@
     const OWNER_DATA_KEY = "data_of_author"
     const FOLLOWINGS_LIST = "list_of_followings_mid"
     const user = JSON.parse(request["user"])
+    const followings = JSON.parse(request["followings"])
+    const nodeId = lapi.GetVar("", "hostid")
+    console.log("nodeId", nodeId, JSON.stringify(request))
 
     try {
-        const nodeId = lapi.GetVar("", "hostid")
         console.log("nodeId", nodeId, request["user"])
         if (user.hostIds?.length > 0 && user.hostIds[0] != nodeId) {
             // register it on remote host
@@ -31,11 +33,26 @@
             user["mid"] = userMid
             user["password"] = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)
             user["timestamp"] = user["timestamp"] ? user["timestamp"] : Date.now()
+            if (!user["hostIds"] || user["hostIds"].length < 1) {
+                user["hostIds"] = [nodeId]
+            }
             const userSid = lapi.MMOpen(authSid, userMid, "cur")
             lapi.Set(userSid, OWNER_DATA_KEY, user)      // create default user data area
     
-            user["followingList"]?.forEach(mid => {
-                lapi.Hset(userSid, FOLLOWINGS_LIST, mid, Date.now())
+            followings?.forEach(mid => {
+                lapi.Hdel(userSid, FOLLOWINGS_LIST, mid)
+                try {
+                    // find the host of the otherId. Assume it is available on this node.
+                    // otherwise, the returned value will be the IP address of the otherId.
+                    const otherUser = lapi.RunMApp("get_user", {aid: APP_ID, ver: "last",
+                        userid: mid}, [])
+                    console.log("Following otherUser", JSON.stringify(otherUser))
+                    lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
+                        userid: user.mid, otherid: mid, otherhostid: otherUser.hostIds[0]
+                    }, [])
+                } catch(e) {
+                    console.error("Error in register when toggle_following", e, JSON.stringify(request))
+                }
             });
             lapi.MMBackup(userSid, userMid, "", "delref=true")
             lapi.MiMeiPublish(userSid, "", userMid)

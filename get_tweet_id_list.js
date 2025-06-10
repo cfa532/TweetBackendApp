@@ -8,6 +8,6 @@
         const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, 0, -1)
         return arr
     } catch(e) {
-        console.error("Error get_tweet_list", JSON.stringify(request), e)
+        console.error("Error get_tweet_id_list", JSON.stringify(request), e)
     }
 })(request, args)
