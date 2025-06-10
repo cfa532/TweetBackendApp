@@ -13,8 +13,7 @@
     const FOLLOWINGS_LIST = "list_of_followings_mid"
     const APP_ID = request["aid"]
     const userId = request["userid"]      // initiator of the follow or unfollow action
-    const otherId = request["otherid"]     // userId to follow or unfollow
-    const hostOfOtherId = request["otherhostid"]    // host of the otherId.
+    const followedId = request["followingid"]     // userId to follow or unfollow
 
     try {
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
@@ -26,80 +25,73 @@
             // send the request to the remote host
             let ret = lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
                 nid: user.hostIds[0], sid: systemSid,
-                userid: userId, otherid: otherId, otherhostid: hostOfOtherId}, []
+                userid: userId, otherid: followedId}, []
             )
-            console.log("Toggle following remote", ret, userId, otherId, hostOfOtherId, nodeId)
+            console.log("Toggle following remote", ret, userId, followedId, nodeId)
             return ret
         } else {
             const authSid = lapi.BELoginAsAuthor()
             const userSid = lapi.MMOpen(authSid, userId, "cur")
-    
+
+            // temp solution to check if the otherId is provided by current node.
+            // const providers = lapi.MiMeiFindProvs(authSid, "", otherId, 3)
+            // console.log("Find providers", JSON.stringify(providers), otherId)
+            let followedUser = getUser(followedId)
+            if (!followedUser) {
+                // the other is not provided by current node.
+                lapi.MiMeiSync(authSid, "", followedId, {})
+                followedUser = getUser(followedId)
+            }
+            console.log("followingUser", JSON.stringify(followedUser))
+            const hostOfOther = followedUser.hostIds[0]
+
             // check if the otherId is in the following list of the user
-            const isFollowing = lapi.Hget(userSid, FOLLOWINGS_LIST, otherId) ? true : false
+            const isFollowing = lapi.Hget(userSid, FOLLOWINGS_LIST, followedId) ? true : false
             if (isFollowing) {
+                console.log(userId, "unfollowing", followedId, hostOfOther, nodeId)
                 // Unfollow the user and remove it tweets
-                const ts = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last", userid: otherId}, [])
+                const tidList = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last", userid: followedId}, [])
                     .map(element => {
-                        // lapi.MiMeiUnprovide(authSid, "", element.Member)
                         return element.Member
                     })
-                // if (hostOfOtherId && hostOfOtherId != nodeId) {
-                //     lapi.MiMeiUnprovide(authSid, "", otherId)
-                //     lapi.MMDelVers(authSid, otherId)
-                // }
-                lapi.Zrem(userSid, FOLLOWINGS_TWEETS, ...ts)
-                lapi.Hdel(userSid, FOLLOWINGS_LIST, otherId)
-                lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
-                    userid: otherId, otherid: userId, isfollower: false
-                }, [])
-            } else {
-                // Follow the otherId and provide for all of its tweet
-                lapi.Hset(userSid, FOLLOWINGS_LIST, otherId, Date.now())
-                lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
-                    userid: otherId, otherid: userId, isfollower: true
-                }, [])
-                const ts = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
-                    nid: hostOfOtherId, sid: systemSid, userid: otherId
-                }, [])
-                lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...ts)
+                lapi.Zrem(userSid, FOLLOWINGS_TWEETS, ...tidList)
+                lapi.Hdel(userSid, FOLLOWINGS_LIST, followedId)
+                lapi.MMBackup(userSid, userId, "", "delref=true")
+                lapi.MiMeiPublish(authSid, "", userId)
 
-                // temp solution to check if the otherId is provided by current node.
-                // const providers = lapi.MiMeiFindProvs(authSid, "", otherId, 3)
-                // console.log("Find providers", JSON.stringify(providers), otherId)
-                lapi.MiMeiSync(authSid, "", otherId, {}) // throw error if otherId has one copy and on the same node
-                lapi.MiMeiProvide(authSid, "", otherId) // content of the otherId will be synced.
-                // const followedUser = getUser(otherId)
-                // if (!followedUser) {
-                    // try {
-                        // lapi.MiMeiSync(authSid, "", otherId, {}) // throw error if otherId has one copy and on the same node
-                    // } catch(e) {
-                    //     console.log("Error toggle_followings sync", userId, otherId, e)
-                    // } finally {
-                    //     console.log("Provide", otherId)
-                    //     lapi.MiMeiProvide(authSid, "", otherId) // content of the otherId will be synced.
-                    // }
-                    // takes too long when there are many tweet.
-                    // ts.forEach(element => {
-                    //     // sync tweet id
-                    //     try {
-                    //         lapi.MiMeiSync(authSid, "", element.Member, {})
-                    //     } catch(e) {
-                    //         console.log("Error toggle_followings sync", element.Member, userId, otherId, e)
-                    //     } finally {
-                    //         lapi.MiMeiProvide(authSid, "", element.Member)
-                    //     }
-                    // })
+                lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
+                    nid: hostOfOther, sid: systemSid,
+                    userid: followedId, otherid: userId, isfollower: false
+                }, [])
+                // Do not do it yet
+                // if (hostOfOtherId != nodeId) {
+                //     lapi.MiMeiUnprovide(authSid, "", otherId)
                 // }
+            } else {
+                console.log(userId, "following", followedId, hostOfOther, nodeId)
+                // Follow the otherId and provide for all of its tweet
+                lapi.Hset(userSid, FOLLOWINGS_LIST, followedId, Date.now())
+
+                const tidList = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
+                    nid: hostOfOther, sid: systemSid, userid: followedId
+                }, [])
+                console.log("Following List", JSON.stringify(tidList), followedId, hostOfOther)
+                lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...tidList)
+                lapi.MMBackup(userSid, userId, "", "delref=true")
+                lapi.MiMeiPublish(authSid, "", userId)
+
+                lapi.MiMeiProvide(authSid, "", followedId) // content of the otherId will be synced.
+                lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
+                    nid: hostOfOther, sid: systemSid,
+                    userid: followedId, otherid: userId, isfollower: true
+                }, [])
             }
-            lapi.MMBackup(userSid, userId, "", "delref=true")
-            lapi.MiMeiPublish(authSid, "", userId)
     
             // update the score of the user in AppData
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver: "last",
                 userid: userId, mid: userId}, [])
             
             // return the updated following status on the otherid,
-            console.log(userId, "following", otherId, !isFollowing, hostOfOtherId, nodeId)
             return !isFollowing
         }
     } catch(e) {

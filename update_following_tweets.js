@@ -29,7 +29,7 @@
     
             let followingsTweetsUpdated = false
             const arr = followings.map(uid => {
-                const mmsid = lapi.MMOpen("", uid, "last")  // each uid should have been synced locally.
+                const mmsid = lapi.MMOpen("", uid, "last")  // every following's id should have been synced locally.
                 const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, 0, -1)
                 for (const i in arr) {
                     const element = arr[i]

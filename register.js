@@ -5,7 +5,6 @@
     const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
     const APP_EXT = "com.example.twitterclone"    
     const OWNER_DATA_KEY = "data_of_author"
-    const FOLLOWINGS_LIST = "list_of_followings_mid"
     const user = JSON.parse(request["user"])
     const followings = JSON.parse(request["followings"])
     const nodeId = lapi.GetVar("", "hostid")
@@ -38,9 +37,10 @@
             }
             const userSid = lapi.MMOpen(authSid, userMid, "cur")
             lapi.Set(userSid, OWNER_DATA_KEY, user)      // create default user data area
+            lapi.MMBackup(userSid, userMid, "", "delref=true")
+            lapi.MiMeiPublish(authSid, "", userMid)     // otherwise toggle_following won't find the new user.
     
             followings?.forEach(mid => {
-                lapi.Hdel(userSid, FOLLOWINGS_LIST, mid)
                 try {
                     // find the host of the otherId. Assume it is available on this node.
                     // otherwise, the returned value will be the IP address of the otherId.
@@ -54,8 +54,6 @@
                     console.error("Error in register when toggle_following", e, JSON.stringify(request))
                 }
             });
-            lapi.MMBackup(userSid, userMid, "", "delref=true")
-            lapi.MiMeiPublish(userSid, "", userMid)
     
             // lapi.RunMApp("update_app_data", {aid: APP_ID, ver: "last", user: JSON.stringify(user)}, [])
             console.log("User regisgtered.", JSON.stringify(user))
