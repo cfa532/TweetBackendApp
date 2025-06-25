@@ -10,7 +10,8 @@
     const userInDB = lapi.Get(userSid, OWNER_DATA_KEY)
 
     let loginOK = false
-
+    // delete userInDB.password
+    // return {user: userInDB, status: "success"}
     try {
 
         // need to check hashed password

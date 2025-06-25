@@ -11,7 +11,7 @@
         const userId = request["userid"]
         const appUserId = request["appuserid"]
         const mmsid = lapi.MMOpen("", userId, "last")
-        
+
         const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, startRank, endRank)
         return arr.map(sp => {
             const tweetId = sp.Member
@@ -22,10 +22,10 @@
             // } else {
             //     return { tid: tweetId, tweet: tweet }
             // }
+            console.log("tweet by user", JSON.stringify(tweet))
             return tweet
         })
     } catch(e) {
         console.error("Error get_tweets_by_rank", JSON.stringify(request), e)
-        return []
     }
 })(request, args)

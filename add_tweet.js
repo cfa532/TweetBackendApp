@@ -15,24 +15,24 @@
         if (nodeId != hostId) {
             // send the request to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            tweetId = lapi.RunMApp("add_tweet", {aid: APP_ID, ver: "last",
+            const ret = lapi.RunMApp("add_tweet", {aid: APP_ID, ver: "last",
                 nid: hostId, sid: systemSid,
                 hostid: hostId, tweet: request["tweet"]}, []
             )
             // tweet is created on remote host, sync it here.
             try {
-                if (tweetId) {
-                    lapi.MiMeiSync(systemSid, "", tweetId, {})  // Get new tweet right away.
-                    lapi.MiMeiProvide(systemSid, "", tweetId)
+                if (ret.success) {
+                    lapi.MiMeiSync(systemSid, "", ret.mid, {})  // Get new tweet right away.
+                    lapi.MiMeiProvide(systemSid, "", ret.mid)
                 }
             } catch(e) {
                 console.error("add_tweet: remote not ready. tweetid=", tweetId, e)
             }
             console.log("add_tweet remote", tweetId)
-            return tweetId
+            return ret
         } else {
             const friendId = getFriendByAppCode(request.nodeappcode)
-            console.log("friendId=", friendId)
+            console.log("add_tweet: friendId=", friendId)
             if (!friendId) {
                 throw new Error("Not a friend of the host", hostId)
             }
@@ -77,11 +77,11 @@
                 }
             }
             console.log("add_tweet local", tweetId)
-            return tweetId
+            return {success: true, mid: tweetId}
         }
     } catch(e) {
-        console.error("Error add_tweet", e, tweetId, JSON.stringify(request))
-        return tweetId; // Return tweetId even if there's an error
+        console.error("Error add_tweet", e, JSON.stringify(request))
+        return {success: false, message: e}
     }
 
     function getScorePair(mid) {
