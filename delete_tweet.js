@@ -54,10 +54,11 @@
             lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
                 userid: authorId, mid: tweetId}, [])
     
-            return tweetId
+            return {tweetid: tweetId, success: true}
         }
     } catch(e) {
         console.error("Error delete_tweet", e, JSON.stringify(request))
+        return {message: e, success: false}
     }
 
     function getUser(mid) {

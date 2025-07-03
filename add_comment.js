@@ -26,16 +26,16 @@
             // sync tweet to node from where appUser is being loaded.
             try {
                 // if (!lapi.MFIsExist("", tweetId)) {
-                    lapi.MiMeiSync(systemSid, "", tweetId, {})
-                    // lapi.MiMeiProvide(systemSid, "", tweetId)
+                lapi.MiMeiSync(systemSid, "", tweetId, {})
+                lapi.MiMeiProvide(systemSid, "", tweetId)
                 // }
                 // sync all comments of the tweet to local node
                 const tweetSid = lapi.MMOpen("", tweetId, "last")
                 lapi.Zrange(tweetSid, COMMENT_LIST, 0, -1).forEach(element => {
-                    // if (!lapi.MFIsExist("", element.Member)) {
+                    if (!lapi.MFIsExist("", element.Member)) {
                         lapi.MiMeiSync(systemSid, "", element.Member, {})
                         // lapi.MiMeiProvide(systemSid, "", element.Member)
-                    // }
+                    }
                 })
             } catch(e) {
                 console.error("add_comment: Error sync tweet to node", e)
@@ -43,6 +43,18 @@
             console.log("add_comment remote: comment count", JSON.stringify(ret), nodeId)
             return ret
         } else {
+            // if the comment has originalTweetId, publish a new quoted tweet too.
+            var retweetId = ""
+            if (comment.originalTweetId && comment.originalAuthorId) {
+                const ret = lapi.RunMApp("add_tweet", {aid: APP_ID, ver: "last",
+                    hostid: hostId, tweet: request['comment']}, [])
+                if (ret.success) {
+                    retweetId = ret.mid
+                }
+                delete comment.originalTweetId
+                delete comment.originalAuthorId
+            }
+
             // create a new tweet for the comment, which is a tweet object too.
             const authSid = lapi.BELoginAsAuthor()
             const commentId = lapi.MMCreate(authSid, APP_ID, APP_EXT, "{{auto}}", 2, 0x07276704)
@@ -79,11 +91,12 @@
             // return comment mid and number of comments on the tweet.
             let lastSid = lapi.MMOpen("", tweetId, "last")
             const commentCount = lapi.Zcard(lastSid, COMMENT_LIST)
-            console.log("add_comment local: ", commentCount, commentId)
-            return {commentId: commentId, count: commentCount}
+            console.log("add_comment local: ", commentCount, commentId, retweetId)
+            return {success: true, mid: commentId, count: commentCount, retweetid: retweetId}
         }
     } catch(e) {
         console.error("Error add_comment", e, JSON.stringify(request))
+        return {success: false, message: e}
     }
 
     function getScorePair(mid) {
