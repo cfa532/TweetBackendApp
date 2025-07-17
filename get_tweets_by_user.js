@@ -22,10 +22,12 @@
             // } else {
             //     return { tid: tweetId, tweet: tweet }
             // }
-            console.log("tweet by user", JSON.stringify(tweet))
+            if (!tweet) {
+                console.log("get_tweets_by_user NULL", userId, tweetId)
+            }
             return tweet
         })
     } catch(e) {
-        console.error("Error get_tweets_by_rank", JSON.stringify(request), e)
+        console.error("Error get_tweets_by_user", JSON.stringify(request), e)
     }
 })(request, args)
