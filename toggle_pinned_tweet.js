@@ -12,7 +12,7 @@
         const nodeId = lapi.GetVar("", "hostid")
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            let ret = lapi.RunMApp("toggle_top_tweets", {aid: APP_ID, ver: "last",
+            let ret = lapi.RunMApp("toggle_pinned_tweet", {aid: APP_ID, ver: "last",
                 nid: user.hostIds[0], sid: systemSid,
                 tweetid: tweetId, appuserid: appUserId}, []
             )
@@ -34,7 +34,7 @@
             return !pinned
         }
     } catch(e) {
-        console.error("Error toggle_top_tweets", JSON.stringify(request), e)
+        console.error("Error toggle_pinned_tweet", JSON.stringify(request), e)
     }
 
     function getUser(mid) {

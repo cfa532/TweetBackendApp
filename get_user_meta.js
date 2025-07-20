@@ -25,9 +25,9 @@
         console.error('Error get_user_meta', JSON.stringify(request), e);
     }
 
-    function getTweets(dataType) {
+    function getTweets(tweetType) {
         const mmsid = lapi.MMOpen('', userId, 'last');
-        const arr = lapi.Hgetall(mmsid, dataType)
+        const arr = lapi.Hgetall(mmsid, tweetType)
             .sort((a, b) => b.Value - a.Value) // Sort by timestamp
             .slice(startRank, endRank)        // Slice to get only the tweets for the current page
             .map(fv => {
