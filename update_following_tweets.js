@@ -45,7 +45,7 @@
                             lapi.MiMeiProvide(userSid, "", tweetId)
                         // }
                         const tweet = lapi.RunMApp("get_tweet", {aid: APP_ID, ver:"last",
-                            userid: userId, tweetid: tweetId}, [])
+                            appuserid: userId, tweetid: tweetId}, [])
                         console.log("update followings' new tweet", element.Member, rank, userId)
                         return tweet
                     }

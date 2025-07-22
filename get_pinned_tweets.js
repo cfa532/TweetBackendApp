@@ -3,7 +3,7 @@
         /**
          * Get list of pinned tweet IDs from a hash set.
          */
-        const PINNED_TWEETS = "top_tweet_list"
+        const PINNED_TWEETS = "pinned_tweet_list"
         const appUserId = request["appuserid"]
         const userId = request["userid"]
         const mmsid = lapi.MMOpen("", userId, "last")

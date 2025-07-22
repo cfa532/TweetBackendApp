@@ -1,9 +1,9 @@
 ((request, args)=>{
     /**
-     * Toggle pinned tweets and return updated pinned tweets list.
+     * Toggle pinned tweets and return updated pinned tweets status.
      */
     try {
-        const PINNED_TWEETS = "top_tweet_list"
+        const PINNED_TWEETS = "pinned_tweet_list"
         const APP_ID = request["aid"]
         const tweetId = request["tweetid"]
         const appUserId = request["appuserid"]
