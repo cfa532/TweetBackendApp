@@ -25,10 +25,35 @@
             // }
             return tweet
         })
+        
+        // Collect original tweets if originalTweetId is present
+        let originalTweets = []
+        arr.forEach(tweet => {
+            if (tweet && tweet.originalTweetId) {
+                const originalTweet = lapi.RunMApp("get_tweet", {
+                    aid: request["aid"], 
+                    ver: "last",
+                    appuserid: appUserId, 
+                    tweetid: tweet.originalTweetId
+                }, [])
+                if (originalTweet) {
+                    originalTweets.push(originalTweet)
+                }
+            }
+        })
+        
         // return all tweets, including null. Enable client to check the end of the feed.
         // .filter(e=> e)
-        return arr
+        return {
+            success: true,
+            tweets: arr,
+            originalTweets: originalTweets
+        }
     } catch(e) {
         console.error("Error get_tweet_feed", JSON.stringify(request), e)
+        return {
+            success: false,
+            error: e.message
+        }
     }
 })(request, args)

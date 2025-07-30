@@ -13,7 +13,7 @@
         const mmsid = lapi.MMOpen("", userId, "last")
 
         const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, startRank, endRank)
-        return arr.map(sp => {
+        let tweets = arr.map(sp => {
             const tweetId = sp.Member
             const tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
                 appuserid: appUserId, tweetid: tweetId}, [])
@@ -27,7 +27,33 @@
             }
             return tweet
         })
+        
+        // Collect original tweets if originalTweetId is present
+        let originalTweets = []
+        tweets.forEach(tweet => {
+            if (tweet && tweet.originalTweetId) {
+                const originalTweet = lapi.RunMApp("get_tweet", {
+                    aid: request["aid"], 
+                    ver: "last",
+                    appuserid: appUserId, 
+                    tweetid: tweet.originalTweetId
+                }, [])
+                if (originalTweet) {
+                    originalTweets.push(originalTweet)
+                }
+            }
+        })
+        
+        return {
+            success: true,
+            tweets: tweets,
+            originalTweets: originalTweets
+        }
     } catch(e) {
         console.error("Error get_tweets_by_user", JSON.stringify(request), e)
+        return {
+            success: false,
+            error: e.message
+        }
     }
 })(request, args)
