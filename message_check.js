@@ -26,8 +26,6 @@
     const MESSAGE_MIMEI = "message_mimei_1"
     const userId = request["userid"]
 
-    console.log("message_check: Starting check incoming messages for user", userId)
-
     try {
         // Get authentication and create/open message Mimei
         const authSid = lapi.BELoginAsAuthor()
@@ -49,12 +47,10 @@
         } else {
             // Get all senders who have sent messages to this user
             const senders = lapi.Hkeys(msgSid, LAST_INCOMING_MSG)
-            console.log("message_check: Found", senders.length, "senders,", senders)
+            let lastTimeFetched = 0;
 
             // Check each sender for new unread messages
             const messageList = senders.map(senderId => {
-                let lastTimeFetched = 0;
-                
                 /**
                  * Check if the app has ever fetched messages from this sender
                  */
@@ -62,27 +58,18 @@
                 if (rank > -1) {
                     // get the last time the app fetched messages from this sender
                     lastTimeFetched = lapi.Zscore(msgSid, LAST_FETCH_MSG, senderId)
-                    console.log("message_check: Sender", senderId, "last fetched at", lastTimeFetched)
-                } else {
-                    console.log("message_check: Sender", senderId, "never fetched before")
                 }
                 
                 // Get the last message's timestamp from this sender
-                let lastMsgTimestamp = lapi.Hget(msgSid, LAST_INCOMING_MSG, senderId)
-                console.log("message_check: Last message from", senderId, "timestamp:", formatTime(lastMsgTimestamp))
+                let lastIncomingTS = lapi.Hget(msgSid, LAST_INCOMING_MSG, senderId)
                 
                 // If the message is newer than the last fetch time, it's unread
-                if (lastMsgTimestamp > lastTimeFetched) {
-                    const lastMsg = lapi.Hget(msgSid, senderId, lastMsgTimestamp)
-                    console.log("message_check: NEW MESSAGE from", senderId, "timestamp", formatTime(lastMsgTimestamp), "last fetched", JSON.stringify(lastMsg))
+                if (lastIncomingTS > lastTimeFetched) {
+                    const lastMsg = lapi.Hget(msgSid, senderId, lastIncomingTS)
+                    console.log("message_check: NEW MESSAGE from", senderId, JSON.stringify(lastMsg), "at", formatTime(lastIncomingTS))
                     return lastMsg
-                } else {
-                    console.log("message_check: No new messages from", senderId, "timestamp", formatTime(lastMsgTimestamp), "last fetched", formatTime(lastTimeFetched))
-                    return null
                 }
-            }).filter(e => e)   // Filter out null results (already read messages)
-            
-            console.log("message_check: Returning", messageList.length, "unread messages")
+            }).filter(e => e)
             return messageList  // Return list of most recent unread messages for notification
         }
     } catch(e) {

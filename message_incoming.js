@@ -44,18 +44,19 @@
             const msgMid = lapi.MMCreate(authSid, APP_ID, APP_EXT, receiptId+"_"+MESSAGE_MIMEI, 2, 0x07276704)
             const msgSid = lapi.MMOpen(authSid, msgMid, "cur")
 
-            // Update the incoming_message indicator with the last message from a sender
-            // Used by message_check.js to determine if there are new unread messages
-            sp = new ScorePair
-            sp.Score = Date.now()  // Use current time as score (must be integer for Zset)
-            sp.Member = String(sp.Score)  // Use timestamp as member for unique identification
             /**
              * The client's time might be different from the server's time.
              * So we need to store the timestamp of the server as the indicator,
              * and use it the find the last message from a sender.
              */
+            sp = new ScorePair
+            sp.Score = Date.now()  // Use current time as score (must be integer for Zset)
+            sp.Member = String(sp.Score)  // Use timestamp as member for unique identification
+
+            // Update the incoming_message indicator with the last message from a sender
+            // Used by message_check.js to determine if there are new unread messages
             lapi.Hset(msgSid, LAST_INCOMING_MSG, senderId, sp.Member)
-            console.log("message_incoming:", senderId, "to", receiptId, request["msg"], msgMid)
+            console.log("message_incoming:", senderId, "to", receiptId, request["msg"])
 
             // Store message in receiver's local database:
             // 1. Add to Zset for fast chronological querying by sender
@@ -63,11 +64,11 @@
             lapi.Zadd(msgSid, senderId, sp)
             lapi.Hset(msgSid, senderId, sp.Member, msg)
             lapi.MMBackup(authSid, msgMid, "", "delref=true")
-            return true
+            return {success: true}
         }
     } catch(e) {
         console.error("Error message_incoming", JSON.stringify(request), e)
-        return false
+        return {success: false, error: e.message}
     }
 
     function ScorePair() {}

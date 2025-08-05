@@ -23,8 +23,6 @@
     const userId = request["userid"]    // ID of the user fetching messages
     const senderId = request["senderid"] // ID of the sender whose messages to fetch
 
-    console.log("message_fetch: Starting fetch for user", userId, "from sender", senderId, "app", APP_ID)
-
     try {
         const user = getUser(userId)
         const nodeId = lapi.GetVar("", "hostid")
@@ -49,9 +47,6 @@
             const rank = lapi.Zrank(msgSid, LAST_FETCH_MSG, senderId)
             if (rank > -1) {
                 lastTimeFetched = lapi.Zscore(msgSid, LAST_FETCH_MSG, senderId)
-                console.log("message_fetch: Last fetched from", senderId, "at", formatTime(lastTimeFetched))
-            } else {
-                console.log("message_fetch: First time fetching from", senderId)
             }
             
             // Retrieve all messages from this sender since the last fetch
@@ -59,17 +54,15 @@
             // Using (lastTimeFetched + 1) ensures we don't miss messages with exactly equal timestamps
             const nowTime = Date.now()
             let tsList = lapi.Zrangebyscore(msgSid, senderId, lastTimeFetched + 1, nowTime, 0, 1000)
-            console.log("message_fetch: Found", tsList.length, "message from", senderId)
             
             // Extract actual message content for each timestamp
             let messages = tsList.map(e => {
                 // Messages from both parties are stored here, but we only read messages from the sender
                 const message = lapi.Hget(msgSid, senderId, e.Member)
+                console.log("message_fetch:", userId, "fetched", JSON.stringify(message), "from", senderId)
                 return message
             }).filter(e => e)  // Filter out any null results
             
-            console.log(userId, "fetched", messages.length, "messages from", senderId)
-
             // MARK MESSAGES AS READ by updating the LAST_FETCH_MSG indicator
             // This is the critical step that marks messages as read
             function ScorePair() {}
