@@ -1,25 +1,27 @@
 /**
- * Given a node Id, return a IP address list
+ * Given a mimei Id, return the best IP address of providers, excluding private IPs (IPv4 and IPv6)
  */
-((request, args)=>{
+((request, args) => {
+    const mid = request["mid"];
+    const providers = JSON.parse(lapi.GetVar("", "mmprovsips", mid));
+
     try {
-        let ips = lapi.GetVar("", "ips", request["nodeid"])
-        console.log(JSON.stringify(ips))
-        // Parse comma-separated string into array, filter out empty strings
-        ips = ips.split(',').filter(ip => ip.trim() !== '')
-        for (let element of ips) {
-            // element format: ip:port
-            console.log(element)
-            const { ipAddress, port } = extractIPAndPort(element);
-            console.log(port)
-            if (port < 8000 || port > 9000) continue;
-            if (isPrivateIP(ipAddress)) continue;
-            // Found a valid IP, return it immediately
-            return element;
-        }
-        return null; // No valid IP found
+        let ip = "", mini = null;
+        providers.forEach(element => {
+            element.forEach(element2 => {
+                // element2 format: [ip:port, score]
+                const { ipAddress, port } = extractIPAndPort(element2[0]);
+                if (port < 8000 || port > 9000) return;
+                if (isPrivateIP(ipAddress)) return;
+                if (mini === null || element2[1] < mini) {
+                    mini = element2[1];
+                    ip = element2[0];
+                }
+            });
+        });
+        return ip;
     } catch (e) {
-        console.error("Error get_node_ip:", e, JSON.stringify(request));
+        console.error("Error get_provider:", e, JSON.stringify(request));
     }
 
     // Extract IP address and port from a string that may contain both
@@ -100,4 +102,4 @@
         // IPv4
         return isPrivateIPv4(ipPart);
     }
-})(request, args)
+})(request, args); 
