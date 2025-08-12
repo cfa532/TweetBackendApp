@@ -65,19 +65,19 @@
 
     // update favorites list within the tweet, then update the score of tweet in AppData
     function toggleFavoriteOfTweet(
-        userId,     // appUser who favorites/w the tweet 
+        appUserId,     // appUser who favorites/w the tweet 
         authorId,   // author of the tweet
         tweetId, 
     ) {
         try {
             const authSid = lapi.BELoginAsAuthor()
             const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
-            const isFavorite = lapi.Hget(tweetSid, FAVORITE_LIST, userId) ? true : false
+            const isFavorite = lapi.Hget(tweetSid, FAVORITE_LIST, appUserId) ? true : false
             if (isFavorite) {
-                lapi.Hdel(tweetSid, FAVORITE_LIST, userId)
+                lapi.Hdel(tweetSid, FAVORITE_LIST, appUserId)
             } 
             else {
-                lapi.Hset(tweetSid, FAVORITE_LIST, userId, Date.now())
+                lapi.Hset(tweetSid, FAVORITE_LIST, appUserId, Date.now())
             }
             lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
             lapi.MiMeiPublish(tweetSid, "", tweetId)

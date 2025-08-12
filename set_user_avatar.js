@@ -24,6 +24,7 @@
             // update the score of the user in AppData
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
                 userid: userInDB.mid, mid: userInDB.mid}, [])
+            return request["avatar"]
         }
     } catch(e) {
         console.error("Error set_user_avatar", e, JSON.stringify(request))

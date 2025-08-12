@@ -52,7 +52,7 @@
     }
 
     function toggleBookmarkOfTweet(
-        userId,     // appUser who favorites/w the tweet 
+        appUserId,     // appUser who favorites/w the tweet 
         authorId,   // author of the tweet
         tweetId, 
     ) {
@@ -60,12 +60,12 @@
         try {
             const authSid = lapi.BELoginAsAuthor()
             const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
-            const hasMarked = lapi.Hget(tweetSid, BOOKMARK_LIST, userId) ? true : false
+            const hasMarked = lapi.Hget(tweetSid, BOOKMARK_LIST, appUserId) ? true : false
             if (hasMarked) {
-                lapi.Hdel(tweetSid, BOOKMARK_LIST, userId)
+                lapi.Hdel(tweetSid, BOOKMARK_LIST, appUserId)
             } 
             else {
-                lapi.Hset(tweetSid, BOOKMARK_LIST, userId, Date.now())
+                lapi.Hset(tweetSid, BOOKMARK_LIST, appUserId, Date.now())
             }
             lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
             lapi.MiMeiPublish(tweetSid, "", tweetId)
