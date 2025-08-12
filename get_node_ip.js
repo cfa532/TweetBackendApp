@@ -4,14 +4,11 @@
 ((request, args)=>{
     try {
         let ips = lapi.GetVar("", "ips", request["nodeid"])
-        console.log(JSON.stringify(ips))
         // Parse comma-separated string into array, filter out empty strings
         ips = ips.split(',').filter(ip => ip.trim() !== '')
         for (let element of ips) {
             // element format: ip:port
-            console.log(element)
             const { ipAddress, port } = extractIPAndPort(element);
-            console.log(port)
             if (port < 8000 || port > 9000) continue;
             if (isPrivateIP(ipAddress)) continue;
             // Found a valid IP, return it immediately

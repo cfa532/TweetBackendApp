@@ -16,9 +16,8 @@
                 // timestamp is the time when the tweet was pinned, not its creation time.
                 return {tweet: tweet, timestamp: ts}
             }
-            return null
         }).filter(e=> e);
     } catch(e) {
-        console.error("Error get_top_tweets:", JSON.stringify(request), e)
+        console.error("Error get_pinned_tweets:", e, JSON.stringify(request))
     }
 })(request, args)

@@ -37,17 +37,18 @@
             console.log("toggle_bookmark remote ret=", JSON.stringify(ret))
             return ret
         } else {
-            let ret = toggleBookmarkOfTweet(userId, authorId, tweetId)
+            const updatedTweet = toggleBookmarkOfTweet(userId, authorId, tweetId)
             // toggle the bookmark of the tweet in appUser's node.
             const updatedUser = lapi.RunMApp("toggle_bookmark_by_user", {aid: APP_ID, ver: "last",
                 nid: userHostId, sid: systemSid,
-                userid: userId, tweetid: tweetId, isbookmarked: ret.hasBookmarked}, []
+                userid: userId, tweetid: tweetId, isbookmarked: updatedTweet.favorites[1]}, []
             )
-            console.log("toggle_bookmark local tweet", JSON.stringify(ret), JSON.stringify(updatedUser))
-            return {user: updatedUser, hasBookmarked: ret.hasBookmarked, count: ret.count}
+            console.log("toggle_bookmark local tweet", JSON.stringify(updatedTweet), JSON.stringify(updatedUser))
+            return {success: true, user: updatedUser, tweet: updatedTweet}
         }
     } catch(e) {
         console.error("toggle_bookmark error", e, JSON.stringify(request))
+        return {success: false, error: e}
     }
 
     function toggleBookmarkOfTweet(
@@ -73,10 +74,13 @@
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
                 userid: authorId, mid: tweetId}, []
             )
-            const bookmarkCount = lapi.Hlen(tweetSid, BOOKMARK_LIST)
-            return {hasBookmarked: !hasMarked, count: bookmarkCount}
+            // return updated tweet
+            return lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
+                tweetid: tweetId, appuserid: appUserId}, []
+            )
         } catch(e) {
             console.error("Error toggleBookmarkOfTweet", JSON.stringify(request), e)
+            return null
         }    
     }
 

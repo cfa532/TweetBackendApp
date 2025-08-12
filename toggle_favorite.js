@@ -48,18 +48,19 @@
             return ret
         } else {
             // current node is the author's host, where tweet is published.
-            let ret = toggleFavoriteOfTweet(appUserId, authorId, tweetId)
+            const updatedTweet = toggleFavoriteOfTweet(appUserId, authorId, tweetId)
     
             // toggle the favorite status of the tweet in appUser's node.
             const updatedUser = lapi.RunMApp("toggle_favorite_by_user", {aid: APP_ID, ver: "last",
                 nid: userHostId, sid: systemSid,
-                userid: appUserId, tweetid: tweetId, isfavorite: ret.isFavorite}, []
+                userid: appUserId, tweetid: tweetId, isfavorite: updatedTweet.favorites[0]}, []
             )
-            console.log("toggle_favorite local tweet", JSON.stringify(ret), appUserId, tweetId)
-            return {user: updatedUser, isFavorite: ret.isFavorite, count: ret.count }
+            console.log("toggle_favorite local tweet", JSON.stringify(updatedTweet), JSON.stringify(updatedUser))
+            return {success: true, user: updatedUser, tweet: updatedTweet }
         }
     } catch(e) {
         console.error("Error toggle_favorite", e, JSON.stringify(request))
+        return {success: false, error: e}
     }
 
     // update favorites list within the tweet, then update the score of tweet in AppData
@@ -85,11 +86,13 @@
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
                 userid: authorId, mid: tweetId}, []
             )
-            // return current favorite count and favorite status by userId (appUser).
-            const favoriteCount = lapi.Hlen(tweetSid, FAVORITE_LIST)
-            return { isFavorite: !isFavorite, count: favoriteCount }
+            // return updated tweet
+            return lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
+                tweetid: tweetId, appuserid: appUserId}, []
+            )
         } catch(e) {
             console.error("Error toggle_favorite", JSON.stringify(request), e)
+            return null
         }    
     }
 
