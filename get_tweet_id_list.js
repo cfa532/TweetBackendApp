@@ -22,22 +22,18 @@
         } else {
             const mmsid = lapi.MMOpen("", userId, "last")
             // TODO: -1 might fail. Retreive 100 for now.
-            const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, 0, 100)
-            .map(tweetId => {
-                const mmsid = lapi.MMOpen("", tweetId, "last")
+            const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, 0, -1)
+            .map(e => {
+                const mmsid = lapi.MMOpen("", e.Member, "last")
                 const tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
-                if (tweet.isPrivate) {
-                    if (tweet.authorId == visitorId) {
-                        return tweetId
-                    }
-                } else {
-                    return tweetId
+                if (!tweet.isPrivate) {
+                    return e
                 }
-            })
-            return arr    
+            }).filter(e=> e)
+            return arr    // return the list of scorepairs
         }
     } catch(e) {
-        console.error("Error get_tweet_id_list", JSON.stringify(request), e)
+        console.error("Error get_tweet_id_list", e, JSON.stringify(request))
     }
 
     function getUser(mid) {

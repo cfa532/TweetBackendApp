@@ -50,11 +50,9 @@
             if (isFollowing) {
                 console.log(userId, "unfollowing", followedId, hostOfOther, nodeId)
                 // Unfollow the user and remove it tweets
-                const tidList = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last", userid: followedId}, [])
-                    .map(element => {
-                        return element.Member
-                    })
-                lapi.Zrem(userSid, FOLLOWINGS_TWEETS, ...tidList)
+                const scorepairs = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last", userid: followedId}, [])
+
+                lapi.Zrem(userSid, FOLLOWINGS_TWEETS, ...scorepairs)
                 lapi.Hdel(userSid, FOLLOWINGS_LIST, followedId)
                 lapi.MMBackup(userSid, userId, "", "delref=true")
                 lapi.MiMeiPublish(authSid, "", userId)
@@ -72,11 +70,11 @@
                 // Follow the otherId and provide for all of its tweet
                 lapi.Hset(userSid, FOLLOWINGS_LIST, followedId, Date.now())
 
-                const tidList = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
+                const scorepairs = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
                     nid: hostOfOther, sid: systemSid, userid: followedId
                 }, [])
-                console.log("Following List", JSON.stringify(tidList), followedId, hostOfOther)
-                lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...tidList)
+                console.log("Following List", JSON.stringify(scorepairs), followedId, hostOfOther)
+                lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...scorepairs)
                 lapi.MMBackup(userSid, userId, "", "delref=true")
                 lapi.MiMeiPublish(authSid, "", userId)
 
