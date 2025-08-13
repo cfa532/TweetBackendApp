@@ -6,7 +6,6 @@
 ((request, args)=>{
     const TWT_CONTENT_KEY = "core_data_of_tweet"
     const TWT_LIST_KEY = "list_of_tweets_mid"
-    const visitorId = request["visitorid"]
     const userId = request["userid"]
     const APP_ID = request["aid"]
     try {

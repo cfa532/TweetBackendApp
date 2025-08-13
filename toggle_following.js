@@ -50,9 +50,9 @@
             if (isFollowing) {
                 console.log(userId, "unfollowing", followedId, hostOfOther, nodeId)
                 // Unfollow the user and remove it tweets
-                const scorepairs = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last", userid: followedId}, [])
+                const midList = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last", userid: followedId}, []).map(e => e.Member)
 
-                lapi.Zrem(userSid, FOLLOWINGS_TWEETS, ...scorepairs)
+                lapi.Zrem(userSid, FOLLOWINGS_TWEETS, ...midList)
                 lapi.Hdel(userSid, FOLLOWINGS_LIST, followedId)
                 lapi.MMBackup(userSid, userId, "", "delref=true")
                 lapi.MiMeiPublish(authSid, "", userId)

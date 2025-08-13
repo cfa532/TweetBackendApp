@@ -76,7 +76,7 @@
                     console.error("add_tweet: Error sync original tweet", e, JSON.stringify(tweet))
                 }
             }
-            console.log("add_tweet local", tweetId)
+            console.log("add_tweet local", JSON.stringify(tweet))
             return {success: true, mid: tweetId}
         }
     } catch(e) {
