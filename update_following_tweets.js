@@ -16,30 +16,29 @@
         if (nodeId != hostId) {
             // send the request to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            const arr = lapi.RunMApp("update_following_tweets", {aid: APP_ID, ver: "last",
+            const tweets = lapi.RunMApp("update_following_tweets", {aid: APP_ID, ver: "last",
                 nid: hostId, sid: systemSid,
                 hostid: hostId, appuserid: userId}, []
             )
-            console.log("new_tweets_followings remote", JSON.stringify(arr))
-            return arr
+            console.log("new_tweets_followings remote", JSON.stringify(tweets))
+            return tweets
         } else {
             const authSid = lapi.BELoginAsAuthor()
             const userSid = lapi.MMOpen(authSid, userId, "cur")
             const followings = lapi.Hkeys(userSid, FOLLOWINGS_LIST) // mid list of my followings
             console.log("update_following_tweets followings", JSON.stringify(followings))
             let followingsTweetsUpdated = false
-            const arr = followings.map(uid => {
+            const tweets = []
+            for (const uid of followings) {
                 const mmsid = lapi.MMOpen("", uid, "last")  // every following's id should have been synced locally.
                 const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, 0, -1)
-                console.log("update_following_tweets arr", JSON.stringify(arr))
-                for (const i in arr) {
-                    const element = arr[i]
-                    const tweetId = element.Member
+                for (const e of arr) {
+                    const tweetId = e.Member
                     const rank = lapi.Zrank(userSid, FOLLOWINGS_TWEETS, tweetId)
                     if (rank > -1) {
                         break   // the newest tweet of the user is in followings' tweet already. No new tweet.
                     } else {
-                        lapi.Zadd(userSid, FOLLOWINGS_TWEETS, element)
+                        lapi.Zadd(userSid, FOLLOWINGS_TWEETS, e)
                         followingsTweetsUpdated = true
 
                         lapi.MiMeiSync(userSid, "", tweetId, {})
@@ -47,11 +46,11 @@
 
                         const tweet = lapi.RunMApp("get_tweet", {aid: APP_ID, ver:"last",
                             appuserid: userId, tweetid: tweetId}, [])
-                        console.log("update followings' new tweet", element.Member, rank, userId)
-                        return tweet
+                        console.log("update followings' new tweet", tweetId, rank, userId)
+                        tweets.push(tweet)
                     }
                 }
-            })
+            }
             
             if (followingsTweetsUpdated) {
                 lapi.MMBackup(userSid, userId, "", "delref=true")
@@ -59,7 +58,7 @@
             }
             return {
                 success: true,
-                tweets: arr.filter(e=> e),
+                tweets: tweets,
                 originalTweets: []
             }
         }
