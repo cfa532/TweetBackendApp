@@ -29,6 +29,7 @@
                     username: username, password: password,
                 }, [])
             } else {
+                // userInDB.timestamp = Date.now()
                 userInDB["lastLogin"] = Date.now()
                 lapi.Set(userSid, OWNER_DATA_KEY, userInDB)
                 lapi.MMBackup(authSid, userInDB.mid, "", "delref=true")
