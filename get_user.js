@@ -9,10 +9,11 @@
         // try to get the user's data from local node
         const user = lapi.RunMApp("get_user_core_data", {aid: request.aid, ver:"last",
             userid: userId}, [])
+            
         if (user) {
             return user
         } else {
-            const ip = lapi.RunMApp("get_provider", {aid: request.aid, ver:"last",
+            const ip = lapi.RunMApp("get_provider_ip", {aid: request.aid, ver:"last",
                 mid: userId}, [])
             console.log("get_user: new ip", ip)
             return ip

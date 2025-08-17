@@ -33,16 +33,16 @@
             const authSid = lapi.BELoginAsAuthor()
             const userSid = lapi.MMOpen(authSid, userId, "cur")
 
-            // temp solution to check if the otherId is provided by current node.
-            // const providers = lapi.MiMeiFindProvs(authSid, "", otherId, 3)
-            // console.log("Find providers", JSON.stringify(providers), otherId)
             let followedUser = getUser(followedId)
             if (!followedUser) {
                 // the other is not provided by current node.
                 lapi.MiMeiSync(authSid, "", followedId, {})
+                lapi.MiMeiProvide(authSid, "", followedId)
                 followedUser = getUser(followedId)
+                console.error("Error toggle_followings: followingUser", JSON.stringify(followedUser), followedId)
+                if (!followedUser) 
+                    return
             }
-            console.log("followingUser", JSON.stringify(followedUser))
             const hostOfOther = followedUser.hostIds[0]
 
             // check if the otherId is in the following list of the user
@@ -56,15 +56,18 @@
                 lapi.Hdel(userSid, FOLLOWINGS_LIST, followedId)
                 lapi.MMBackup(userSid, userId, "", "delref=true")
                 lapi.MiMeiPublish(authSid, "", userId)
-
-                lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
-                    nid: hostOfOther, sid: systemSid,
-                    userid: followedId, otherid: userId, isfollower: false
-                }, [])
-                // Do not do it yet
-                // if (hostOfOtherId != nodeId) {
-                //     lapi.MiMeiUnprovide(authSid, "", otherId)
-                // }
+                try {
+                    lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
+                        nid: hostOfOther, sid: systemSid,
+                        userid: followedId, otherid: userId, isfollower: false
+                    }, [])
+                    // Do not unprovide the otherId yet. Wait until Leither is ready.
+                    // if (hostOfOtherId != nodeId) {
+                    //     lapi.MiMeiUnprovide(authSid, "", otherId)
+                    // }
+                } catch(e) {
+                    console.error("Error toggle_following: toggle_follower failed", e, JSON.stringify(request))
+                }
             } else {
                 console.log(userId, "following", followedId, hostOfOther, nodeId)
                 // Follow the otherId and provide for all of its tweet
@@ -79,10 +82,14 @@
                 lapi.MiMeiPublish(authSid, "", userId)
 
                 lapi.MiMeiProvide(authSid, "", followedId) // content of the otherId will be synced.
-                lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
-                    nid: hostOfOther, sid: systemSid,
-                    userid: followedId, otherid: userId, isfollower: true
-                }, [])
+                try {
+                    lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
+                        nid: hostOfOther, sid: systemSid,
+                        userid: followedId, otherid: userId, isfollower: true
+                    }, [])
+                } catch(e) {
+                    console.error("Error toggle_following: toggle_follower failed", e, JSON.stringify(request))
+                }
             }
     
             // update the score of the user in AppData

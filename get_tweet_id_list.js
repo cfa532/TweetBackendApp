@@ -25,7 +25,7 @@
             .map(e => {
                 const mmsid = lapi.MMOpen("", e.Member, "last")
                 const tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
-                if (!tweet.isPrivate) {
+                if (tweet && !tweet.isPrivate) {
                     return e
                 }
             }).filter(e=> e)

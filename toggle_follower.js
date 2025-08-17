@@ -10,22 +10,14 @@
     const nodeId = lapi.GetVar("", "hostid")    // current node id
     const user = getUser(userId)
 
-    if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
-        // send the request to the remote host
-        const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-        lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
-            nid: user.hostIds[0], sid: systemSid,
-            userid: userId, otherid: otherId, isfollower: isFollower}, []
-        )
-    } else {
-        toggleFollower(userId, otherId, isFollower)
-        console.log(userId, "with follower", otherId, isFollower)
-    }
-
-    function toggleFollower(
-        userId, otherId, isFollower
-    ) {
-        try {
+    try {
+        if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
+            // send the request to the remote host
+            const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
+            lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
+                nid: user.hostIds[0], sid: systemSid,
+                userid: userId, otherid: otherId, isfollower: isFollower}, [])
+        } else {
             const FOLLOWERS_LIST = "list_of_followers_mid"
             const authSid = lapi.BELoginAsAuthor()
             const userSid = lapi.MMOpen(authSid, userId, "cur")
@@ -43,9 +35,10 @@
             // update the score of the user in AppData
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
                 userid: userId, mid: userId}, [])
-        } catch(e) {
-            console.error("Error toggle_follower", JSON.stringify(request), e)
+            console.log(userId, "with follower", otherId, isFollower)
         }
+    } catch(e) {
+        console.error("Error toggle_follower", JSON.stringify(request), e)
     }
 
     function getUser(mid) {
