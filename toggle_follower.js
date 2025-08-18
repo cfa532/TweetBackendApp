@@ -6,6 +6,9 @@
     const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
     const userId = request["userid"]
     const otherId = request["otherid"]    // the follower whose status is toggled
+    if (userId == otherId) {
+        return    // don't follow yourself
+    }
 
     const nodeId = lapi.GetVar("", "hostid")    // current node id
     const user = getUser(userId)

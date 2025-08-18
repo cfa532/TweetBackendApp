@@ -14,6 +14,9 @@
     const APP_ID = request["aid"]
     const userId = request["userid"]      // initiator of the follow or unfollow action
     const followedId = request["followingid"]     // userId to follow or unfollow
+    if (userId == followedId) {
+        return    // don't follow yourself
+    }
 
     try {
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
