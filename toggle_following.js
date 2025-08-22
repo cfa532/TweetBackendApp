@@ -28,7 +28,7 @@
             // send the request to the remote host
             let ret = lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
                 nid: user.hostIds[0], sid: systemSid,
-                userid: userId, otherid: followedId}, []
+                userid: userId, followingid: followedId}, []
             )
             console.log("Toggle following remote", ret, userId, followedId, nodeId)
             return ret

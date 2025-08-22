@@ -15,7 +15,7 @@
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             let ret = lapi.RunMApp("delete_tweet", {aid: APP_ID, ver: "last",
                 nid: user.hostIds[0], sid: systemSid,
-                tweetid: tweetId, authorid: userId}, []
+                tweetid: tweetId, userid: userId}, []
             )
             return ret
         } else {
@@ -24,9 +24,10 @@
             const authSid = lapi.BELoginAsAuthor()
             const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
             const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
+            console.log("delete_tweet: tweet=", JSON.stringify(tweet))
 
             // only the author of the tweet can delete it.
-            // the others only remove the mid of its tweet list.
+            // the others only remove the mid from its tweet list.
             if (tweet && tweet.authorId == userId) {
                 tweet.attachments?.forEach(element => {
                     lapi.MMDelRef(tweetSid, tweetId, element.mid)
@@ -44,7 +45,6 @@
                 lapi.MMDelRef(userSid, userId, tweetId)
                 lapi.MMBackup(userSid, userId, "", "delref=true")
             } catch(e) {
-                lapi.Rollback(userSid)
                 throw e
             }
             lapi.MiMeiPublish(authSid, "", userId)

@@ -7,37 +7,22 @@
     const TWT_CONTENT_KEY = "core_data_of_tweet"
     const TWT_LIST_KEY = "list_of_tweets_mid"
     const userId = request["userid"]
-    const APP_ID = request["aid"]
+
     try {
-        const user = getUser(userId)
-        const nodeId = lapi.GetVar("", "hostid")    // current node id
-        if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
-            // send the request to the remote host
-            const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            let ret = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
-                nid: user.hostIds[0], sid: systemSid, userid: userId}, []
-            )
-            return ret
-        } else {
-            const mmsid = lapi.MMOpen("", userId, "last")
-            // TODO: -1 might fail. Retreive 100 for now.
-            const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, 0, -1)
-            .map(e => {
-                const mmsid = lapi.MMOpen("", e.Member, "last")
-                const tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
-                if (tweet && !tweet.isPrivate) {
-                    return e
-                }
-            }).filter(e=> e)
-            return arr    // return the list of scorepairs
-        }
+        const mmsid = lapi.MMOpen("", userId, "last")
+        // TODO: -1 might fail. Retreive 100 for now.
+        const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, 0, -1)
+        .map(e => {
+            const mmsid = lapi.MMOpen("", e.Member, "last")
+            const tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
+            if (tweet && !tweet.isPrivate) {
+                // Only return the tweet if it is public
+                return e
+            }
+        }).filter(e=> e)
+        return arr    // return the list of scorepairs
     } catch(e) {
         console.error("Error get_tweet_id_list", e, JSON.stringify(request))
-    }
-
-    function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"
-        const mmsid = lapi.MMOpen("", mid, "last")
-        return lapi.Get(mmsid, OWNER_DATA_KEY)
+        return []
     }
 })(request, args)

@@ -385,9 +385,6 @@ This document describes all endpoints available in the TweetBackendApp server, i
 
 **Output Schema:** No specific return value
 
-### Delete Comment Host
-**Endpoint:** `delete_comment_host`
-
 **Input Parameters:**
 - `aid` (string): App ID
 - `commentid` (string): Comment ID to delete
