@@ -27,6 +27,6 @@
         }
     } catch(e) {
         console.error("Error delete_account:", e, JSON.stringify(request))
-        return {success: false}
+        return {success: false, message: e}
     }
 })(request, args)
