@@ -2,7 +2,7 @@
     const TWT_LIST_KEY = "list_of_tweets_mid"
     const TWT_CONTENT_KEY = "core_data_of_tweet"
     const FOLLOWINGS_TWEETS = "followings_tweets"
-    const PINNED_TWEETS = "top_tweet_list"
+    const PINNED_TWEETS = "pinned_tweet_list"
     const tweetId = request["tweetid"]    // tweet Id to be removed
     const userId = request["userid"]
     const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
@@ -49,7 +49,7 @@
             }
             lapi.MiMeiPublish(authSid, "", userId)
 
-            console.log("Delete tweet ", JSON.stringify(tweet))
+            console.log("Delete tweet ", JSON.stringify(tweet), tweetId)
     
             // update the score of the tweet in AppData
             lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
