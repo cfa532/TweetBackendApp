@@ -5,6 +5,7 @@
     const userId = request["userid"]
 
     try {
+        const user = getUser(userId)
         const nodeId = lapi.GetVar("", "hostid")
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
             // send the request to the remote host
@@ -14,19 +15,31 @@
             )
             return ret
         } else {
-            const userSid = lapi.MMOpen("", userId, "last")
-            lapi.Zrange(userSid, TWT_LIST_KEY, 0, -1).forEach(e => {
-                lapi.RunMApp("delete_tweet", {aid: APP_ID, ver: "last",
-                    tweetid: e.Member, userid: userId}, []
-                )
-            })
+            try {
+                const userSid = lapi.MMOpen("", userId, "last")
+                lapi.Zrange(userSid, TWT_LIST_KEY, 0, -1).forEach(e => {
+                    lapi.RunMApp("delete_tweet", {aid: APP_ID, ver: "last",
+                        tweetid: e.Member, userid: userId}, []
+                    )
+                })
+            } catch(e) {
+                console.error("Error delete_account: delete tweets", e, JSON.stringify(request))
+            }
+
             const authSid = lapi.BELoginAsAuthor()
             lapi.MiMeiUnpublish(authSid, "", userId)
             lapi.MMDelVers(authSid, userId)
+            console.log("Deleted account ", userId)
             return {success: true}
         }
     } catch(e) {
         console.error("Error delete_account:", e, JSON.stringify(request))
         return {success: false, message: e}
+    }
+
+    function getUser(mid) {
+        const OWNER_DATA_KEY = "data_of_author"
+        const mmsid = lapi.MMOpen("", mid, "last")
+        return lapi.Get(mmsid, OWNER_DATA_KEY)
     }
 })(request, args)
