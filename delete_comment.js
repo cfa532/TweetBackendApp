@@ -20,10 +20,8 @@
                 appuserid: appUserId, tweetid: tweetId, commentid: commentId},
                 [])
             try {
-                // if (!lapi.MFIsExist("", tweetId)) {
-                    lapi.MiMeiSync(systemSid, "", tweetId, {})
-                    lapi.MiMeiProvide(systemSid, "", tweetId)
-                // }
+                lapi.MiMeiSync(systemSid, "", tweetId, {})
+                lapi.MiMeiProvide(systemSid, "", tweetId)
             } catch(e) {
                 console.error("delete_comment Error sync tweet", e, JSON.stringify(ret))
             }

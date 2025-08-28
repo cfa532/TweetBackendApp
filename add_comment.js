@@ -25,20 +25,16 @@
             )
             // sync tweet to node from where appUser is being loaded.
             try {
-                // if (!lapi.MFIsExist("", tweetId)) {
                 lapi.MiMeiSync(systemSid, "", tweetId, {})
                 lapi.MiMeiProvide(systemSid, "", tweetId)
-                // }
-                // sync all comments of the tweet to local node
-                const tweetSid = lapi.MMOpen("", tweetId, "last")
-                lapi.Zrange(tweetSid, COMMENT_LIST, 0, -1).forEach(element => {
-                    if (!lapi.MFIsExist("", element.Member)) {
-                        lapi.MiMeiSync(systemSid, "", element.Member, {})
-                        // lapi.MiMeiProvide(systemSid, "", element.Member)
-                    }
-                })
+
+                // sync new comment of the tweet to local node
+                if (ret.success) {
+                    lapi.MiMeiSync(systemSid, "", ret.commentId, {})
+                    lapi.MiMeiProvide(systemSid, "", ret.commentId)
+                }
             } catch(e) {
-                console.error("add_comment: Error sync tweet to node", e)
+                console.error("add_comment: Error sync tweet to local node", e)
             }
             console.log("add_comment remote: comment count", JSON.stringify(ret), nodeId)
             return ret
