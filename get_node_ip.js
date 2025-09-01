@@ -2,6 +2,7 @@
  * Given a node Id, return a IP address list
  */
 ((request, args)=>{
+    const v4Only = request["v4only"] ? true : false;
     try {
         let ips = lapi.GetVar("", "ips", request["nodeid"])
         // Parse comma-separated string into array, filter out empty strings
@@ -11,6 +12,10 @@
             const { ipAddress, port } = extractIPAndPort(element);
             if (port < 8000 || port > 9000) continue;
             if (isPrivateIP(ipAddress)) continue;
+            
+            // If v4Only is true, skip IPv6 addresses
+            if (v4Only && isIPv6(ipAddress)) continue;
+            
             // Found a valid IP, return it immediately
             return element;
         }
@@ -96,5 +101,16 @@
         }
         // IPv4
         return isPrivateIPv4(ipPart);
+    }
+
+    // Check if an IP address is IPv6
+    function isIPv6(ip) {
+        // Remove brackets if present
+        let cleanIp = ip;
+        if (cleanIp.startsWith('[') && cleanIp.includes(']')) {
+            cleanIp = cleanIp.slice(1, cleanIp.indexOf(']'));
+        }
+        // IPv6 addresses contain colons and are typically longer than IPv4
+        return cleanIp.includes(':');
     }
 })(request, args)
