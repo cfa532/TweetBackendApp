@@ -22,7 +22,6 @@
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
         const nodeId = lapi.GetVar("", "hostid")    // current node id
         const user = getUser(userId)
-        // const provs = lapi.MiMeiFindProvs(systemSid, "", userId, 3)
 
         if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
             // send the request to the remote host
@@ -85,7 +84,23 @@
                 lapi.MMBackup(userSid, userId, "", "delref=true")
                 lapi.MiMeiPublish(authSid, "", userId)
 
-                lapi.MiMeiProvide(authSid, "", followedId) // content of the otherId will be synced.
+                // sync the otherId's content
+                lapi.MiMeiSync(authSid, "", followedId, {})
+                lapi.MiMeiProvide(authSid, "", followedId)
+
+                // sync the otherId's tweets if not found locally
+                scorepairs.forEach(sp => {
+                    const tweetId = sp.Member
+                    const t = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
+                        tweetid: tweetId, appuserid: userId}, [])
+                    if (!t) {
+                        console.log("Syncing tweet", tweetId, followedId)
+                        lapi.MiMeiSync(authSid, "", tweetId, {})
+                        // lapi.MiMeiProvide(authSid, "", tweetId)
+                    }
+                })
+
+                // add userId to the otherId's follower list
                 try {
                     lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
                         nid: hostOfOther, sid: systemSid,
