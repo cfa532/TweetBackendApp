@@ -2,9 +2,9 @@
     const TWT_LIST_KEY = "list_of_tweets_mid"
     const TWT_CONTENT_KEY = "core_data_of_tweet"
     const FOLLOWINGS_TWEETS = "followings_tweets"
-    const PINNED_TWEETS = "top_tweet_list"
+    const PINNED_TWEETS = "pinned_tweet_list"
     const tweetId = request["tweetid"]    // tweet Id to be removed
-    const userId = request["authorid"]
+    const userId = request["userid"]
     const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
 
     try {
@@ -15,7 +15,7 @@
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             let ret = lapi.RunMApp("delete_tweet", {aid: APP_ID, ver: "last",
                 nid: user.hostIds[0], sid: systemSid,
-                tweetid: tweetId, authorid: userId}, []
+                tweetid: tweetId, userid: userId}, []
             )
             return ret
         } else {
@@ -24,7 +24,11 @@
             const authSid = lapi.BELoginAsAuthor()
             const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
             const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
-            if (tweet) {
+            console.log("delete_tweet: tweet=", JSON.stringify(tweet))
+
+            // only the author of the tweet can delete it.
+            // the others only remove the mid from its tweet list.
+            if (tweet && tweet.authorId == userId) {
                 tweet.attachments?.forEach(element => {
                     lapi.MMDelRef(tweetSid, tweetId, element.mid)
                 });
@@ -35,29 +39,27 @@
 
             const userSid = lapi.MMOpen(authSid, userId, "cur")
             try {
-                lapi.Begin(userSid, 2)
                 lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
                 lapi.Zrem(userSid, FOLLOWINGS_TWEETS, tweetId)
                 lapi.Hdel(userSid, PINNED_TWEETS, tweetId)   // remove it from pinned list
-                lapi.Commit(userSid)
                 lapi.MMDelRef(userSid, userId, tweetId)
                 lapi.MMBackup(userSid, userId, "", "delref=true")
             } catch(e) {
-                lapi.Rollback(userSid)
                 throw e
             }
             lapi.MiMeiPublish(authSid, "", userId)
 
-            console.log("Delete tweet ", JSON.stringify(tweet))
+            console.log("Delete tweet ", JSON.stringify(tweet), tweetId)
     
             // update the score of the tweet in AppData
             lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
                 userid: userId, mid: tweetId}, [])
     
-            return tweetId
+            return {tweetid: tweetId, success: true}
         }
     } catch(e) {
         console.error("Error delete_tweet", e, JSON.stringify(request))
+        return {message: e, success: false}
     }
 
     function getUser(mid) {

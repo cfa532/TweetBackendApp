@@ -2,17 +2,20 @@
     try {
         // Given authorId and tweetId, load all comments.
         const COMMENT_LIST = "comment_list_key"
-
-        let tweetId = request["tweetid"]
-        let userId = request["userid"]
-        let mmsid = lapi.MMOpen("", tweetId, "last")
+        const appUserId = request["appuserid"]
+        const pageNumber = request['pn'];
+        const pageSize = request['ps'];
+        const startRank = pageNumber * pageSize;
+        const endRank = startRank + pageSize - 1;
+        const tweetId = request["tweetid"]
+        const mmsid = lapi.MMOpen("", tweetId, "last")
     
-        let arr = lapi.Zrevrange(mmsid, COMMENT_LIST, 0, -1)
-        let ret = arr.map(sp => {
+        const arr = lapi.Zrevrange(mmsid, COMMENT_LIST, startRank, endRank)
+        return arr.map(sp => {
             return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
-                userid: userId, tweetid: sp.Member}, [])
-        }).filter(e=> e)
-        return ret
+                appuserid: appUserId, tweetid: sp.Member}, [])
+        })
+        // .filter(e=> e)
     } catch(e) {
         console.error("Error get_comments:", JSON.stringify(request), e)
     }

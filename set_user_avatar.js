@@ -1,28 +1,32 @@
 ((request, args)=>{
     try {
         const OWNER_DATA_KEY = "data_of_author"
-        const authSid = lapi.BELoginAsAuthor()
-        const userSid = lapi.MMOpen(authSid, request["userid"], "cur")
-        const user = lapi.Get(userSid, OWNER_DATA_KEY)
-        const nodeId = lapi.GetVar("", "hostid")
-        const systemSid = lapi.BEOpenAppDataNode("cur", request["aid"])
+        const APP_ID = request["aid"]
+        const userId = request["userid"]
 
-        if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
-            return lapi.RunMApp("set_user_avatar", {aid: request["aid"], ver: "last",
-                nid: user.hostIds[0], sid: systemSid,
-                userid: request["userid"], avatar: request["avatar"]}, []
+        const authSid = lapi.BELoginAsAuthor()
+        const userSid = lapi.MMOpen(authSid, userId, "cur")
+        const userInDB = lapi.Get(userSid, OWNER_DATA_KEY)
+
+        const nodeId = lapi.GetVar("", "hostid")
+        if (userInDB.hostIds?.findIndex(id => id == nodeId) != 0) {
+            const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
+            return lapi.RunMApp("set_user_avatar", {aid: APP_ID, ver: "last",
+                nid: userInDB.hostIds[0], sid: systemSid,
+                userid: userId, avatar: request["avatar"]}, []
             )
         } else {
-            user["avatar"] = request["avatar"]
-            lapi.Set(userSid, OWNER_DATA_KEY, user)
-            lapi.MMBackup(userSid, user.mid, "", "delref=true")
-            lapi.MiMeiPublish(userSid, "", user.mid)
+            userInDB["avatar"] = request["avatar"]
+            lapi.Set(userSid, OWNER_DATA_KEY, userInDB)
+            lapi.MMBackup(userSid, userInDB.mid, "", "delref=true")
+            lapi.MiMeiPublish(userSid, "", userInDB.mid)
 
             // update the score of the user in AppData
-            lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
-                userid: user.mid, mid: user.mid}, [])
+            lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
+                userid: userInDB.mid, mid: userInDB.mid}, [])
+            return request["avatar"]
         }
     } catch(e) {
-        console.error("Error set_user_avatar", JSON.stringify(request), e)
+        console.error("Error set_user_avatar", e, JSON.stringify(request))
     }
 })(request, args)

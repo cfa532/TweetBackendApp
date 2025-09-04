@@ -12,7 +12,7 @@
         const mmsid = lapi.MMOpen("", userId, "last")
         const user = lapi.Get(mmsid, OWNER_DATA_KEY)
         if (!user) {
-            console.warn("User", userId, "not found on node", lapi.GetVar("", "hostid"))
+            console.warn("get_user_core_data: User", userId, "not found on node", lapi.GetVar("", "hostid"))
             return null
         }
 
@@ -26,6 +26,6 @@
         delete user.password
         return user
     } catch(e) {
-        console.error("ERROR get_user_core", JSON.stringify(request), e)
+        console.error("ERROR get_user_core_data", JSON.stringify(request), e)
     }
 })(request, args)

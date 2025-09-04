@@ -29,7 +29,6 @@
         } else {
             const userSid = lapi.MMOpen(authSid, userId, "cur")
             try {
-                lapi.Begin(userSid, 2)
                 if (isBookmarked) {
                     lapi.Hset(userSid, BOOKMARK_LIST, tweetId, Date.now())
                 } else {
@@ -37,19 +36,18 @@
                         lapi.Hdel(userSid, BOOKMARK_LIST, tweetId)
                     }
                 }
-                lapi.Commit(userSid)
                 lapi.MMBackup(userSid, userId, "", "delref=true")
             } catch(e) {
-                lapi.Rollback(userSid)
+                console.error("toggle_bookmark_by_user error", e, JSON.stringify(request))
                 throw e
             }
             lapi.MiMeiPublish(userSid, "", userId)
             
             if (isBookmarked) {
-                if (!lapi.MFIsExist("", tweetId)) {
+                // if (!lapi.MFIsExist("", tweetId)) {
                     lapi.MiMeiSync(authSid, "", tweetId, {})
                     lapi.MiMeiProvide(authSid, "", tweetId)
-                }
+                // }
             } else {
                 // TODO: prevent the tweet from being deleted if it is on the same node
                 // lapi.MiMeiUnprovide(authSid, "", tweetId)
@@ -58,7 +56,7 @@
             const updatedUser = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
                 userid: userId}, []
             )
-            console.log("toggle_bookmark_by_user local", JSON.stringify(updatedUser))
+            console.log("toggle_bookmark_by_user local", tweetId, JSON.stringify(updatedUser))
             return updatedUser
         }
     } catch(e) {

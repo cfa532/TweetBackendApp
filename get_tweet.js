@@ -15,7 +15,7 @@
         const COMMENT_LIST = "comment_list_key"
 
         // Need to find out if the current user has liked or bookmarked the tweet.
-        const appUserId = request["userid"]
+        const appUserId = request["appuserid"]
         const tweetId = request["tweetid"]
         const mmsid = lapi.MMOpen("", tweetId, "last")
         const tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
@@ -31,7 +31,9 @@
             "mid": tweet.mid,
             "authorId": tweet.authorId,
             "title": tweet.title,
-            "attachments": tweet.attachments,
+            "attachments": tweet.attachments?.map(a => {
+                return a
+            }),
             "isPrivate": tweet.isPrivate,           // viewable by author only.
             "downloadable": tweet.downloadable,     // if the attachment is downloadable
             "originalTweetId": tweet.originalTweetId,

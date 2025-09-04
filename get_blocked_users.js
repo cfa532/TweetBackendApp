@@ -1,11 +1,12 @@
 ((request, args)=>{
+    const BLOCKED_USERS = "blocked_users"
+
     try {
-        const FOLLOWERS_LIST = "list_of_followers_mid"
         let userId = request["userid"]
         let mmsid = lapi.MMOpen("", userId, "last")
-        let keys = lapi.Hkeys(mmsid, FOLLOWERS_LIST)
+        let keys = lapi.Hkeys(mmsid, BLOCKED_USERS)
         return keys
     } catch(e) {
-        console.error("Error get_followers", JSON.stringify(request), e)
+        console.error("Error get_blocked_users", e, JSON.stringify(request))
     }
 })(request, args)

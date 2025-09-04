@@ -29,7 +29,6 @@
         } else {
             const userSid = lapi.MMOpen(authSid, userId, "cur")
             try {
-                lapi.Begin(userSid, 2)
                 if (isFavorite) {
                     lapi.Hset(userSid, FAVORITE_LIST, tweetId, Date.now())
                 } 
@@ -38,19 +37,18 @@
                         lapi.Hdel(userSid, FAVORITE_LIST, tweetId)
                     }
                 }
-                lapi.Commit(userSid)
                 lapi.MMBackup(userSid, userId, "", "delref=true")
             } catch(e) {
-                lapi.Rollback(userSid)
+                console.error("toggle_favorite_by_user error", e, JSON.stringify(request))
                 throw e
             }
             lapi.MiMeiPublish(userSid, "", userId)
 
             if (isFavorite) {
-                if (!lapi.MFIsExist("", tweetId)) {
+                // if (!lapi.MFIsExist("", tweetId)) {
                     lapi.MiMeiSync(authSid, "", tweetId, {})
                     lapi.MiMeiProvide(authSid, "", tweetId)
-                }
+                // }
             } else {
                 // TODO: prevent the tweet from being deleted if it is on the same node
                 // lapi.MiMeiUnprovide(authSid, "", tweetId)
@@ -59,7 +57,7 @@
             const updatedUser = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
                 userid: userId}, []
             )
-            console.log("toggle_favorite_by_user local", JSON.stringify(updatedUser))
+            console.log("toggle_favorite_by_user local", tweetId, JSON.stringify(updatedUser))
             return updatedUser
         }
     } catch(e) {

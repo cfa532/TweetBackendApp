@@ -14,7 +14,6 @@
         const nodeId = lapi.GetVar("", "hostid")
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
 
-
         // If user has changed hostId, make sure user mimei is available on the new hostId.
         // The code below will throw an error if the new hostId is invalid.
         if (user.hostIds[0] != userInDB.hostIds[0]) {
@@ -31,24 +30,24 @@
             /**
              * If user update without providing hostIds, keep the old ones.
              */
-            if (!user.hostIds || user.hostIds.length == 0) {
-                user.hostIds = userInDB.hostIds
+            if (user.hostIds && user.hostIds.length > 0) {
+                userInDB.hostIds = user.hostIds
             }
             /**
              * When user update without providing password, keep the old one.
              */
             if (user.password) {
-                user.password = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)
-            } else {
-                user.password = userInDB.password
+                userInDB.password = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)
             }
+            userInDB.name = user.name
+            userInDB.profile = user.profile
 
-            lapi.Set(userSid, OWNER_DATA_KEY, user)
-            lapi.MMBackup(userSid, user.mid, "", "delref=true")
-            lapi.MiMeiPublish(userSid, "", user.mid)
+            lapi.Set(userSid, OWNER_DATA_KEY, userInDB)
+            lapi.MMBackup(userSid, userInDB.mid, "", "delref=true")
+            lapi.MiMeiProvide(authSid, "", userInDB.mid)
 
-            delete user.password
-            return {user: JSON.stringify(user), status: "success"}
+            delete userInDB.password
+            return {user: JSON.stringify(userInDB), status: "success"}
         }
     } catch(e) {
         console.error("Error set_auth_core_data", JSON.stringify(request), e)

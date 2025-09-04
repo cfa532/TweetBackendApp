@@ -1,27 +1,27 @@
 /**
- * Given a node Id, return a IP address list
+ * Given a mimei Id, return the best IP address of providers, excluding private IPs (IPv4 and IPv6)
  */
-((request, args)=>{
-    const v4Only = request["v4only"] ? true : false;
+((request, args) => {
+    const mid = request["mid"];
+    const providers = JSON.parse(lapi.GetVar("", "mmprovsips", mid));
+
     try {
-        let ips = lapi.GetVar("", "ips", request["nodeid"])
-        // Parse comma-separated string into array, filter out empty strings
-        ips = ips.split(',').filter(ip => ip.trim() !== '')
-        for (let element of ips) {
-            // element format: ip:port
-            const { ipAddress, port } = extractIPAndPort(element);
-            if (port < 8000 || port > 9000) continue;
-            if (isPrivateIP(ipAddress)) continue;
-            
-            // If v4Only is true, skip IPv6 addresses
-            if (v4Only && isIPv6(ipAddress)) continue;
-            
-            // Found a valid IP, return it immediately
-            return element;
-        }
-        return null; // No valid IP found
+        let ip = "", mini = null;
+        providers.forEach(element => {
+            element.forEach(element2 => {
+                // element2 format: [ip:port, score]
+                const { ipAddress, port } = extractIPAndPort(element2[0]);
+                if (port < 8000 || port > 9000) return;
+                if (isPrivateIP(ipAddress)) return;
+                if (mini === null || element2[1] < mini) {
+                    mini = element2[1];
+                    ip = element2[0];
+                }
+            });
+        });
+        return ip;
     } catch (e) {
-        console.error("Error get_node_ip:", e, JSON.stringify(request));
+        console.error("Error get_provider_ip:", e, JSON.stringify(request));
     }
 
     // Extract IP address and port from a string that may contain both
@@ -102,15 +102,4 @@
         // IPv4
         return isPrivateIPv4(ipPart);
     }
-
-    // Check if an IP address is IPv6
-    function isIPv6(ip) {
-        // Remove brackets if present
-        let cleanIp = ip;
-        if (cleanIp.startsWith('[') && cleanIp.includes(']')) {
-            cleanIp = cleanIp.slice(1, cleanIp.indexOf(']'));
-        }
-        // IPv6 addresses contain colons and are typically longer than IPv4
-        return cleanIp.includes(':');
-    }
-})(request, args)
+})(request, args); 
