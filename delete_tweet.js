@@ -17,6 +17,7 @@
                 nid: user.hostIds[0], sid: systemSid,
                 tweetid: tweetId, userid: userId}, []
             )
+            console.log("delete_tweet: remote ret=", JSON.stringify(ret))
             return ret
         } else {
             // If there are attachments, delete all of the references.
@@ -58,7 +59,7 @@
             return {tweetid: tweetId, success: true}
         }
     } catch(e) {
-        console.error("Error delete_tweet", e, JSON.stringify(request))
+        console.error("Error delete_tweet:", e, JSON.stringify(request))
         return {message: e, success: false}
     }
 
