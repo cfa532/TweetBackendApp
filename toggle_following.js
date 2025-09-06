@@ -79,7 +79,7 @@
                 const scorepairs = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
                     nid: hostOfOther, sid: systemSid, userid: followedId
                 }, [])
-                console.log("Following List", JSON.stringify(scorepairs), followedId, hostOfOther)
+                console.log("Following's tweets", JSON.stringify(scorepairs), followedId, hostOfOther)
                 lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...scorepairs)
                 lapi.MMBackup(userSid, userId, "", "delref=true")
                 lapi.MiMeiPublish(authSid, "", userId)
