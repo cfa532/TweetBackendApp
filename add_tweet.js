@@ -3,38 +3,42 @@
  */
 ((request, args)=>{
     const APP_EXT = "com.example.twitterclone"
-    const TWT_CONTENT_KEY = "core_data_of_tweet"
+    const TWT_CONTENT_KEY = "core_data_of_tweet" 
     const TWT_LIST_KEY = "list_of_tweets_mid"
     const FOLLOWINGS_TWEETS = "followings_tweets"
     const APP_ID = request["aid"]
-    const hostId = request["hostid"]
     let tweetId = ""; // Initialize tweetId outside the try block
+    let tweet = JSON.parse(request["tweet"])
+    const user = getUser(tweet.authorId)
 
     try {
         let nodeId = lapi.GetVar("", "hostid")    // current node id
-        if (nodeId != hostId) {
+        if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
             // send the request to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            const ret = lapi.RunMApp("add_tweet", {aid: APP_ID, ver: "last",
-                nid: hostId, sid: systemSid,
-                hostid: hostId, tweet: request["tweet"]}, []
+
+            const ret = lapi.RunMApp("add_tweet", {aid: APP_ID, ver: request.ver,
+                nid: user.hostIds[0], sid: systemSid,
+                tweet: request["tweet"]}, []
             )
             // tweet is created on remote host, sync it here.
+            // TODO: the returned value is null. It seems the remote host returned
+            // result directly to the caller.
+            console.log("add_tweet remote ret=", JSON.stringify(ret))
             try {
                 if (ret.success) {
                     lapi.MiMeiSync(systemSid, "", ret.mid, {})  // Get new tweet right away.
                     lapi.MiMeiProvide(systemSid, "", ret.mid)
                 }
             } catch(e) {
-                console.error("add_tweet: remote not ready. tweetid=", tweetId, e)
+                console.error("Error add_tweet: remote not ready.", e, JSON.stringify(ret), JSON.stringify(request))
             }
-            console.log("add_tweet remote", tweetId)
             return ret
         } else {
             const friendId = getFriendByAppCode(request.nodeappcode)
             console.log("add_tweet: friendId=", friendId)
             if (!friendId) {
-                throw new Error("Not a friend of the host", hostId)
+                throw new Error("Not a friend of the host")
             }
             const tweet = JSON.parse(request['tweet'])
             const authSid = lapi.BELoginAsAuthor()
@@ -82,6 +86,12 @@
     } catch(e) {
         console.error("Error add_tweet", e, JSON.stringify(request))
         return {success: false, message: e}
+    }
+
+    function getUser(mid) {
+        const OWNER_DATA_KEY = "data_of_author"
+        const mmsid = lapi.MMOpen("", mid, "last")
+        return lapi.Get(mmsid, OWNER_DATA_KEY)
     }
 
     function getScorePair(mid) {
