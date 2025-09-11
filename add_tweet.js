@@ -106,7 +106,7 @@
 		if (!nodeAppCode) {
             // The function is called by the frontend, not the peer.
 			// throw new Error("nodeAppCode is required")
-            return hostId
+            return user.hostIds[0]
 		}
 		console.log("nodeAppCode=", nodeAppCode)
 
