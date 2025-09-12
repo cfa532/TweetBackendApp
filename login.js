@@ -29,8 +29,20 @@
                     username: username, password: password,
                 }, [])
             } else {
-                // userInDB.timestamp = Date.now()
                 userInDB["lastLogin"] = Date.now()
+                
+                // Check and validate user timestamp - must be in the past and not more than 2 years old
+                const currentTime = userInDB["lastLogin"]
+                const twoYearsAgo = currentTime - (2 * 365 * 24 * 60 * 60 * 1000) // 2 years in milliseconds
+                
+                if (!userInDB.timestamp || 
+                    typeof userInDB.timestamp !== 'number' || 
+                    userInDB.timestamp <= 0 || 
+                    userInDB.timestamp > currentTime || 
+                    userInDB.timestamp < twoYearsAgo) {
+                    userInDB.timestamp = currentTime
+                }
+                
                 lapi.Set(userSid, OWNER_DATA_KEY, userInDB)
                 lapi.MMBackup(authSid, userInDB.mid, "", "delref=true")
                 lapi.MiMeiPublish(authSid, "", userInDB.mid)
