@@ -16,7 +16,11 @@
             const ip = lapi.RunMApp("get_provider_ip", {aid: request.aid, ver:"last",
                 mid: userId}, [])
             console.log("get_user: new ip", ip)
-            return ip
+            if (ip) {
+                return ip
+            } else {
+                throw new Error("No provider IP found.")
+            }
         }
     } catch(e) {
         console.error("Error get_user:", e, JSON.stringify(request))
