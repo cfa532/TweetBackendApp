@@ -2,9 +2,10 @@
     /////////////////////////////////////////////////////////////
     //  IMPORTANT: bool is passed as string "true/false"
     /////////////////////////////////////////////////////////////
+
     const isFollower = request["isfollower"]
-    const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
-    const userId = request["userid"]
+    const APP_ID = request["aid"]
+    const userId = request["userid"]    // the user one of whose followers status is toggled
     const otherId = request["otherid"]    // the follower whose status is toggled
     if (userId == otherId) {
         return    // don't follow yourself
@@ -20,6 +21,8 @@
             lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
                 nid: user.hostIds[0], sid: systemSid,
                 userid: userId, otherid: otherId, isfollower: isFollower}, [])
+            lapi.RunMApp("node_update_mid_by_score", {aid: APP_ID, ver:"last",
+                hostid: user.hostIds[0], userid: userId, mid: userId}, [])
         } else {
             const FOLLOWERS_LIST = "list_of_followers_mid"
             const authSid = lapi.BELoginAsAuthor()

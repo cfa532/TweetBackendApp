@@ -12,10 +12,14 @@
     const userId = request["appuserid"]    // appUser
     const hostId = request["hostid"]
     const authSid = lapi.BELoginAsAuthor()
-    const userSid = lapi.MMOpen(authSid, userId, "cur")
+    const nodeId = lapi.GetVar("", "hostid")    // current node id
 
     try {
-        let nodeId = lapi.GetVar("", "hostid")    // current node id
+        const userSid = lapi.MMOpen(authSid, userId, "cur")
+        const lastElements = lapi.Zrevrange(userSid, FOLLOWINGS_TWEETS, 0, 0)
+        const lastScore = lastElements.length > 0 ? lastElements[0].Score : 0
+        const tweets = []
+
         if (nodeId != hostId) {
             // send the request to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
@@ -24,28 +28,15 @@
                 hostid: hostId, appuserid: userId}, []
             )
 
-            // update the followings_tweets of the appUser on current node
-            const tweets = []
-            const arr = lapi.Zrevrange(userSid, FOLLOWINGS_TWEETS, 0, -1)
+            lapi.MiMeiSync(userSid, "", userId, {})
+            const arr = lapi.Zrangebyscore(userSid, FOLLOWINGS_TWEETS, lastScore, -1, 0, 1000)
+            
             for (const e of arr) {
                 const tweetId = e.Member
-                let tweet = lapi.RunMApp("get_tweet", {aid: APP_ID, ver:"last",
+                const tweet = lapi.RunMApp("get_tweet", {aid: APP_ID, ver:"last",
                     appuserid: userId, tweetid: tweetId}, [])
-                if (!tweet) {
-                    console.log("update_following_tweets: sync tweet", tweetId)
-                    try {
-                        lapi.MiMeiSync(userSid, "", tweetId, {})
-                        // lapi.MiMeiProvide(userSid, "", tweetId)
-                        tweet = lapi.RunMApp("get_tweet", {aid: APP_ID, ver:"last",
-                            appuserid: userId, tweetid: tweetId}, [])
-                        if (tweet) {
-                            tweets.push(tweet)
-                        }
-                    } catch(e) {
-                        console.error("Error update_following_tweets: sync tweet", e, tweetId)
-                    }
-                } else {
-                    break
+                if (tweet) {
+                    tweets.push(tweet)
                 }
             }
             lapi.MMBackup(userSid, userId, "", "delref=true")
@@ -55,39 +46,15 @@
                 originalTweets: []
             }
         } else {
+            // remote host
             const followings = lapi.Hkeys(userSid, FOLLOWINGS_LIST) // mid list of its followings
             console.log("update_following_tweets followings", JSON.stringify(followings))
 
-            let followingsTweetsUpdated = false
-            const tweets = []
             for (const uid of followings) {
-                try {
-                    const mmsid = lapi.MMOpen("", uid, "last")  // every following's id should have been synced locally.
-                    const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, 0, -1)
-                    for (const e of arr) {
-                        const tweetId = e.Member
-                        const rank = lapi.Zrank(userSid, FOLLOWINGS_TWEETS, tweetId)
-                        if (rank > -1) {
-                            break   // the newest tweet of the user is in followings' tweet already. No new tweet.
-                        } else {
-                            lapi.Zadd(userSid, FOLLOWINGS_TWEETS, e)
-                            followingsTweetsUpdated = true
-
-                            lapi.MiMeiSync(userSid, "", tweetId, {})
-                            lapi.MiMeiProvide(userSid, "", tweetId)
-
-                            const tweet = lapi.RunMApp("get_tweet", {aid: APP_ID, ver:"last",
-                                appuserid: userId, tweetid: tweetId}, [])
-                            console.log("update followings' new tweet", tweetId, userId)
-                            tweets.push(tweet)
-                        }
-                    }
-                } catch(e) {
-                    console.error("Error update_following_tweets", e, uid)
-                }
+                tweets.push(...updateUser(uid, lastScore, userSid))     // sync followings' data if there is any new tweet.
             }
-            
-            if (followingsTweetsUpdated) {
+        
+            if (tweets.length > 0) {
                 lapi.MMBackup(userSid, userId, "", "delref=true")
                 lapi.MiMeiPublish(userSid, "", userId)
             }
@@ -98,10 +65,45 @@
             }
         }
     } catch(e) {
-        console.error("Error update_following_tweets", e, JSON.stringify(request))
+        console.error("Error update_following_tweets:", e, JSON.stringify(request))
         return {
             success: false,
             error: e.message
+        }
+    }
+
+    function updateUser(uid, lastScore, userSid) {
+        try {
+            const OWNER_DATA_KEY = "data_of_author"
+            const mmsid = lapi.MMOpen("", uid, "last")
+            const user = lapi.Get(mmsid, OWNER_DATA_KEY)
+            if (!user) {
+                console.error("Error update_following_tweets: updateUser: user not found", uid, nodeId)
+                return []
+            }
+            if (user.hostIds && user.hostIds.length > 0) {
+                lapi.RunMApp("node_update_mid_by_score", {aid: APP_ID, ver:"last",
+                    hostid: user.hostIds[0], userid: uid, mid: uid}, [])
+            }
+
+            const arr = lapi.Zrangebyscore(mmsid, TWT_LIST_KEY, lastScore, -1, 0, 1000)
+            if (arr.length > 0) {
+                lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...arr)
+            }
+            const tweets = []
+            for (const e of arr) {
+                const tweetId = e.Member
+                const tweet = lapi.RunMApp("get_tweet", {aid: APP_ID, ver:"last",
+                    appuserid: userId, tweetid: tweetId}, [])
+                if (tweet) {
+                    console.log("update followings' new tweet", tweetId, userId)
+                    tweets.push(tweet)
+                }
+            }
+            return tweets
+        } catch(e) {
+            console.error("Error update_following_tweets: updateUser", e, uid)
+            return []
         }
     }
 })(request, args)

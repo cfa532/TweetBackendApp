@@ -43,7 +43,9 @@
                 throw e
             }
             lapi.MiMeiPublish(userSid, "", userId)
-
+            lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
+                userid: userId, mid: userId}, [])
+                
             if (isFavorite) {
                 // if (!lapi.MFIsExist("", tweetId)) {
                     lapi.MiMeiSync(authSid, "", tweetId, {})

@@ -14,9 +14,9 @@
         const nodeId = lapi.GetVar("", "hostid")
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
 
-        // If user has changed hostId, make sure user mimei is available on the new hostId.
         // The code below will throw an error if the new hostId is invalid.
         if (user.hostIds[0] != userInDB.hostIds[0]) {
+            // make sure user mimei is available on the new hostId.
             lapi.RunMApp("sync_user", {aid: APP_ID, ver: "last",
                 nid: user.hostIds[0], sid: systemSid, mid: user.mid}, []
             )
@@ -45,6 +45,8 @@
             lapi.Set(userSid, OWNER_DATA_KEY, userInDB)
             lapi.MMBackup(userSid, userInDB.mid, "", "delref=true")
             lapi.MiMeiProvide(authSid, "", userInDB.mid)
+            lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
+                userid: userInDB.mid, mid: userInDB.mid}, [])
 
             delete userInDB.password
             return {user: JSON.stringify(userInDB), status: "success"}

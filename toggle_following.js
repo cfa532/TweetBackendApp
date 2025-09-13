@@ -29,6 +29,9 @@
                 nid: user.hostIds[0], sid: systemSid,
                 userid: userId, followingid: followedId}, []
             )
+            lapi.RunMApp("node_update_mid_by_score", {aid: APP_ID, ver:"last",
+                hostid: user.hostIds[0], userid: userId, mid: userId}, [])
+                
             console.log("Toggle following remote", ret, userId, followedId, nodeId)
             return ret
         } else {

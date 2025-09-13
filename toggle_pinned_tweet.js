@@ -30,7 +30,9 @@
             }
             lapi.MMBackup(authSid, appUserId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", appUserId)
-            
+            lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
+                userid: appUserId, mid: appUserId}, [])
+
             return !pinned
         }
     } catch(e) {

@@ -11,6 +11,8 @@
 
     const rank = lapi.Zrank(systemSid, userId, mid)
     if (rank == -1) {
+        // the mid has never been synced before, add it to AppData.
+        // add a score pair with system sequence number as score.
         lapi.Zaddwithseq(systemSid, userId, mid)
         lapi.MiMeiSync(systemSid, "", mid, {})
         lapi.MiMeiProvide(systemSid, "", mid)
