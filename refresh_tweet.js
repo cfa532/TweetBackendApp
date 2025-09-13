@@ -16,8 +16,8 @@
             console.log("refresh_tweet", tweetId, "on", nodeId, "from host", hostId)
             // loading tweet from a node other than author's host,
             // make sure the current node is up to date.
-            lapi.RunMApp("node_update_tweet", {aid: request["aid"], ver:"last",
-                hostid: hostId, userid: authorId, tweetid: tweetId}, [])
+            lapi.RunMApp("node_update_mid_by_score", {aid: request["aid"], ver:"last",
+                hostid: hostId, userid: authorId, mid: tweetId}, [])
         }
         const tweet = lapi.RunMApp("get_tweet", {aid: request.aid, ver:"last",
             appuserid: appUserId, tweetid: tweetId}, [])

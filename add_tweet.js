@@ -65,9 +65,11 @@
             lapi.MMBackup(authSid, authorId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", authorId)
     
-            // update the score of the new tweet in AppData
+            // update the score of the author and the new tweet in AppData
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
                 userid: tweet.authorId, mid: tweetId}, [])
+            lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
+                userid: tweet.authorId, mid: authorId}, [])
 
             // if the tweet is a retweet of an original tweet, sync the original tweet here.
             if (tweet.originalTweetId) {

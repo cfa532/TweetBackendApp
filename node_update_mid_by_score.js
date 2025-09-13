@@ -6,34 +6,32 @@
     const APP_ID = request["aid"]
     const hostId = request["hostid"]
     const userId = request["userid"]
-    const tweetId = request["tweetid"]
+    const mid = request["mid"]
     const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
 
-    try {
+    const rank = lapi.Zrank(systemSid, userId, mid)
+    if (rank == -1) {
+        lapi.Zaddwithseq(systemSid, userId, mid)
+        lapi.MiMeiSync(systemSid, "", mid, {})
+        lapi.MiMeiProvide(systemSid, "", mid)
+    } else {
         // get new score from the remote host
         const newScore = lapi.RunMApp("node_get_score", { aid: APP_ID, ver: request.ver,
             nid: hostId,        // remote host id
             sid: systemSid,     // necessary to prove the user's authenticity.
-            userid: userId, mid: tweetId,
+            userid: userId, mid: mid,
         }, [])
-        // get old score from current node data.
-        const oldScore = lapi.Zscore(systemSid, userId, tweetId)
+
+        // get old score from current node.
+        const oldScore = lapi.Zscore(systemSid, userId, mid)
 
         if (newScore != oldScore) {
-            console.log("New and old score of tweet", tweetId, newScore, oldScore, "of user", userId)
+            console.log(mid, "new and old score:", newScore, oldScore, "of user", userId)
             // Only sync the tweet itself. Update comments when viewing tweet details.
-            lapi.MiMeiSync(systemSid, "", tweetId, {})
-            lapi.MiMeiProvide(systemSid, "", tweetId)
-            const sp = getScorePair(newScore, tweetId)
+            lapi.MiMeiSync(systemSid, "", mid, {})
+            const sp = getScorePair(newScore, mid)
             lapi.Zadd(systemSid, userId, sp)
         }
-    } catch(e) {
-        // if the tweet is never synced before, there is no score in the node data.
-        // which will cuase the exception. Initialize the score here and sync the tweet.
-        console.error("Error node_update_tweet", e, JSON.stringify(request))
-        lapi.Zaddwithseq(systemSid, userId, tweetId)    // update the score if it is missing.
-        lapi.MiMeiSync(systemSid, "", tweetId, {})
-        lapi.MiMeiProvide(systemSid, "", tweetId)
     }
 
     function getScorePair(score, member) {

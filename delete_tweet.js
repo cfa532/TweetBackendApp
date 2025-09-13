@@ -52,9 +52,9 @@
 
             console.log("Delete tweet ", JSON.stringify(tweet), tweetId)
     
-            // update the score of the tweet in AppData
+            // update the score of the author in AppData
             lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
-                userid: userId, mid: tweetId}, [])
+                userid: userId, mid: userId}, [])
     
             return {tweetid: tweetId, success: true}
         }

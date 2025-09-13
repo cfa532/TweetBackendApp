@@ -708,7 +708,7 @@ This document describes all endpoints available in the TweetBackendApp server, i
 **Output Schema:** No specific return value
 
 ### Node Update Tweet
-**Endpoint:** `node_update_tweet`
+**Endpoint:** `node_update_mid_by_score`
 
 **Input Parameters:**
 - `aid` (string): App ID
