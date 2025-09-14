@@ -12,7 +12,7 @@
     const author = getUser(authorId)
 
     const nodeId = lapi.GetVar("", "hostid")
-    if (author.hostIds?.findIndex(id => id == nodeId) != 0) {
+    if (!author.hostIds || author.hostIds.length === 0 || author.hostIds[0] !== nodeId) {
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
         let ret = lapi.RunMApp("retweet_added", {aid: APP_ID, ver: "last",
           nid: author.hostIds[0], sid: systemSid,

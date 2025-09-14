@@ -66,7 +66,7 @@
             // MARK MESSAGES AS READ by updating the LAST_FETCH_MSG indicator
             // This is the critical step that marks messages as read
             function ScorePair() {}
-            sp = new ScorePair
+            const sp = new ScorePair()
             sp.Score = nowTime  // Use current timestamp as the new "last read" time
             sp.Member = senderId
             lapi.Zadd(msgSid, LAST_FETCH_MSG, sp)  // If member exists, score will be updated, otherwise insert

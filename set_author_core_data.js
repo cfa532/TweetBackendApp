@@ -28,7 +28,7 @@
 
         // Check if the primary host ID has changed
         // This will throw an error if the new hostId is invalid
-        if (user.hostIds && user.hostIds[0] && userInDB.hostIds && user.hostIds[0] != userInDB.hostIds[0]) {
+        if (user.hostIds && user.hostIds[0] && userInDB.hostIds && user.hostIds[0] !== userInDB.hostIds[0]) {
             // Make sure user mimei is available on the new hostId
             lapi.RunMApp("sync_user", {
                 aid: APP_ID, 
@@ -40,7 +40,7 @@
         }
 
         // Check if we need to delegate to the primary host
-        if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
+        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
             console.log("set_author_core_data local", JSON.stringify(user))
             
             // Delegate the update to the primary host

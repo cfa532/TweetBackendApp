@@ -14,7 +14,7 @@
     const APP_ID = request["aid"]
     const userId = request["userid"]      // initiator of the follow or unfollow action
     const followedId = request["followingid"]     // userId to follow or unfollow
-    if (userId == followedId) {
+    if (userId === followedId) {
         return    // don't follow yourself
     }
 
@@ -23,7 +23,7 @@
         const nodeId = lapi.GetVar("", "hostid")    // current node id
         const user = getUser(userId)
 
-        if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
+        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
             // send the request to the remote host
             let ret = lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
                 nid: user.hostIds[0], sid: systemSid,

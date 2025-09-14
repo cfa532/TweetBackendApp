@@ -29,7 +29,7 @@
         const lastElements = lapi.Zrevrange(userSid, FOLLOWINGS_TWEETS, 0, 0)
         const lastScore = lastElements.length > 0 ? lastElements[0].Score + 1 : 0
 
-        if (nodeId != hostId) {
+        if (nodeId !== hostId) {
             // We are on a local node, delegate to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             
@@ -58,7 +58,7 @@
             const localScore = lapi.Zscore(systemSid, userId, userId)
             console.log("update_following_tweets remoteScore", remoteScore, "localScore", localScore)
             
-            if (remoteScore != localScore) {
+            if (remoteScore !== localScore) {
                 lapi.MiMeiSync(systemSid, "", userId, {})
                 // update the score of the user in local AppData
                 const sp = getScorePair(remoteScore, userId)

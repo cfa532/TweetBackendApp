@@ -8,7 +8,7 @@
     const APP_ID = request["aid"]
     const userId = request["userid"]
     const tweetId = request["tweetid"]  // tweetID that appUser bookmarked
-    const isBookmarked = request["isbookmarked"] == "true" ? true : false
+    const isBookmarked = request["isbookmarked"] === "true" ? true : false
 
     try {
         /**
@@ -17,7 +17,7 @@
         const authSid = lapi.BELoginAsAuthor()
         const user = getUser(userId)
         const nodeId = lapi.GetVar("", "hostid")    // current node id
-        if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
+        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             const userData = lapi.RunMApp("toggle_bookmark_by_user",
                 { aid: APP_ID, ver: "last",

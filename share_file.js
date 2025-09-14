@@ -9,7 +9,7 @@
         const file = JSON.parse(request["file"])    // file path on user's hard drive that is being shared.
         const nodeId = lapi.GetVar("", "hostid")
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-        if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
+        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
             return lapi.RunMApp("share_file", {aid: APP_ID, ver: "last",
                 nid: user.hostIds[0], sid: systemSid,
                 userid: userId}, []

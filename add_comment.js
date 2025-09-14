@@ -17,7 +17,7 @@
 
     try {
         const nodeId = lapi.GetVar("", "hostid")    // current node id
-        if (nodeId != hostId) {
+        if (nodeId !== hostId) {
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             let ret = lapi.RunMApp("add_comment", {aid: APP_ID, ver: "last",
                 nid: hostId, sid: systemSid,
@@ -97,7 +97,7 @@
 
     function getScorePair(mid) {
         function ScorePair() {}
-        sp = new ScorePair
+        const sp = new ScorePair()
         sp.Score = Date.now()
         sp.Member = mid
         return sp

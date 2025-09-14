@@ -5,7 +5,7 @@
     const mid = request["mid"]
     try {
         const rank = lapi.Zrank(mmsid, userId, mid)
-        if (rank == -1) {
+        if (rank === -1) {
             // score not exist, assign the global sequence number as score of the mid
             lapi.Zaddwithseq(mmsid, userId, mid)
         }

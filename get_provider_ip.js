@@ -6,6 +6,7 @@
     const providers = JSON.parse(lapi.GetVar("", "mmprovsips", mid));
 
     try {
+        if (!providers || !Array.isArray(providers)) return null
         let ip = "", mini = null;
         providers.forEach(element => {
             element.forEach(element2 => {

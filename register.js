@@ -12,7 +12,7 @@
 
     try {
         console.log("nodeId", nodeId, request["user"])
-        if (user.hostIds?.length > 0 && user.hostIds[0] != nodeId) {
+        if (user.hostIds?.length > 0 && user.hostIds[0] !== nodeId) {
             // register it on remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             return lapi.RunMApp("register", {aid: APP_ID, ver: "last",

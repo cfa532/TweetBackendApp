@@ -49,7 +49,7 @@
              * So we need to store the timestamp of the server as the indicator,
              * and use it the find the last message from a sender.
              */
-            sp = new ScorePair
+            const sp = new ScorePair()
             sp.Score = Date.now()  // Use current time as score (must be integer for Zset)
             sp.Member = String(sp.Score)  // Use timestamp as member for unique identification
 

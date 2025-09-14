@@ -20,7 +20,7 @@
         const author = getUser(authorId)
         const nodeId = lapi.GetVar("", "hostid")    // current node id
 
-        if (author.hostIds?.findIndex(id => id == nodeId) != 0) {
+        if (!author.hostIds || author.hostIds.length === 0 || author.hostIds[0] !== nodeId) {
             let ret = lapi.RunMApp("toggle_bookmark", {aid: APP_ID, ver: "last", 
                 nid: author.hostIds[0], sid: systemSid, userhostid: userHostId,
                 userid: userId, authorid: authorId, tweetid: tweetId}, []

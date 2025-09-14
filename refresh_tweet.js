@@ -12,7 +12,7 @@
 
     try {
         const nodeId = lapi.GetVar("", "hostid")
-        if (nodeId != hostId) {
+        if (nodeId !== hostId) {
             console.log("refresh_tweet", tweetId, "on", nodeId, "from host", hostId)
             // loading tweet from a node other than author's host,
             // make sure the current node is up to date.

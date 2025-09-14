@@ -20,7 +20,7 @@
             loginOK = true
             // update last login time
             let nodeId = lapi.GetVar("", "hostid")
-            if (userInDB.hostIds?.length > 0 && userInDB.hostIds?.indexOf(nodeId) != 0) {
+            if (userInDB.hostIds?.length > 0 && userInDB.hostIds?.indexOf(nodeId) !== 0) {
                 // current node is not the writable host of the user data.
                 // update last login time on the remost host.
                 let systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)

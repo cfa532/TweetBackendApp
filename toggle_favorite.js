@@ -27,7 +27,7 @@
         const author = getUser(authorId)    // tweet's author, should be available locally.
         const nodeId = lapi.GetVar("", "hostid")  // id of the current node.
     
-        if (author.hostIds?.findIndex(id => id == nodeId) != 0) {
+        if (!author.hostIds || author.hostIds.length === 0 || author.hostIds[0] !== nodeId) {
             // current node is not the author's host, where tweet is published.
             // send the request to that remote host that published the tweet.
             let ret = lapi.RunMApp("toggle_favorite", {aid: APP_ID, ver: "last",

@@ -13,7 +13,7 @@
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
 
         let nodeId = lapi.GetVar("", "hostid")    // current node id
-        if (nodeId != hostId) {
+        if (nodeId !== hostId) {
             // send the request to the remote host
             let ret = lapi.RunMApp("delete_comment", {aid: APP_ID, ver: "last",
                 nid: hostId, sid: systemSid,

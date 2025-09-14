@@ -29,7 +29,7 @@
         const nodeId = lapi.GetVar("", "hostid")
         
         // If user's primary node is not the current node, forward to primary node
-        if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
+        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             return lapi.RunMApp("message_outgoing", {aid: APP_ID, ver: "last",
                 nid: user.hostIds[0], sid: systemSid,
@@ -43,7 +43,7 @@
             // console.log(senderId, "outgoing message to", receiptId, request["msg"], msgMid)
 
             // Create score pair for Zset indexing
-            sp = new ScorePair
+            const sp = new ScorePair()
             sp.Score = Date.now()  // Use timestamp as score for chronological ordering
             sp.Member = String(sp.Score)  // Use timestamp as member for unique identification
 

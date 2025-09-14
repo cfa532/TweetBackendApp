@@ -9,7 +9,7 @@
         const userInDB = lapi.Get(userSid, OWNER_DATA_KEY)
 
         const nodeId = lapi.GetVar("", "hostid")
-        if (userInDB.hostIds?.findIndex(id => id == nodeId) != 0) {
+        if (!userInDB.hostIds || userInDB.hostIds.length === 0 || userInDB.hostIds[0] !== nodeId) {
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             return lapi.RunMApp("set_user_avatar", {aid: APP_ID, ver: "last",
                 nid: userInDB.hostIds[0], sid: systemSid,

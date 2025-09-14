@@ -13,7 +13,7 @@
 
     try {
         let nodeId = lapi.GetVar("", "hostid")    // current node id
-        if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
+        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
             // send the request to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
 
@@ -96,7 +96,7 @@
 
     function getScorePair(mid) {
         function ScorePair() {}
-        sp = new ScorePair
+        const sp = new ScorePair()
         sp.Score = Date.now()
         sp.Member = mid
         return sp

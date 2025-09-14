@@ -7,7 +7,7 @@
     const APP_ID = request["aid"]
     const userId = request["userid"]    // the user one of whose followers status is toggled
     const otherId = request["otherid"]    // the follower whose status is toggled
-    if (userId == otherId) {
+    if (userId === otherId) {
         return    // don't follow yourself
     }
 
@@ -15,7 +15,7 @@
     const user = getUser(userId)
 
     try {
-        if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
+        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
             // send the request to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
@@ -28,7 +28,7 @@
             const authSid = lapi.BELoginAsAuthor()
             const userSid = lapi.MMOpen(authSid, userId, "cur")
     
-            if (isFollower == "true") {
+            if (isFollower === "true") {
                 // otherId is a follower of userId
                 lapi.Hset(userSid, FOLLOWERS_LIST, otherId, Date.now())
             } else {

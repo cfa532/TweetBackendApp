@@ -2,9 +2,10 @@
  * Given a node Id, return a IP address list
  */
 ((request, args)=>{
-    const v4Only = request["v4only"] == "true" ? true : false;
+    const v4Only = request["v4only"] === "true" ? true : false;
     try {
         let ips = lapi.GetVar("", "ips", request["nodeid"])
+        if (!ips) return null
         // Parse comma-separated string into array, filter out empty strings
         ips = ips.split(',').filter(ip => ip.trim() !== '')
         for (let element of ips) {

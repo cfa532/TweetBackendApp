@@ -8,7 +8,7 @@
 
     try {
         const nodeId = lapi.GetVar("", "hostid")
-        if (nodeId != hostId) {
+        if (nodeId !== hostId) {
             // make sure the current node is up to date.
             lapi.RunMApp("node_update_mid_by_score", {aid: request["aid"], ver:"last",
                 hostid: hostId, userid: userId, mid: userId}, [])

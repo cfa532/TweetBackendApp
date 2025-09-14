@@ -10,7 +10,7 @@
         const userId = request["userid"]
         const user = getUser(userId)
         const nodeId = lapi.GetVar("", "hostid")
-        if (user.hostIds?.findIndex(id => id == nodeId) != 0) {
+        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
             // send the request to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             let ret = lapi.RunMApp("block_user", {aid: APP_ID, ver: "last",

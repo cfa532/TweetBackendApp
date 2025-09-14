@@ -15,14 +15,14 @@
     const nodeId = lapi.GetVar("", "hostid")
 
     // Skip processing if we're already on the target host
-    if (nodeId == hostId) {
+    if (nodeId === hostId) {
         return
     }
 
     // Check if the mid exists in the sorted set
     const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
     const rank = lapi.Zrank(systemSid, userId, mid)
-    if (rank == -1) {
+    if (rank === -1) {
         // The mid has never been synced before, add it to AppData
         // Add a score pair with system sequence number as score
         lapi.Zaddwithseq(systemSid, userId, mid)
@@ -44,7 +44,7 @@
     const localScore = lapi.Zscore(systemSid, userId, mid)
 
     // If scores differ, sync and update the local score
-    if (remoteScore != localScore) {
+    if (remoteScore !== localScore) {
         console.log(mid, "new and old score:", remoteScore, localScore, "of user", userId)
         
         // Sync the mid data from remote host

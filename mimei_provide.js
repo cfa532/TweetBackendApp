@@ -7,7 +7,7 @@
         let isProvider = request["provide"]
         let authSid = lapi.BELoginAsAuthor()
 
-        if (isProvider == "true") {
+        if (isProvider === "true") {
             lapi.MiMeiSync(authSid, "", targetId, {})
             let dhtreply = lapi.MiMeiProvide(authSid, "", targetId)
             console.log("provide", targetId, JSON.stringify(dhtreply))
