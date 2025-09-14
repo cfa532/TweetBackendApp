@@ -17,14 +17,6 @@
             const tweetId = sp.Member
             const tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
                 appuserid: appUserId, tweetid: tweetId}, [])
-            // if (!tweet) {
-            //     return { tid: tweetId, tweet: null }
-            // } else {
-            //     return { tid: tweetId, tweet: tweet }
-            // }
-            if (!tweet) {
-                console.log("get_tweets_by_user NULL", userId, tweetId)
-            }
             return tweet
         })
         
