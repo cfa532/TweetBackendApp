@@ -1,63 +1,129 @@
 /**
- * Check for new tweet of appUser's followings, and add them to
- * appUser's followings_tweets. If there is a new tweet, sync it and
- * return it to the appUser.
+ * Check for new tweets from appUser's followings, and add them to
+ * appUser's followings_tweets. If there are new tweets, sync them and
+ * return them to the appUser.
+ * 
+ * This function handles both local and remote execution:
+ * - When called locally: delegates to remote host and processes results
+ * - When called remotely: processes followings and returns new tweets
  */
 
-((request, args)=>{
+((request, args) => {
+    // Constants for data storage keys
     const FOLLOWINGS_TWEETS = "followings_tweets"   // sorted set of followings' tweets
     const FOLLOWINGS_LIST = "list_of_followings_mid"
     const TWT_LIST_KEY = "list_of_tweets_mid"   // sorted set of user's own tweets
+    
+    // Extract request parameters
     const APP_ID = request["aid"]
     const userId = request["appuserid"]    // appUser
     const hostId = request["hostid"]
+    
+    // Initialize authentication and get current node ID
     const authSid = lapi.BELoginAsAuthor()
     const nodeId = lapi.GetVar("", "hostid")    // current node id
 
     try {
-        const userSid = lapi.MMOpen(authSid, userId, "cur")
+        // Get user session and find the last tweet score
+        const userSid = lapi.MMOpen(authSid, userId, "last")
         const lastElements = lapi.Zrevrange(userSid, FOLLOWINGS_TWEETS, 0, 0)
-        const lastScore = lastElements.length > 0 ? lastElements[0].Score : 0
-        const tweets = []
+        const lastScore = lastElements.length > 0 ? lastElements[0].Score + 1 : 0
 
         if (nodeId != hostId) {
-            // send the request to the remote host
+            // We are on a local node, delegate to the remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            lapi.RunMApp("update_following_tweets", {aid: APP_ID, ver: "last",
-                nid: hostId, sid: systemSid,
-                hostid: hostId, appuserid: userId}, []
-            )
-
-            lapi.MiMeiSync(userSid, "", userId, {})
-            const arr = lapi.Zrangebyscore(userSid, FOLLOWINGS_TWEETS, lastScore, -1, 0, 1000)
             
+            // Send the request to the remote host
+            const ret = lapi.RunMApp("update_following_tweets", {
+                aid: APP_ID, 
+                ver: "last",
+                nid: hostId, 
+                sid: systemSid,
+                hostid: hostId, 
+                appuserid: userId
+            }, [])
+            console.log("update_following_tweets ret from remote host", JSON.stringify(ret))
+            
+            // Get the updated score from the remote host
+            const remoteScore = lapi.RunMApp("node_get_score", { 
+                aid: APP_ID, 
+                ver: request.ver,
+                nid: hostId,        // remote host id
+                sid: systemSid,     // necessary to prove the user's authenticity
+                userid: userId, 
+                mid: userId
+            }, [])
+            
+            // Compare with local score and sync if different
+            const localScore = lapi.Zscore(systemSid, userId, userId)
+            console.log("update_following_tweets remoteScore", remoteScore, "localScore", localScore)
+            
+            if (remoteScore != localScore) {
+                lapi.MiMeiSync(systemSid, "", userId, {})
+                // update the score of the user in local AppData
+                const sp = getScorePair(remoteScore, userId)
+                lapi.Zadd(systemSid, userId, sp)
+            }
+
+            // Get new tweets since the last processed score
+            const arr = lapi.Zrangebyscore(userSid, FOLLOWINGS_TWEETS, lastScore, Date.now(), 0, 1000)
+            console.log("update_following_tweets new tweets", lastScore, JSON.stringify(arr))
+            
+            // Fetch tweet details for each new tweet
+            const tweets = []
             for (const e of arr) {
                 const tweetId = e.Member
-                const tweet = lapi.RunMApp("get_tweet", {aid: APP_ID, ver:"last",
-                    appuserid: userId, tweetid: tweetId}, [])
+                let tweet = lapi.RunMApp("get_tweet", {
+                    aid: APP_ID, 
+                    ver: "last",
+                    appuserid: userId, 
+                    tweetid: tweetId
+                }, [])
+                
                 if (tweet) {
                     tweets.push(tweet)
+                } else {
+                    // Tweet not found locally, try to sync and fetch again
+                    lapi.MiMeiSync(userSid, "", tweetId, {})
+                    tweet = lapi.RunMApp("get_tweet", {
+                        aid: APP_ID, 
+                        ver: "last",
+                        appuserid: userId, 
+                        tweetid: tweetId
+                    }, [])
+                    
+                    if (tweet) {
+                        tweets.push(tweet)
+                    }
                 }
             }
-            lapi.MMBackup(userSid, userId, "", "delref=true")
+
             return {
                 success: true,
                 tweets: tweets,
                 originalTweets: []
             }
         } else {
-            // remote host
-            const followings = lapi.Hkeys(userSid, FOLLOWINGS_LIST) // mid list of its followings
-            console.log("update_following_tweets followings", JSON.stringify(followings))
+            // This host is the single source of truth, process followings directly.
+            const mmsid = lapi.MMOpen(authSid, userId, "cur")
+            const followings = lapi.Hkeys(mmsid, FOLLOWINGS_LIST) // mid list of its followings
+            console.log("update_following_tweets remote", JSON.stringify(followings))
 
+            // Process each following to get their new tweets
+            const tweets = []
             for (const uid of followings) {
-                tweets.push(...updateUser(uid, lastScore, userSid))     // sync followings' data if there is any new tweet.
+                // sync followings' data if there is any new tweet
+                tweets.push(...updateUser(uid, lastScore, mmsid))
             }
         
+            console.log("update_following_tweets remote new tweets.", JSON.stringify(tweets))
+            
+            // If we found new tweets, backup and publish the changes
             if (tweets.length > 0) {
-                lapi.MMBackup(userSid, userId, "", "delref=true")
-                lapi.MiMeiPublish(userSid, "", userId)
+                lapi.MMBackup(mmsid, userId, "", "delref=true")
+                lapi.MiMeiPublish(mmsid, "", userId)
             }
+            
             return {
                 success: true,
                 tweets: tweets,
@@ -72,38 +138,80 @@
         }
     }
 
+    /**
+     * Updates a specific user's tweets and adds new ones to the followings_tweets list
+     * This function is called by the remote host to process individual followings
+     * 
+     * @param {string} uid - The user ID to update
+     * @param {number} lastScore - The last processed score timestamp
+     * @param {string} userSid - The user session ID
+     * @returns {Array} Array of new tweets from the user
+     */
     function updateUser(uid, lastScore, userSid) {
         try {
             const OWNER_DATA_KEY = "data_of_author"
             const mmsid = lapi.MMOpen("", uid, "last")
             const user = lapi.Get(mmsid, OWNER_DATA_KEY)
+            
             if (!user) {
                 console.error("Error update_following_tweets: updateUser: user not found", uid, nodeId)
                 return []
             }
+            
+            // Update the user's score if they have host IDs
             if (user.hostIds && user.hostIds.length > 0) {
-                lapi.RunMApp("node_update_mid_by_score", {aid: APP_ID, ver:"last",
-                    hostid: user.hostIds[0], userid: uid, mid: uid}, [])
+                lapi.RunMApp("node_update_mid_by_score", {
+                    aid: APP_ID, 
+                    ver: "last",
+                    hostid: user.hostIds[0], 
+                    userid: uid, 
+                    mid: uid
+                }, [])
             }
-
-            const arr = lapi.Zrangebyscore(mmsid, TWT_LIST_KEY, lastScore, -1, 0, 1000)
+            
+            // Get new tweets since lastScore by the uid
+            const arr = lapi.Zrangebyscore(mmsid, TWT_LIST_KEY, lastScore, Date.now(), 0, 1000)
+            console.log("update_following_tweets: updateUser: arr", JSON.stringify(arr), lastScore, uid)
+            
+            // Add new tweets to the followings_tweets sorted set
             if (arr.length > 0) {
                 lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...arr)
             }
+            
+            // Fetch tweet details for each new tweet
             const tweets = []
             for (const e of arr) {
                 const tweetId = e.Member
-                const tweet = lapi.RunMApp("get_tweet", {aid: APP_ID, ver:"last",
-                    appuserid: userId, tweetid: tweetId}, [])
+                const tweet = lapi.RunMApp("get_tweet", {
+                    aid: APP_ID, 
+                    ver: "last",
+                    appuserid: userId, 
+                    tweetid: tweetId
+                }, [])
+                
                 if (tweet) {
-                    console.log("update followings' new tweet", tweetId, userId)
                     tweets.push(tweet)
                 }
             }
+            
             return tweets
         } catch(e) {
-            console.error("Error update_following_tweets: updateUser", e, uid)
+            // console.error("Error update_following_tweets: updateUser", e, uid)
             return []
         }
+    }
+
+    /**
+     * Creates a score pair object for storing in sorted sets
+     * @param {number} score - The score value
+     * @param {string} member - The member identifier
+     * @returns {Object} ScorePair object with Score and Member properties
+     */
+    function getScorePair(score, member) {
+        function ScorePair() {}
+        const sp = new ScorePair()
+        sp.Score = score ? score : 0
+        sp.Member = member
+        return sp
     }
 })(request, args)

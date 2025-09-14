@@ -1,44 +1,69 @@
 /**
- * Compare the score of the given tweet's MimeiId. If it is out of date, sync it.
+ * Compare the score of the given mid with its score on the remote host.
+ * If they are different, sync the mid from the remote host
+ * and update the score on the current node.
  * 
- *  */
-((request, args)=>{
+ * This function ensures data consistency across nodes by comparing
+ * scores and syncing when discrepancies are found.
+ */
+((request, args) => {
+    // Extract request parameters
     const APP_ID = request["aid"]
     const hostId = request["hostid"]
     const userId = request["userid"]
     const mid = request["mid"]
-    const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
+    const nodeId = lapi.GetVar("", "hostid")
 
+    // Skip processing if we're already on the target host
+    if (nodeId == hostId) {
+        return
+    }
+
+    // Check if the mid exists in the sorted set
+    const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
     const rank = lapi.Zrank(systemSid, userId, mid)
     if (rank == -1) {
-        // the mid has never been synced before, add it to AppData.
-        // add a score pair with system sequence number as score.
+        // The mid has never been synced before, add it to AppData
+        // Add a score pair with system sequence number as score
         lapi.Zaddwithseq(systemSid, userId, mid)
         lapi.MiMeiSync(systemSid, "", mid, {})
         lapi.MiMeiProvide(systemSid, "", mid)
-    } else {
-        // get new score from the remote host
-        const newScore = lapi.RunMApp("node_get_score", { aid: APP_ID, ver: request.ver,
-            nid: hostId,        // remote host id
-            sid: systemSid,     // necessary to prove the user's authenticity.
-            userid: userId, mid: mid,
-        }, [])
-
-        // get old score from current node.
-        const oldScore = lapi.Zscore(systemSid, userId, mid)
-
-        if (newScore != oldScore) {
-            console.log(mid, "new and old score:", newScore, oldScore, "of user", userId)
-            // Only sync the tweet itself. Update comments when viewing tweet details.
-            lapi.MiMeiSync(systemSid, "", mid, {})
-            const sp = getScorePair(newScore, mid)
-            lapi.Zadd(systemSid, userId, sp)
-        }
     }
 
+    // Get the current score from the remote host
+    const remoteScore = lapi.RunMApp("node_get_score", { 
+        aid: APP_ID, 
+        ver: request.ver,
+        nid: hostId,        // remote host id
+        sid: systemSid,     // necessary to prove the user's authenticity
+        userid: userId, 
+        mid: mid,
+    }, [])
+
+    // Get the current score from the local node
+    const localScore = lapi.Zscore(systemSid, userId, mid)
+
+    // If scores differ, sync and update the local score
+    if (remoteScore != localScore) {
+        console.log(mid, "new and old score:", remoteScore, localScore, "of user", userId)
+        
+        // Sync the mid data from remote host
+        lapi.MiMeiSync(systemSid, "", mid, {})
+
+        // Update the score of the user in local AppData
+        const sp = getScorePair(remoteScore, mid)
+        lapi.Zadd(systemSid, userId, sp)
+    }
+
+    /**
+     * Creates a score pair object for storing in sorted sets
+     * @param {number} score - The score value
+     * @param {string} member - The member identifier
+     * @returns {Object} ScorePair object with Score and Member properties
+     */
     function getScorePair(score, member) {
         function ScorePair() {}
-        sp = new ScorePair
+        const sp = new ScorePair()
         sp.Score = score ? score : 0
         sp.Member = member
         return sp
