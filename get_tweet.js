@@ -26,6 +26,7 @@
         const isFavorite = lapi.Hget(mmsid, FAVORITE_LIST, appUserId)
         const isBookmarked = lapi.Hget(mmsid, BOOKMARK_LIST, appUserId)
         const hasRetweeted = lapi.Hget(mmsid, RETWEET_LIST, appUserId)
+        
         let ret = {
             // tweet core data
             "mid": tweet.mid,
