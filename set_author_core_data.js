@@ -56,6 +56,7 @@
             
             // Sync the updated data from the remote host. Assume the remote host is up to date.
             lapi.MiMeiSync(systemSid, "", user.mid, {})
+            lapi.MiMeiProvide(systemSid, "", user.mid)
             
             // Get the updated user data from the locat host.
             const newUser = lapi.RunMApp("get_user_core_data", {
