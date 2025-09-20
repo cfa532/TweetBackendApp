@@ -75,14 +75,14 @@
                     console.error("Error toggle_following: toggle_follower failed", e, JSON.stringify(request))
                 }
             } else {
-                console.log(userId, "following", followedId, hostOfOther, nodeId)
+                console.log("toggle_following:", userId, "following", followedId, hostOfOther, nodeId)
                 // Follow the otherId and provide for all of its tweet
                 lapi.Hset(userSid, FOLLOWINGS_LIST, followedId, Date.now())
 
                 const scorepairs = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
                     nid: hostOfOther, sid: systemSid, userid: followedId
                 }, [])
-                console.log("Following's tweets", JSON.stringify(scorepairs), followedId, hostOfOther)
+                console.log("toggle_following: Following's tweets", JSON.stringify(scorepairs))
                 lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...scorepairs)
                 lapi.MMBackup(userSid, userId, "", "delref=true")
                 lapi.MiMeiPublish(authSid, "", userId)
@@ -92,16 +92,16 @@
                 lapi.MiMeiProvide(authSid, "", followedId)
 
                 // sync the otherId's tweets if not found locally
-                scorepairs.forEach(sp => {
-                    const tweetId = sp.Member
-                    const t = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
-                        tweetid: tweetId, appuserid: userId}, [])
-                    if (!t) {
-                        console.log("Syncing tweet", tweetId, followedId)
-                        lapi.MiMeiSync(authSid, "", tweetId, {})
-                        // lapi.MiMeiProvide(authSid, "", tweetId)
-                    }
-                })
+                // scorepairs.forEach(sp => {
+                //     const tweetId = sp.Member
+                //     const t = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
+                //         tweetid: tweetId, appuserid: userId}, [])
+                //     if (!t) {
+                //         console.log("Syncing tweet", tweetId, followedId)
+                //         lapi.MiMeiSync(authSid, "", tweetId, {})
+                //         // lapi.MiMeiProvide(authSid, "", tweetId)
+                //     }
+                // })
 
                 // add userId to the otherId's follower list
                 try {

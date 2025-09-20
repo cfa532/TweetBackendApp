@@ -11,12 +11,12 @@
         if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
             // make sure the current user is up to date.
             lapi.RunMApp("node_update_mid_by_score", {aid: request["aid"], ver:"last",
-                hostid: hostIds[0], userid: userId, mid: userId}, [])
+                hostid: user.hostIds[0], userid: userId, mid: userId}, [])
         }
         return lapi.RunMApp("get_user_core_data", {aid: request["aid"], ver:"last",
             userid: userId}, [])
     } catch(e) {
-        console.error("Error resync_user", e, JSON.stringify(request))
+        console.error("Error resync_user:", e, JSON.stringify(request))
     }
 
     function getUser(mid) {
