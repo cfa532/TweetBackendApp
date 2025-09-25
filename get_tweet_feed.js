@@ -13,7 +13,7 @@
         /**
          * Given the rank, get the tweets of the followings
          */
-        let arr = lapi.Zrevrange(mmsid, FOLLOWINGS_TWEETS, startRank, endRank)
+        const arr = lapi.Zrevrange(mmsid, FOLLOWINGS_TWEETS, startRank, endRank)
         .map(sp => {
             const tweetId = sp.Member
             const tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",

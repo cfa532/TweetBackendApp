@@ -11,8 +11,8 @@
     try {
         const mmsid = lapi.MMOpen("", userId, "last")
         // TODO: -1 might fail. Retreive 100 for now.
-        const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, 0, -1)
-        .map(e => {
+        const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, 0, 100)
+        arr.map(e => {
             const mmsid = lapi.MMOpen("", e.Member, "last")
             const tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
             if (tweet && !tweet.isPrivate) {
