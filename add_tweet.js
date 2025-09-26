@@ -61,6 +61,15 @@
             lapi.Zadd(userSid, TWT_LIST_KEY, sp)
             lapi.Zadd(userSid, FOLLOWINGS_TWEETS, sp)
     
+            if (tweet.originalTweetId) {
+                try {
+                    lapi.MMAddRef(authSid, authorId, tweet.originalTweetId)
+                    lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
+                    lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
+                } catch(e) {
+                    console.error("add_tweet: Error sync original tweet", e, JSON.stringify(tweet))
+                }
+            }
             lapi.MMAddRef(authSid, authorId, tweetId)
             lapi.MMBackup(authSid, authorId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", authorId)
@@ -69,17 +78,6 @@
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
                 userid: tweet.authorId, mid: authorId}, [])
 
-            // if the tweet is a retweet of an original tweet, sync the original tweet here.
-            if (tweet.originalTweetId) {
-                try {
-                    // if (!lapi.MFIsExist("", tweet.originalTweetId)) {
-                        lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
-                        lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
-                    // }
-                } catch(e) {
-                    console.error("add_tweet: Error sync original tweet", e, JSON.stringify(tweet))
-                }
-            }
             console.log("add_tweet local", JSON.stringify(tweet))
             return {success: true, mid: tweetId}
         }

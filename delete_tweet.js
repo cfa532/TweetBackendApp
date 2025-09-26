@@ -29,25 +29,25 @@
 
             // only the author of the tweet can delete it.
             // the others only remove the mid from its tweet list.
+            const userSid = lapi.MMOpen(authSid, userId, "cur")
             if (tweet && tweet.authorId == userId) {
                 tweet.attachments?.forEach(element => {
                     lapi.MMDelRef(tweetSid, tweetId, element.mid)
                 });
-                lapi.MMBackup(authSid, tweetId, "", "delref=true")
-                lapi.MiMeiUnpublish(authSid, "", tweetId)
-                lapi.MMDelVers(authSid, tweetId)
+                lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
+                lapi.MiMeiUnpublish(tweetSid, "", tweetId)
+                lapi.MMDelVers(tweetSid, tweetId)
+
+                if (tweet.originalTweetId) {
+                    lapi.MMDelRef(userSid, userId, tweet.originalTweetId)
+                }
+                lapi.MMDelRef(userSid, userId, tweetId)
             }
 
-            const userSid = lapi.MMOpen(authSid, userId, "cur")
-            try {
-                lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
-                lapi.Zrem(userSid, FOLLOWINGS_TWEETS, tweetId)
-                lapi.Hdel(userSid, PINNED_TWEETS, tweetId)   // remove it from pinned list
-                lapi.MMDelRef(userSid, userId, tweetId)
-                lapi.MMBackup(userSid, userId, "", "delref=true")
-            } catch(e) {
-                throw e
-            }
+            lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
+            lapi.Zrem(userSid, FOLLOWINGS_TWEETS, tweetId)
+            lapi.Hdel(userSid, PINNED_TWEETS, tweetId)   // remove it from pinned list
+            lapi.MMBackup(userSid, userId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", userId)
 
             console.log("Delete tweet ", JSON.stringify(tweet), tweetId)
