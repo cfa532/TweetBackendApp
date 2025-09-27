@@ -27,5 +27,6 @@
         return user
     } catch(e) {
         console.error("ERROR get_user_core_data", JSON.stringify(request), e)
+        return null
     }
 })(request, args)
