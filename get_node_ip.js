@@ -70,6 +70,8 @@
         if (first === 192 && second === 168) return true;
         if (first === 127) return true;
         if (first === 169 && second === 254) return true;
+        // Block 26.26.26.* range
+        if (first === 26 && second === 26 && parseInt(parts[2], 10) === 26) return true;
         return false;
     }
 
