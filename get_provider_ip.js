@@ -2,6 +2,7 @@
  * Given a mimei Id, return the best IP address of providers, excluding private IPs (IPv4 and IPv6)
  */
 ((request, args) => {
+    const v4Only = request["v4only"] === "true" ? true : false;
     const mid = request["mid"];
     const providers = JSON.parse(lapi.GetVar("", "mmprovsips", mid));
 
@@ -14,6 +15,7 @@
                 const { ipAddress, port } = extractIPAndPort(element2[0]);
                 if (port < 8000 || port > 9000) return;
                 if (isPrivateIP(ipAddress)) return;
+                if (v4Only && !isIPv4(ipAddress)) return;
                 if (mini === null || element2[1] < mini) {
                     mini = element2[1];
                     ip = element2[0];
@@ -88,6 +90,22 @@
         if (cleanIp.startsWith('fe8') || cleanIp.startsWith('fe9') || cleanIp.startsWith('fea') || cleanIp.startsWith('feb')) return true; // link-local
         if (cleanIp.startsWith('::ffff:127.')) return true; // IPv4-mapped loopback
         return false;
+    }
+
+    // Check if IP is IPv4
+    function isIPv4(ip) {
+        // IPv6 with brackets
+        if (ip.startsWith('[')) {
+            return false;
+        }
+        // Split out port if present
+        const ipPart = ip.split(':')[0];
+        if (ipPart.includes(':')) {
+            // IPv6 without brackets
+            return false;
+        }
+        // IPv4
+        return true;
     }
 
     // General private IP check
