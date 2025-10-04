@@ -17,6 +17,10 @@
             const tweetId = sp.Member
             const tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
                 appuserid: appUserId, tweetid: tweetId}, [])
+            // Replace tweets with isPrivate: true with null if user is not the author
+            if (tweet && tweet.isPrivate === true && appUserId !== tweet.authorId) {
+                return null
+            }
             return tweet
         })
         
