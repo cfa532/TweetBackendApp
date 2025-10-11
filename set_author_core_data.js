@@ -84,6 +84,11 @@
             userInDB.name = user.name
             userInDB.profile = user.profile
 
+            // Update cloudDrivePort if provided
+            if (user.cloudDrivePort !== undefined && user.cloudDrivePort !== null) {
+                userInDB.cloudDrivePort = user.cloudDrivePort
+            }
+
             // Save the updated user data
             lapi.Set(userSid, OWNER_DATA_KEY, userInDB)
             lapi.MMBackup(userSid, userInDB.mid, "", "delref=true")
