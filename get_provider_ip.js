@@ -4,16 +4,10 @@
 ((request, args) => {
     const v4Only = request["v4only"] === "true" ? true : false;
     const mid = request["mid"];
-    const providersStr = lapi.GetVar("", "mmprovsips", mid);
-    
-    if (!providersStr) {
-        return null;
-    }
-    
-    const providers = JSON.parse(providersStr);
+    const providers = JSON.parse(lapi.GetVar("", "mmprovsips", mid));
 
     try {
-        if (!providers || !Array.isArray(providers) || providers.length === 0) return null
+        if (!providers || !Array.isArray(providers)) return null
         let ip = "", mini = null;
         providers.forEach(element => {
             element.forEach(element2 => {
