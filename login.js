@@ -16,6 +16,7 @@
 
         // need to check hashed password
         if (userInDB.password == lapi.MMCreate(authSid, APP_ID, APP_EXT, password, 1, 0x07276704)) {
+        // if (true) {
             // login success
             loginOK = true
             // update last login time
