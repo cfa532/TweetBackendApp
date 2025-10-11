@@ -6,17 +6,17 @@
     const APP_EXT = "com.example.twitterclone"    
     const OWNER_DATA_KEY = "data_of_author"
     const user = JSON.parse(request["user"])
-    const followings = JSON.parse(request["followings"])
+    const followings = request["followings"] ? JSON.parse(request["followings"]) : []
     const nodeId = lapi.GetVar("", "hostid")
-    console.log("nodeId", nodeId, JSON.stringify(request))
 
     try {
-        console.log("nodeId", nodeId, request["user"])
+        console.log("nodeId", nodeId, request["user"], request["followings"])
         if (user.hostIds?.length > 0 && user.hostIds[0] !== nodeId) {
             // register it on remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             return lapi.RunMApp("register", {aid: APP_ID, ver: "last",
-                nid: user.hostIds[0], sid: systemSid, user: request["user"]}, []
+                nid: user.hostIds[0], sid: systemSid,
+                user: request["user"], followings: request["followings"]}, []
             )
         } else {
             // register it on current node
@@ -24,10 +24,11 @@
             const userMid = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.username, 2, 0x07276704)
     
             // result of GetVar is a string literal "[]", we need to parse it to an array.
-            const userProvs = JSON.parse(lapi.GetVar("", "mmprovsips", userMid))
-            if (userProvs.length > 0) {
-                console.warn("User register failed. Existing user", JSON.stringify(userProvs))
-                return {status: "failure", reason: "Username is taken"}
+            const providerIp = lapi.RunMApp("get_provider_ip", {aid: APP_ID, ver: "last",
+                mid: userMid}, [])
+            if (providerIp) {
+                console.warn("User register failed. Existing user", JSON.stringify(providerIp))
+                // return {status: "failure", reason: "Username is taken"}
             }
             user["mid"] = userMid
             user["password"] = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)
@@ -47,9 +48,14 @@
                     const otherUser = lapi.RunMApp("get_user", {aid: APP_ID, ver: "last",
                         userid: mid}, [])
                     console.log("Following otherUser", JSON.stringify(otherUser))
-                    lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
-                        userid: user.mid, otherid: mid, otherhostid: otherUser.hostIds[0]
-                    }, [])
+                    
+                    if (otherUser && typeof otherUser === 'object' && otherUser.hostIds) {
+                        lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
+                            userid: user.mid, otherid: mid, otherhostid: otherUser.hostIds[0]
+                        }, [])
+                    } else {
+                        console.warn("Cannot follow user, invalid otherUser format:", mid)
+                    }
                 } catch(e) {
                     console.error("Error in register when toggle_following", e, JSON.stringify(request))
                 }
@@ -62,5 +68,6 @@
         }
     } catch(e) {
         console.error("Error register", JSON.stringify(request), e)
+        return {status: "failure", reason: e.message || String(e)}
     }
 })(request, args)

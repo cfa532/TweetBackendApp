@@ -1,5 +1,6 @@
 /**
  * Given a mimei Id, return the best IP address of providers, excluding private IPs (IPv4 and IPv6)
+ * "[[[\"115.205.180.247:8002\", 1942861047],[\"[240e:391:edd:26d0:b25a:daff:fe87:21d4]:8002\", 39642857350864],[\"192.168.10.5:8002\", 281478208948741]]]"
  */
 ((request, args) => {
     const v4Only = request["v4only"] === "true" ? true : false;
