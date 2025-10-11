@@ -28,7 +28,7 @@
                 mid: userMid}, [])
             if (providerIp) {
                 console.warn("User register failed. Existing user", JSON.stringify(providerIp))
-                // return {status: "failure", reason: "Username is taken"}
+                return {status: "failure", reason: "Username is taken"}
             }
             user["mid"] = userMid
             user["password"] = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)
@@ -43,19 +43,8 @@
     
             followings?.forEach(mid => {
                 try {
-                    // find the host of the otherId. Assume it is available on this node.
-                    // otherwise, the returned value will be the IP address of the otherId.
-                    const otherUser = lapi.RunMApp("get_user", {aid: APP_ID, ver: "last",
-                        userid: mid}, [])
-                    console.log("Following otherUser", JSON.stringify(otherUser))
-                    
-                    if (otherUser && typeof otherUser === 'object' && otherUser.hostIds) {
-                        lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
-                            userid: user.mid, otherid: mid, otherhostid: otherUser.hostIds[0]
-                        }, [])
-                    } else {
-                        console.warn("Cannot follow user, invalid otherUser format:", mid)
-                    }
+                    lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
+                        userid: user.mid, followingid: mid}, [])
                 } catch(e) {
                     console.error("Error in register when toggle_following", e, JSON.stringify(request))
                 }
