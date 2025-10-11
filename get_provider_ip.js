@@ -26,6 +26,7 @@
         return ip;
     } catch (e) {
         console.error("Error get_provider_ip:", e, JSON.stringify(request));
+        return ""
     }
 
     // Extract IP address and port from a string that may contain both
