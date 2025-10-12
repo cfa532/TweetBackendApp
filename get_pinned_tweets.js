@@ -19,5 +19,6 @@
         }).filter(e=> e);
     } catch(e) {
         console.error("Error get_pinned_tweets:", e, JSON.stringify(request))
+        return []
     }
 })(request, args)
