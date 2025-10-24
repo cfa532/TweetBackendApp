@@ -1,24 +1,61 @@
 /**
- * Delete a comment from a tweet. Both comment author and tweet author
- * can delete the comment.
+ * Delete Comment Function
+ * 
+ * This function deletes a comment from a tweet in a distributed social media system.
+ * Both the comment author and the original tweet author can delete comments.
+ * 
+ * Key Features:
+ * - Handles both local and remote comment deletion
+ * - Removes comment from tweet's comment list
+ * - Deletes comment references and updates counts
+ * - Updates tweet scores and publishes changes
+ * 
+ * Flow:
+ * 1. Determines if target tweet is on local or remote node
+ * 2. For remote tweets: delegates to appropriate node and syncs content
+ * 3. For local tweets: deletes comment and updates references
+ * 4. Updates parent tweet's comment count and score
+ * 
+ * @param {Object} request - The request object containing deletion data
+ * @param {string} request.aid - Application ID
+ * @param {string} request.appuserid - ID of user requesting deletion
+ * @param {string} request.tweetid - ID of tweet containing the comment
+ * @param {string} request.commentid - ID of comment to delete
+ * @param {string} request.hostid - Node ID where the tweet is hosted
+ * @param {Array} args - Additional arguments (unused)
  */
 ((request, args)=>{
+    // ============================================================================
+    // CONSTANTS AND INITIALIZATION
+    // ============================================================================
+    
     try {
-        const COMMENT_LIST = "comment_list_key"
-        const APP_ID = request["aid"]
-        const appUserId = request["appuserid"]
-        const tweetId = request["tweetid"]
-        const commentId = request["commentid"]
-        const hostId = request["hostid"]
+        const COMMENT_LIST = "comment_list_key"  // Redis key for tweet's comment list
+        const APP_ID = request["aid"]  // Application identifier
+        const appUserId = request["appuserid"]  // ID of user requesting deletion
+        const tweetId = request["tweetid"]  // ID of tweet containing the comment
+        const commentId = request["commentid"]  // ID of comment to delete
+        const hostId = request["hostid"]  // Node ID where the tweet is hosted
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
 
-        let nodeId = lapi.GetVar("", "hostid")    // current node id
+        // ========================================================================
+        // MAIN EXECUTION
+        // ========================================================================
+        
+        let nodeId = lapi.GetVar("", "hostid")  // Current node identifier
+        
+        // ========================================================================
+        // REMOTE TWEET HANDLING
+        // ========================================================================
+        
         if (nodeId !== hostId) {
-            // send the request to the remote host
+            // Delegate comment deletion to the node hosting the tweet
             let ret = lapi.RunMApp("delete_comment", {aid: APP_ID, ver: "last",
                 nid: hostId, sid: systemSid,
                 appuserid: appUserId, tweetid: tweetId, commentid: commentId},
                 [])
+            
+            // Sync the updated tweet to local node for caching
             try {
                 lapi.MiMeiSync(systemSid, "", tweetId, {})
                 lapi.MiMeiProvide(systemSid, "", tweetId)
@@ -27,26 +64,39 @@
             }
             return ret
         } else {
+            // ====================================================================
+            // LOCAL TWEET HANDLING
+            // ====================================================================
+            
+            // Delete the comment object
             const authSid = lapi.BELoginAsAuthor()
             const commentSid = lapi.MMOpen(authSid, commentId, "cur")
-            lapi.MMDelVers(commentSid, commentId)   // delete the comment
+            lapi.MMDelVers(commentSid, commentId)  // Remove all versions of the comment
     
+            // Remove comment from tweet's comment list and references
             const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
-            lapi.MMDelRef(tweetSid, tweetId, commentId) // delete the reference to the comment
-            lapi.Zrem(tweetSid, COMMENT_LIST, commentId)
+            lapi.MMDelRef(tweetSid, tweetId, commentId)  // Remove reference to comment
+            lapi.Zrem(tweetSid, COMMENT_LIST, commentId)  // Remove from comment list
+            
+            // Backup tweet data and publish changes
             lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", tweetId)
     
-            // update the score of the tweet in AppData
+            // Update the parent tweet's score in application data
             lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
                 userid: appUserId, mid: tweetId}, [])
     
+            // Return updated comment count
             let lastSid = lapi.MMOpen("", tweetId, "last")
             const commentCount = lapi.Zcard(lastSid, COMMENT_LIST)
             console.log("delete_comment local: ", commentCount, commentId)
             return {success: true, commentId: commentId, count: commentCount}
         }
     } catch(e) {
+        // ========================================================================
+        // ERROR HANDLING
+        // ========================================================================
+        
         console.error("Error delete_comment", e, JSON.stringify(request))
         return {success: false, message: e}
     }

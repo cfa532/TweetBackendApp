@@ -1,17 +1,50 @@
 /**
- * Given a node Id, return a IP address list
+ * Get Node IP Function
+ * 
+ * This function retrieves a valid public IP address for a given node ID.
+ * It filters out private IPs, invalid ports, and optionally IPv6 addresses.
+ * 
+ * Key Features:
+ * - Filters out private IP addresses (IPv4 and IPv6)
+ * - Validates port ranges (8000-9000)
+ * - Optional IPv4-only filtering
+ * - Handles both IPv4 and IPv6 addresses
+ * - Supports bracketed IPv6 notation
+ * 
+ * @param {Object} request - The request object containing node data
+ * @param {string} request.nodeid - Node ID to get IP address for
+ * @param {string} [request.v4only] - If "true", only return IPv4 addresses
+ * @param {Array} args - Additional arguments (unused)
+ * @returns {string|null} Valid IP address with port, or null if none found
  */
 ((request, args)=>{
-    const v4Only = request["v4only"] === "true" ? true : false;
+    // ============================================================================
+    // CONSTANTS AND INITIALIZATION
+    // ============================================================================
+    
+    const v4Only = request["v4only"] === "true" ? true : false;  // IPv4-only filter flag
+    
+    // ============================================================================
+    // MAIN EXECUTION
+    // ============================================================================
+    
     try {
+        // Get IP addresses for the specified node
         let ips = lapi.GetVar("", "ips", request["nodeid"])
         if (!ips) return null
+        
         // Parse comma-separated string into array, filter out empty strings
         ips = ips.split(',').filter(ip => ip.trim() !== '')
+        
+        // Check each IP address for validity
         for (let element of ips) {
             // element format: ip:port
             const { ipAddress, port } = extractIPAndPort(element);
+            
+            // Validate port range (8000-9000)
             if (port < 8000 || port > 9000) continue;
+            
+            // Skip private IP addresses
             if (isPrivateIP(ipAddress)) continue;
             
             // If v4Only is true, skip IPv6 addresses
@@ -22,10 +55,22 @@
         }
         return null; // No valid IP found
     } catch (e) {
+        // ========================================================================
+        // ERROR HANDLING
+        // ========================================================================
+        
         console.error("Error get_node_ip:", e, JSON.stringify(request));
     }
 
-    // Extract IP address and port from a string that may contain both
+    // ============================================================================
+    // HELPER FUNCTIONS
+    // ============================================================================
+    
+    /**
+     * Extracts IP address and port from a string that may contain both
+     * @param {string} ipPortString - String containing IP and optionally port
+     * @returns {Object} Object with ipAddress and port properties
+     */
     function extractIPAndPort(ipPortString) {
         let ipAddress, port;
         
@@ -59,23 +104,34 @@
         return { ipAddress, port };
     }
 
-    // Check if IPv4 is private
+    /**
+     * Checks if an IPv4 address is private
+     * @param {string} ip - IPv4 address to check
+     * @returns {boolean} True if the IP is private
+     */
     function isPrivateIPv4(ip) {
         const parts = ip.split('.');
         if (parts.length !== 4) return false;
         const first = parseInt(parts[0], 10);
         const second = parseInt(parts[1], 10);
-        if (first === 10) return true;
-        if (first === 172 && second >= 16 && second <= 31) return true;
-        if (first === 192 && second === 168) return true;
-        if (first === 127) return true;
-        if (first === 169 && second === 254) return true;
-        // Block 26.26.26.* range
+        
+        // Standard private IP ranges
+        if (first === 10) return true;  // 10.0.0.0/8
+        if (first === 172 && second >= 16 && second <= 31) return true;  // 172.16.0.0/12
+        if (first === 192 && second === 168) return true;  // 192.168.0.0/16
+        if (first === 127) return true;  // 127.0.0.0/8 (loopback)
+        if (first === 169 && second === 254) return true;  // 169.254.0.0/16 (link-local)
+        
+        // Block specific problematic range
         if (first === 26 && second === 26 && parseInt(parts[2], 10) === 26) return true;
         return false;
     }
 
-    // Check if IPv6 is private
+    /**
+     * Checks if an IPv6 address is private
+     * @param {string} ip - IPv6 address to check
+     * @returns {boolean} True if the IP is private
+     */
     function isPrivateIPv6(ip) {
         // Remove brackets if present
         let cleanIp = ip;
@@ -83,14 +139,20 @@
             cleanIp = cleanIp.slice(1, cleanIp.indexOf(']'));
         }
         cleanIp = cleanIp.toLowerCase();
+        
+        // Standard private IPv6 ranges
         if (cleanIp === '::1') return true; // loopback
-        if (cleanIp.startsWith('fc') || cleanIp.startsWith('fd')) return true; // unique local
-        if (cleanIp.startsWith('fe8') || cleanIp.startsWith('fe9') || cleanIp.startsWith('fea') || cleanIp.startsWith('feb')) return true; // link-local
+        if (cleanIp.startsWith('fc') || cleanIp.startsWith('fd')) return true; // unique local (fc00::/7)
+        if (cleanIp.startsWith('fe8') || cleanIp.startsWith('fe9') || cleanIp.startsWith('fea') || cleanIp.startsWith('feb')) return true; // link-local (fe80::/10)
         if (cleanIp.startsWith('::ffff:127.')) return true; // IPv4-mapped loopback
         return false;
     }
 
-    // General private IP check
+    /**
+     * General private IP check for both IPv4 and IPv6
+     * @param {string} ip - IP address to check
+     * @returns {boolean} True if the IP is private
+     */
     function isPrivateIP(ip) {
         // IPv6 with brackets
         if (ip.startsWith('[')) {
@@ -106,7 +168,11 @@
         return isPrivateIPv4(ipPart);
     }
 
-    // Check if an IP address is IPv6
+    /**
+     * Checks if an IP address is IPv6
+     * @param {string} ip - IP address to check
+     * @returns {boolean} True if the IP is IPv6
+     */
     function isIPv6(ip) {
         // Remove brackets if present
         let cleanIp = ip;

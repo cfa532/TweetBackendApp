@@ -1,59 +1,94 @@
 /**
- * Get a tweet from its author's node. Not necessary its host, which has the latest data.
- * The current node may be out of date, but get it anyway for better user experience.
- * When the user opens the tweet detail page, call refresh_tweet to update current node.
+ * Get Tweet Function
+ * 
+ * This function retrieves a complete tweet object with user interaction data.
+ * It gets the tweet from the author's node (which may not be the most current)
+ * but provides better user experience. For the latest data, use refresh_tweet.
+ * 
+ * Key Features:
+ * - Retrieves complete tweet data with interaction counts
+ * - Checks user's interaction status (liked, bookmarked, retweeted)
+ * - Returns engagement metrics (likes, bookmarks, comments, retweets)
+ * - Handles private tweets appropriately
+ * - Provides user-specific interaction flags
+ * 
+ * @param {Object} request - The request object containing tweet data
+ * @param {string} request.tweetid - ID of tweet to retrieve
+ * @param {string} request.appuserid - ID of user requesting the tweet (for interaction checks)
+ * @param {Array} args - Additional arguments (unused)
+ * @returns {Object|null} Complete tweet object with interaction data, or null if not found
  */
 ((request, args)=>{
-    // Take a tweetId as argument. The 2nd argument userId is NOT the author,
-    // but the current APP user. It is used to check if the curret app user
-    // has liked or bookmarked this tweet.
+    // ============================================================================
+    // CONSTANTS AND INITIALIZATION
+    // ============================================================================
+    
+    // Note: appuserid is NOT the tweet author, but the current app user
+    // It's used to check if the current user has liked, bookmarked, or retweeted this tweet
+    
     try {
-        const TWT_CONTENT_KEY = "core_data_of_tweet"
-        const FAVORITE_LIST = "tweet_like_list"
-        const BOOKMARK_LIST = "tweet_bookmark_list"
-        const RETWEET_LIST = "tweet_retweet_list"
-        const COMMENT_LIST = "comment_list_key"
+        const TWT_CONTENT_KEY = "core_data_of_tweet"  // Key for tweet content storage
+        const FAVORITE_LIST = "tweet_like_list"  // Redis key for tweet likes
+        const BOOKMARK_LIST = "tweet_bookmark_list"  // Redis key for tweet bookmarks
+        const RETWEET_LIST = "tweet_retweet_list"  // Redis key for tweet retweets
+        const COMMENT_LIST = "comment_list_key"  // Redis key for tweet comments
 
-        // Need to find out if the current user has liked or bookmarked the tweet.
-        const appUserId = request["appuserid"]
-        const tweetId = request["tweetid"]
-        const mmsid = lapi.MMOpen("", tweetId, "last")
-        const tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
+        const appUserId = request["appuserid"]  // ID of user requesting the tweet
+        const tweetId = request["tweetid"]  // ID of tweet to retrieve
+        const mmsid = lapi.MMOpen("", tweetId, "last")  // Open tweet's memory space
+        const tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)  // Get tweet content
+        
         if (!tweet)
             return null
 
-        // check if the appUser has bookmarked or liked the tweet
+        // ========================================================================
+        // MAIN EXECUTION
+        // ========================================================================
+        
+        // Check if the current user has interacted with this tweet
         const isFavorite = lapi.Hget(mmsid, FAVORITE_LIST, appUserId)
         const isBookmarked = lapi.Hget(mmsid, BOOKMARK_LIST, appUserId)
         const hasRetweeted = lapi.Hget(mmsid, RETWEET_LIST, appUserId)
         
+        // Build complete tweet response object
         let ret = {
-            // tweet core data
+            // Core tweet data
             "mid": tweet.mid,
             "authorId": tweet.authorId,
             "title": tweet.title,
             "attachments": tweet.attachments?.map(a => {
                 return a
             }),
-            "isPrivate": tweet.isPrivate,           // viewable by author only.
-            "downloadable": tweet.downloadable,     // if the attachment is downloadable
+            "isPrivate": tweet.isPrivate,  // Viewable by author only
+            "downloadable": tweet.downloadable,  // If the attachment is downloadable
             "originalTweetId": tweet.originalTweetId,
             "originalAuthorId": tweet.originalAuthorId,
             "timestamp": tweet.timestamp,
+            
+            // Engagement metrics
             "bookmarkCount": lapi.Hlen(mmsid, BOOKMARK_LIST),
             "favoriteCount": lapi.Hlen(mmsid, FAVORITE_LIST),
             "commentCount": lapi.Zcard(mmsid, COMMENT_LIST),
             "retweetCount": lapi.Hlen(mmsid, RETWEET_LIST),
+            
+            // User interaction flags [isFavorite, isBookmarked, hasRetweeted]
             "favorites": [
                 isFavorite ? true : false,
                 isBookmarked ? true : false,
                 hasRetweeted ? true : false,
             ],
         }
+        
+        // Add content if present (prevent null from becoming empty string)
         if (tweet.content)
-            ret["content"] = tweet.content  // prevent null from becoming empty string.
+            ret["content"] = tweet.content
+            
         return ret
     } catch(e) {
+        // ========================================================================
+        // ERROR HANDLING
+        // ========================================================================
+        
         console.error("Error get_tweet", JSON.stringify(request), e)
         return null
     }

@@ -1,34 +1,70 @@
-((request, args)=>{
 /**
- * Add a comment to a tweet.
- *
- * @param {string} tweetId - The ID of the tweet to which the comment is being added.
- * @param {string} comment - The comment object, which is a Tweet object itself.
- * @param {string} [userId] - (Optional) The ID of the user posting the comment.
+ * Add Comment Function
+ * 
+ * This function adds a comment to an existing tweet in a distributed social media system.
+ * Comments are treated as tweet objects themselves, allowing for nested conversations.
+ * 
+ * Key Features:
+ * - Handles both local and remote tweet commenting
+ * - Supports quoted tweets (retweets with comments)
+ * - Manages comment references and attachments
+ * - Updates tweet scores and comment counts
+ * 
+ * Flow:
+ * 1. Determines if target tweet is on local or remote node
+ * 2. For remote tweets: delegates to appropriate node and syncs content
+ * 3. For local tweets: creates comment object and updates references
+ * 4. Handles quoted tweet creation if originalTweetId is present
+ * 5. Updates parent tweet's comment count and score
+ * 
+ * @param {Object} request - The request object containing comment data
+ * @param {string} request.aid - Application ID
+ * @param {string} request.appuserid - ID of user posting the comment
+ * @param {string} request.tweetid - ID of tweet being commented on
+ * @param {string} request.hostid - Node ID where the original tweet is hosted
+ * @param {string} request.comment - JSON string of comment object (tweet format)
+ * @param {Array} args - Additional arguments (unused)
  */
-    const COMMENT_LIST = "comment_list_key"
-    const TWT_CONTENT_KEY = "core_data_of_tweet"
-    const APP_EXT = "com.example.twitterclone"
-    const APP_ID = request["aid"]
-    const appUserId = request["appuserid"]    // appUser who makes the comment
-    const tweetId = request["tweetid"]  // tweet commented to
-    const hostId = request["hostid"]    // host where the tweet is published.
-    const comment = JSON.parse(request['comment'])
 
+((request, args)=>{
+    // ============================================================================
+    // CONSTANTS AND INITIALIZATION
+    // ============================================================================
+    
+    const COMMENT_LIST = "comment_list_key"  // Redis key for tweet's comment list
+    const TWT_CONTENT_KEY = "core_data_of_tweet"  // Key for tweet content storage
+    const APP_EXT = "com.example.twitterclone"  // Application extension identifier
+    const APP_ID = request["aid"]  // Application identifier
+    const appUserId = request["appuserid"]  // ID of user posting the comment
+    const tweetId = request["tweetid"]  // ID of tweet being commented on
+    const hostId = request["hostid"]  // Node ID where the original tweet is hosted
+    const comment = JSON.parse(request['comment'])  // Parsed comment object (tweet format)
+
+    // ============================================================================
+    // MAIN EXECUTION
+    // ============================================================================
+    
     try {
-        const nodeId = lapi.GetVar("", "hostid")    // current node id
+        const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
+        
+        // ========================================================================
+        // REMOTE TWEET HANDLING
+        // ========================================================================
+        
         if (nodeId !== hostId) {
+            // Delegate comment creation to the node hosting the original tweet
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             let ret = lapi.RunMApp("add_comment", {aid: APP_ID, ver: "last",
                 nid: hostId, sid: systemSid,
                 hostid: hostId, appuserid: appUserId, tweetid: tweetId, comment: request["comment"]}, []
             )
-            // sync tweet to node from where appUser is being loaded.
+            
+            // Sync the original tweet and new comment to local node for caching
             try {
                 lapi.MiMeiSync(systemSid, "", tweetId, {})
                 lapi.MiMeiProvide(systemSid, "", tweetId)
 
-                // sync new comment of the tweet to local node
+                // Sync the newly created comment to local node
                 if (ret.success) {
                     lapi.MiMeiSync(systemSid, "", ret.commentId, {})
                     lapi.MiMeiProvide(systemSid, "", ret.commentId)
@@ -36,70 +72,97 @@
             } catch(e) {
                 console.error("add_comment: Error sync tweet to local node", e)
             }
+            
             console.log("add_comment remote: comment count", JSON.stringify(ret), nodeId)
             return ret
         } else {
-            // if the comment has originalTweetId, publish a new quoted tweet too.
+            // ====================================================================
+            // LOCAL TWEET HANDLING
+            // ====================================================================
+            
+            // Handle quoted tweets (comments with original tweet references)
             var retweetId = ""
             if (comment.originalTweetId && comment.originalAuthorId) {
+                // Create a quoted tweet if the comment references an original tweet
                 const ret = lapi.RunMApp("add_tweet", {aid: APP_ID, ver: "last",
                     hostid: hostId, tweet: request['comment']}, [])
                 if (ret.success) {
                     retweetId = ret.mid
                 }
+                // Remove original tweet references from comment object
                 delete comment.originalTweetId
                 delete comment.originalAuthorId
             }
 
-            // create a new tweet for the comment, which is a tweet object too.
+            // Create the comment object (treated as a tweet)
             const authSid = lapi.BELoginAsAuthor()
             const commentId = lapi.MMCreate(authSid, APP_ID, APP_EXT, "{{auto}}", 2, 0x07276704)
-            comment["mid"] = commentId
-            comment["timestamp"] = Date.now()
+            comment["mid"] = commentId  // Set the comment's unique identifier
+            comment["timestamp"] = Date.now()  // Set creation timestamp
     
+            // Store comment content and handle attachments
             const commentSid = lapi.MMOpen(authSid, commentId, "cur")
             lapi.Set(commentSid, TWT_CONTENT_KEY, comment)
+            
+            // Process any attachments (images, videos, etc.)
             comment.attachments?.forEach(element => {
-                // add attachment's reference to comment mid
+                // Add reference to attachment in comment's memory space
                 lapi.MMAddRef(commentSid, commentId, element.mid)
-                element.timestamp = Number(element.timestamp)
+                element.timestamp = Number(element.timestamp)  // Ensure timestamp is numeric
             });
+            
+            // Backup comment data and publish it
             lapi.MMBackup(commentSid, commentId, "", "delref=true")
-            lapi.MiMeiPublish(commentSid, "", commentId)     // publish the comment object as a tweet
+            lapi.MiMeiPublish(commentSid, "", commentId)  // Make comment available to other nodes
     
-            // add comment to comment_list of the tweet
+            // Add comment to the parent tweet's comment list
             const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
-            lapi.Zadd(tweetSid, COMMENT_LIST, getScorePair(commentId))
+            lapi.Zadd(tweetSid, COMMENT_LIST, getScorePair(commentId))  // Add with timestamp score
     
+            // Create reference from tweet to comment and update tweet
             lapi.MMAddRef(tweetSid, tweetId, commentId)
             lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
-            lapi.MiMeiPublish(authSid, "", tweetId)
+            lapi.MiMeiPublish(authSid, "", tweetId)  // Publish updated tweet
     
-            // update the score of the parent tweet in AppData,
-            // so that any change in the tweet will be reflected in the AppData.
+            // Update the parent tweet's score in application data
+            // This ensures changes to the tweet are reflected in the app's data layer
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
                 userid: appUserId, mid: tweetId}, [])
     
-            // In future, add the comment to appUser's comment list here
+            // Future enhancement: Track user's comments in their profile
+            // This would allow users to see all their comments in one place
             // lapi.RunMApp("add_comment_by_user", {aid: APP_ID, ver:"last",
             //      userid: userId, commentid: commentId}, [])
     
-            // return comment mid and number of comments on the tweet.
+            // Return success response with comment details
             let lastSid = lapi.MMOpen("", tweetId, "last")
-            const commentCount = lapi.Zcard(lastSid, COMMENT_LIST)
+            const commentCount = lapi.Zcard(lastSid, COMMENT_LIST)  // Get current comment count
             console.log("add_comment local: ", commentCount, commentId, retweetId)
             return {success: true, mid: commentId, count: commentCount, retweetid: retweetId}
         }
     } catch(e) {
+        // ========================================================================
+        // ERROR HANDLING
+        // ========================================================================
+        
         console.error("Error add_comment", e, JSON.stringify(request))
         return {success: false, message: e}
     }
 
+    // ============================================================================
+    // HELPER FUNCTIONS
+    // ============================================================================
+    
+    /**
+     * Creates a score pair object for Redis sorted set operations
+     * @param {string} mid - The member ID to associate with the score
+     * @returns {Object} ScorePair object with timestamp score and member ID
+     */
     function getScorePair(mid) {
         function ScorePair() {}
         const sp = new ScorePair()
-        sp.Score = Date.now()
-        sp.Member = mid
+        sp.Score = Date.now()  // Use current timestamp as score for chronological ordering
+        sp.Member = mid  // The ID of the comment or tweet
         return sp
     }
 })(request, args)

@@ -1,22 +1,60 @@
+/**
+ * Get Comments Function
+ * 
+ * This function retrieves comments for a specific tweet with pagination support.
+ * Comments are returned in reverse chronological order (newest first) and
+ * are fetched as complete tweet objects.
+ * 
+ * Key Features:
+ * - Paginated comment retrieval
+ * - Reverse chronological ordering (newest first)
+ * - Returns complete comment objects (tweets)
+ * - Efficient range-based querying
+ * 
+ * @param {Object} request - The request object containing query parameters
+ * @param {string} request.aid - Application ID
+ * @param {string} request.appuserid - ID of user requesting comments
+ * @param {string} request.tweetid - ID of tweet to get comments for
+ * @param {number} request.pn - Page number (0-based)
+ * @param {number} request.ps - Page size (number of comments per page)
+ * @param {Array} args - Additional arguments (unused)
+ * @returns {Array} Array of comment objects (tweets)
+ */
+
 ((request, args)=>{
-    try {
-        // Given authorId and tweetId, load all comments.
-        const COMMENT_LIST = "comment_list_key"
-        const appUserId = request["appuserid"]
-        const pageNumber = request['pn'];
-        const pageSize = request['ps'];
-        const startRank = pageNumber * pageSize;
-        const endRank = startRank + pageSize - 1;
-        const tweetId = request["tweetid"]
-        const mmsid = lapi.MMOpen("", tweetId, "last")
+    // ============================================================================
+    // CONSTANTS AND INITIALIZATION
+    // ============================================================================
     
+    try {
+        const COMMENT_LIST = "comment_list_key"  // Redis key for tweet's comment list
+        const appUserId = request["appuserid"]  // ID of user requesting comments
+        const pageNumber = request['pn'];  // Page number (0-based)
+        const pageSize = request['ps'];  // Number of comments per page
+        const startRank = pageNumber * pageSize;  // Starting index for pagination
+        const endRank = startRank + pageSize - 1;  // Ending index for pagination
+        const tweetId = request["tweetid"]  // ID of tweet to get comments for
+        const mmsid = lapi.MMOpen("", tweetId, "last")  // Open tweet's memory space
+    
+        // ========================================================================
+        // MAIN EXECUTION
+        // ========================================================================
+        
+        // Get comment IDs in reverse chronological order (newest first)
         const arr = lapi.Zrevrange(mmsid, COMMENT_LIST, startRank, endRank)
+        
+        // Convert comment IDs to full comment objects (tweets)
         return arr.map(sp => {
             return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
                 appuserid: appUserId, tweetid: sp.Member}, [])
         })
+        // Note: Filter could be added here to remove null/undefined results
         // .filter(e=> e)
     } catch(e) {
+        // ========================================================================
+        // ERROR HANDLING
+        // ========================================================================
+        
         console.error("Error get_comments:", JSON.stringify(request), e)
     }
 })(request, args)

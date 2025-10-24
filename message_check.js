@@ -77,13 +77,26 @@
         return []
     }
 
+    // ============================================================================
+    // HELPER FUNCTIONS
+    // ============================================================================
+    
+    /**
+     * Retrieves user data from the system
+     * @param {string} mid - User ID to retrieve data for
+     * @returns {Object|null} User data object or null if not found
+     */
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"
-        const mmsid = lapi.MMOpen("", mid, "last")
-        return lapi.Get(mmsid, OWNER_DATA_KEY)
+        const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+        const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+        return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
     }
 
-    // Simple function to convert timestamp to MM:SS format
+    /**
+     * Converts timestamp to MM:SS format for display
+     * @param {number} timestamp - Timestamp to format
+     * @returns {string} Formatted time string (MM:SS)
+     */
     function formatTime(timestamp) {
         if (!timestamp) return "00:00"
         const date = new Date(timestamp)

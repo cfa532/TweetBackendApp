@@ -1,15 +1,40 @@
 /**
- * Update tweet privacy by toggling the isPrivate property.
- * Delegates to the author's primary host if not currently on that node.
+ * Update Tweet Privacy Function
+ * 
+ * This function updates the privacy settings of a tweet by toggling the isPrivate property.
+ * It handles both local and remote tweet privacy updates, ensuring only tweet authors
+ * can modify their content's privacy settings.
+ * 
+ * Key Features:
+ * - Toggles tweet privacy (public/private)
+ * - Handles both local and remote tweet updates
+ * - Validates tweet authorship before allowing changes
+ * - Syncs changes across the distributed network
+ * - Updates tweet content and publishes changes
+ * 
+ * @param {Object} request - The request object containing privacy update data
+ * @param {string} request.aid - Application ID
+ * @param {string} request.appuserid - ID of user requesting privacy update
+ * @param {string} request.tweetid - ID of tweet to update privacy for
+ * @param {Array} args - Additional arguments (unused)
+ * @returns {boolean} New privacy status (true for private, false for public)
  */
 ((request, args) => {
-    const TWT_CONTENT_KEY = "core_data_of_tweet"
-    const APP_ID = request["aid"]
-    const appUserId = request["appuserid"]
-    const tweetId = request["tweetid"]
+    // ============================================================================
+    // CONSTANTS AND INITIALIZATION
+    // ============================================================================
+    
+    const TWT_CONTENT_KEY = "core_data_of_tweet"  // Key for tweet content storage
+    const APP_ID = request["aid"]  // Application identifier
+    const appUserId = request["appuserid"]  // ID of user requesting privacy update
+    const tweetId = request["tweetid"]  // ID of tweet to update privacy for
 
+    // ============================================================================
+    // MAIN EXECUTION
+    // ============================================================================
+    
     try {
-        const nodeId = lapi.GetVar("", "hostid")    // current node id
+        const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
         
         // Get user data to determine primary host
         const user = getUser(appUserId)
@@ -17,9 +42,13 @@
             throw new Error("User not found")
         }
 
+        // ========================================================================
+        // REMOTE USER HANDLING
+        // ========================================================================
+        
         // Check if we need to delegate to the user's primary host
         if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
-            // send the request to the remote host
+            // Delegate privacy update to the node hosting the user
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
 
             const ret = lapi.RunMApp("update_tweet_privacy", {
@@ -35,7 +64,7 @@
             
             try {
                 if (typeof ret === 'boolean') {
-                    // Remote call returned boolean directly
+                    // Remote call returned boolean directly - sync the updated tweet
                     lapi.MiMeiSync(systemSid, "", tweetId, {})
                     return ret
                 }
@@ -43,6 +72,10 @@
                 console.error("Error update_tweet_privacy: remote sync failed.", e, JSON.stringify(ret), JSON.stringify(request))
             }
         } else {
+            // ====================================================================
+            // LOCAL USER HANDLING
+            // ====================================================================
+            
             // We are on the user's primary host, perform the update locally
             const authSid = lapi.BELoginAsAuthor()
             
@@ -54,15 +87,23 @@
                 throw new Error("Tweet not found")
             }
             
+            // ================================================================
+            // AUTHORSHIP VALIDATION
+            // ================================================================
+            
             // Verify the user is the author of the tweet
             if (tweet.authorId !== appUserId) {
                 throw new Error("Only the tweet author can update privacy settings")
             }
             
+            // ================================================================
+            // PRIVACY UPDATE
+            // ================================================================
+            
             // Toggle the isPrivate property
             tweet.isPrivate = !tweet.isPrivate
             
-            // Update the tweet in storage
+            // Update the tweet in storage and publish changes
             lapi.Set(tweetSid, TWT_CONTENT_KEY, tweet)
             lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", tweetId)
@@ -71,12 +112,25 @@
             return tweet.isPrivate ? true : false
         }
     } catch(e) {
+        // ========================================================================
+        // ERROR HANDLING
+        // ========================================================================
+        
         console.error("Error update_tweet_privacy", e, JSON.stringify(request))
     }
 
+    // ============================================================================
+    // HELPER FUNCTIONS
+    // ============================================================================
+    
+    /**
+     * Retrieves user data from the system
+     * @param {string} mid - User ID to retrieve data for
+     * @returns {Object|null} User data object or null if not found
+     */
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"
-        const mmsid = lapi.MMOpen("", mid, "last")
-        return lapi.Get(mmsid, OWNER_DATA_KEY)
+        const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+        const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+        return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
     }
 })(request, args)
