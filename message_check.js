@@ -37,7 +37,7 @@
         
         // If user's primary node is not the current node, forward to primary node
         if (user.hostIds.findIndex(id => id === nodeId) !== 0) {
-            console.log("message_check: Forwarding to primary node", user.hostIds[0])
+            lapi.Debug("message_check: Forwarding to primary node", user.hostIds[0])
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             let ret = lapi.RunMApp("message_check", {aid: APP_ID, ver: "last",
                 nid: user.hostIds[0], sid: systemSid,
@@ -66,14 +66,14 @@
                 // If the message is newer than the last fetch time, it's unread
                 if (lastIncomingTS > lastTimeFetched) {
                     const lastMsg = lapi.Hget(msgSid, senderId, lastIncomingTS)
-                    console.log("message_check: NEW MESSAGE from", senderId, JSON.stringify(lastMsg), "at", formatTime(lastIncomingTS))
+                    lapi.Debug("message_check: NEW MESSAGE from", senderId, JSON.stringify(lastMsg), "at", formatTime(lastIncomingTS))
                     return lastMsg
                 }
             }).filter(e => e)
             return messageList  // Return list of most recent unread messages for notification
         }
     } catch(e) {
-        console.error("Error message_check", JSON.stringify(request), e)
+        lapi.Error("Error message_check", JSON.stringify(request), e)
         return []
     }
 

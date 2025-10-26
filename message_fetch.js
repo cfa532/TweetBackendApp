@@ -29,7 +29,7 @@
         
         // If user's primary node is not the current node, forward to primary node
         if (user.hostIds.findIndex(id => id === nodeId) !== 0) {
-            console.log("message_fetch: Forwarding to primary node", user.hostIds[0])
+            lapi.Debug("message_fetch: Forwarding to primary node", user.hostIds[0])
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             let ret = lapi.RunMApp("message_fetch", {aid: APP_ID, ver: "last",
                 nid: user.hostIds[0], sid: systemSid,
@@ -59,7 +59,7 @@
             let messages = tsList.map(e => {
                 // Messages from both parties are stored here, but we only read messages from the sender
                 const message = lapi.Hget(msgSid, senderId, e.Member)
-                console.log("message_fetch:", userId, "fetched", JSON.stringify(message), "from", senderId)
+                lapi.Debug("message_fetch:", userId, "fetched", JSON.stringify(message), "from", senderId)
                 return message
             }).filter(e => e)  // Filter out any null results
             
@@ -76,7 +76,7 @@
             return messages
         }
     } catch(e) {
-        console.error("Error message_fetch:", JSON.stringify(request), e)
+        lapi.Error("Error message_fetch:", JSON.stringify(request), e)
         return []
     }
 

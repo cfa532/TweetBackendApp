@@ -84,7 +84,7 @@
     // ERROR HANDLING
     // ========================================================================
     
-    console.error("Error retweet_add", JSON.stringify(request), e)
+    lapi.Error("Error retweet_add", JSON.stringify(request), e)
   }
 
   // ============================================================================

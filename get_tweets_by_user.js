@@ -82,7 +82,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error get_tweets_by_user:", JSON.stringify(request), e)
+        lapi.Error("Error get_tweets_by_user:", JSON.stringify(request), e)
         return {
             success: false,
             error: e.message

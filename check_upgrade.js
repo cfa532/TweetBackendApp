@@ -54,13 +54,13 @@
             domain: "t1.fireshare.store",  // Base URL for deeplinks and sharing
         }
         
-        console.log("check_upgrade", JSON.stringify(ret))
+        lapi.Debug("check_upgrade", JSON.stringify(ret))
         return ret
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error check_upgrade", JSON.stringify(request), e)
+        lapi.Error("Error check_upgrade", JSON.stringify(request), e)
     }
 })(request, args)

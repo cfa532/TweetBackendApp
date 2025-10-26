@@ -53,7 +53,7 @@
                     nid: user.hostIds[0], sid: systemSid,
                     userid: userId, tweetid: tweetId, isbookmarked: isBookmarked}, []
             )
-            console.log("toggle_bookmark_by_user remote", JSON.stringify(userData))
+            lapi.Debug("toggle_bookmark_by_user remote", JSON.stringify(userData))
             return userData
         } else {
             // ====================================================================
@@ -79,7 +79,7 @@
                 // Update user data and publish changes
                 lapi.MMBackup(userSid, userId, "", "delref=true")
             } catch(e) {
-                console.error("toggle_bookmark_by_user error", e, JSON.stringify(request))
+                lapi.Error("toggle_bookmark_by_user error", e, JSON.stringify(request))
                 throw e
             }
             
@@ -113,7 +113,7 @@
             const updatedUser = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
                 userid: userId}, []
             )
-            console.log("toggle_bookmark_by_user local", tweetId, JSON.stringify(updatedUser))
+            lapi.Debug("toggle_bookmark_by_user local", tweetId, JSON.stringify(updatedUser))
             return updatedUser
         }
     } catch(e) {
@@ -121,7 +121,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("toggle_bookmark_by_user error:", e, JSON.stringify(request))
+        lapi.Error("toggle_bookmark_by_user error:", e, JSON.stringify(request))
         
         // Return user data even if bookmark operation failed
         return lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",

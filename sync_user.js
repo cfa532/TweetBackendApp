@@ -32,6 +32,6 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error sync_user:", JSON.stringify(request), e)
+        lapi.Error("Error sync_user:", JSON.stringify(request), e)
     }
 })(request, args)

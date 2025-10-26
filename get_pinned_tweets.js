@@ -49,7 +49,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error get_pinned_tweets:", e, JSON.stringify(request))
+        lapi.Error("Error get_pinned_tweets:", e, JSON.stringify(request))
         return []
     }
 })(request, args)

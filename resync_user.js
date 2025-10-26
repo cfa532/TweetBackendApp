@@ -55,7 +55,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error resync_user:", e, JSON.stringify(request))
+        lapi.Error("Error resync_user:", e, JSON.stringify(request))
     }
 
     // ============================================================================

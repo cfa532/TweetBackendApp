@@ -37,16 +37,16 @@
         
         // Note: Provider IP lookup could be implemented for direct download URLs
         // let ip = lapi.RunMApp("get_provider", {aid: request["aid"], ver: "last", mid: mid}, [])
-        // console.log("Upgrade package mid", mid, ip)
+        // lapi.Debug("Upgrade package mid", mid, ip)
         // return mid.length>27 ? "http://"+ip+"/ipfs/"+mid : "http://"+ip+"/mm/"+mid
         
-        console.log("Upgrade package mid", mid)
+        lapi.Debug("Upgrade package mid", mid)
         return mid
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error download_upgrade", JSON.stringify(request), e)
+        lapi.Error("Error download_upgrade", JSON.stringify(request), e)
     }
 })(request, args)

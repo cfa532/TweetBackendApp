@@ -119,7 +119,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error login", loginOK, JSON.stringify(request), e)
+        lapi.Error("Error login", loginOK, JSON.stringify(request), e)
         
         if (loginOK) {
             // Login was successful but error occurred during processing

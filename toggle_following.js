@@ -65,7 +65,7 @@
             lapi.RunMApp("node_update_mid_by_score", {aid: APP_ID, ver:"last",
                 hostid: user.hostIds[0], userid: userId, mid: userId}, [])
                 
-            console.log("Toggle following remote", ret, userId, followedId, nodeId)
+            lapi.Debug("Toggle following remote", ret, userId, followedId, nodeId)
             return ret
         } else {
             // ====================================================================
@@ -84,7 +84,7 @@
                 lapi.MiMeiProvide(authSid, "", followedId)
                 followedUser = getUser(followedId)
                 
-                console.error("Error toggle_followings: followingUser", JSON.stringify(followedUser), followedId)
+                lapi.Error("Error toggle_followings: followingUser", JSON.stringify(followedUser), followedId)
                 if (!followedUser) 
                     return  // Cannot proceed if target user is unavailable
             }
@@ -101,7 +101,7 @@
                 // UNFOLLOW OPERATION
                 // ================================================================
                 
-                console.log(userId, "unfollowing", followedId, hostOfOther, nodeId)
+                lapi.Debug(userId, "unfollowing", followedId, hostOfOther, nodeId)
                 
                 // Get all tweet IDs from the user being unfollowed
                 const midList = lapi.RunMApp("get_tweet_id_list",
@@ -130,14 +130,14 @@
                     //     lapi.MiMeiUnprovide(authSid, "", otherId)
                     // }
                 } catch(e) {
-                    console.error("Error toggle_following: toggle_follower failed", e, JSON.stringify(request))
+                    lapi.Error("Error toggle_following: toggle_follower failed", e, JSON.stringify(request))
                 }
             } else {
                 // ================================================================
                 // FOLLOW OPERATION
                 // ================================================================
                 
-                console.log("toggle_following:", userId, "following", followedId, hostOfOther, nodeId)
+                lapi.Debug("toggle_following:", userId, "following", followedId, hostOfOther, nodeId)
                 
                 // Add user to following list with timestamp
                 lapi.Hset(userSid, FOLLOWINGS_LIST, followedId, Date.now())
@@ -146,7 +146,7 @@
                 const scorepairs = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
                     nid: hostOfOther, sid: systemSid, userid: followedId
                 }, [])
-                console.log("toggle_following: Following's tweets", JSON.stringify(scorepairs))
+                lapi.Debug("toggle_following: Following's tweets", JSON.stringify(scorepairs))
                 
                 // Add all their tweets to the following feed
                 lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...scorepairs)
@@ -168,7 +168,7 @@
                 //     const t = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
                 //         tweetid: tweetId, appuserid: userId}, [])
                 //     if (!t) {
-                //         console.log("Syncing tweet", tweetId, followedId)
+                //         lapi.Debug("Syncing tweet", tweetId, followedId)
                 //         lapi.MiMeiSync(authSid, "", tweetId, {})
                 //         // lapi.MiMeiProvide(authSid, "", tweetId)
                 //     }
@@ -181,7 +181,7 @@
                         userid: followedId, otherid: userId, isfollower: true
                     }, [])
                 } catch(e) {
-                    console.error("Error toggle_following: toggle_follower failed", e, JSON.stringify(request))
+                    lapi.Error("Error toggle_following: toggle_follower failed", e, JSON.stringify(request))
                 }
             }
     
@@ -201,7 +201,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error toggle_followings", JSON.stringify(request), e)
+        lapi.Error("Error toggle_followings", JSON.stringify(request), e)
     }
 
     // ============================================================================

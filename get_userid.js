@@ -40,6 +40,6 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error get_userid:", JSON.stringify(request), e)
+        lapi.Error("Error get_userid:", JSON.stringify(request), e)
     }
 })(request, args)

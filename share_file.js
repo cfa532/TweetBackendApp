@@ -65,7 +65,7 @@
             // If the mid exists, it has been shared, just return it
             const sharedObj = lapi.Hget(userSid, USER_SHARE_MID, mid)
             if (sharedObj) {
-                console.log("shared file", JSON.stringify(sharedObj))
+                lapi.Debug("shared file", JSON.stringify(sharedObj))
                 return mid
             }
 
@@ -88,7 +88,7 @@
             // Update file data and publish changes
             lapi.MMBackup(fsid, mid, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", mid)
-            console.log("shared file", mid, JSON.stringify(file))
+            lapi.Debug("shared file", mid, JSON.stringify(file))
     
             // ================================================================
             // UPDATE USER SHARING STATISTICS
@@ -113,7 +113,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error share_file", JSON.stringify(request), e)
+        lapi.Error("Error share_file", JSON.stringify(request), e)
     }
 
     // ============================================================================

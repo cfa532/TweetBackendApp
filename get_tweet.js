@@ -89,7 +89,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error get_tweet", JSON.stringify(request), e)
+        lapi.Error("Error get_tweet", JSON.stringify(request), e)
         return null
     }
 })(request, args)

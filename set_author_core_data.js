@@ -76,7 +76,7 @@
         
         // Check if we need to delegate to the primary host
         if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
-            console.log("set_author_core_data local", JSON.stringify(user))
+            lapi.Debug("set_author_core_data local", JSON.stringify(user))
             
             // Delegate the update to the primary host
             const ret = lapi.RunMApp("set_author_core_data", {
@@ -87,7 +87,7 @@
                 user: request["user"]
             }, [])
             
-            console.log("set_author_core_data local ret=", JSON.stringify(ret))
+            lapi.Debug("set_author_core_data local ret=", JSON.stringify(ret))
             
             // Sync the updated data from the remote host (assume the remote host is up to date)
             lapi.MiMeiSync(systemSid, "", user.mid, {})
@@ -100,7 +100,7 @@
                 userid: user.mid
             }, [])
             
-            console.log("set_author_core_data local newUser=", JSON.stringify(newUser))
+            lapi.Debug("set_author_core_data local newUser=", JSON.stringify(newUser))
             return ret
         } else {
             // ====================================================================
@@ -161,7 +161,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error set_auth_core_data", JSON.stringify(request), e)
+        lapi.Error("Error set_auth_core_data", JSON.stringify(request), e)
         return {status: "failure", reason: "Update failed"}
     }
 })(request, args)

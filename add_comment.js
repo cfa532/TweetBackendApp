@@ -70,10 +70,10 @@
                     lapi.MiMeiProvide(systemSid, "", ret.commentId)
                 }
             } catch(e) {
-                console.error("add_comment: Error sync tweet to local node", e)
+                lapi.Error("add_comment: Error sync tweet to local node", e)
             }
             
-            console.log("add_comment remote: comment count", JSON.stringify(ret), nodeId)
+            lapi.Debug("add_comment remote: comment count", JSON.stringify(ret), nodeId)
             return ret
         } else {
             // ====================================================================
@@ -137,7 +137,7 @@
             // Return success response with comment details
             let lastSid = lapi.MMOpen("", tweetId, "last")
             const commentCount = lapi.Zcard(lastSid, COMMENT_LIST)  // Get current comment count
-            console.log("add_comment local: ", commentCount, commentId, retweetId)
+            lapi.Debug("add_comment local: ", commentCount, commentId, retweetId)
             return {success: true, mid: commentId, count: commentCount, retweetid: retweetId}
         }
     } catch(e) {
@@ -145,7 +145,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error add_comment", e, JSON.stringify(request))
+        lapi.Error("Error add_comment", e, JSON.stringify(request))
         return {success: false, message: e}
     }
 

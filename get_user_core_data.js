@@ -61,7 +61,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("ERROR get_user_core_data", JSON.stringify(request), e)
+        lapi.Error("ERROR get_user_core_data", JSON.stringify(request), e)
         return null
     }
 })(request, args)

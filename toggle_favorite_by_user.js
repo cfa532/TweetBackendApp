@@ -54,7 +54,7 @@
                     nid: user.hostIds[0], sid: systemSid,
                     userid: userId, tweetid: tweetId, isfavorite: isFavorite }, []
             )
-            console.log("toggle_favorite_by_user remote", JSON.stringify(userData))
+            lapi.Debug("toggle_favorite_by_user remote", JSON.stringify(userData))
             return userData  // User local data will be updated by Leither
         } else {
             // ====================================================================
@@ -80,7 +80,7 @@
                 // Update user data and publish changes
                 lapi.MMBackup(userSid, userId, "", "delref=true")
             } catch(e) {
-                console.error("toggle_favorite_by_user error", e, JSON.stringify(request))
+                lapi.Error("toggle_favorite_by_user error", e, JSON.stringify(request))
                 throw e
             }
             
@@ -114,7 +114,7 @@
             const updatedUser = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
                 userid: userId}, []
             )
-            console.log("toggle_favorite_by_user local", tweetId, JSON.stringify(updatedUser))
+            lapi.Debug("toggle_favorite_by_user local", tweetId, JSON.stringify(updatedUser))
             return updatedUser
         }
     } catch(e) {
@@ -122,7 +122,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("toggle_favorite_by_user error", e, JSON.stringify(request))
+        lapi.Error("toggle_favorite_by_user error", e, JSON.stringify(request))
         
         // Return user data even if favorite operation failed
         return lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",

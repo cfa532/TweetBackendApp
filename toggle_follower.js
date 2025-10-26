@@ -85,14 +85,14 @@
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
                 userid: userId, mid: userId}, [])
             
-            console.log(userId, "with follower", otherId, isFollower)
+            lapi.Debug(userId, "with follower", otherId, isFollower)
         }
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error toggle_follower", JSON.stringify(request), e)
+        lapi.Error("Error toggle_follower", JSON.stringify(request), e)
     }
 
     // ============================================================================

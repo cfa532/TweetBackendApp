@@ -62,14 +62,14 @@
             
             // Sync the newly created tweet to local node for caching
             // Note: Remote host may return result directly to caller in some cases
-            console.log("add_tweet remote ret=", JSON.stringify(ret))
+            lapi.Info("add_tweet remote ret=", JSON.stringify(ret))
             try {
                 if (ret.success) {
                     lapi.MiMeiSync(systemSid, "", ret.mid, {})  // Sync new tweet immediately
                     lapi.MiMeiProvide(systemSid, "", ret.mid)  // Make tweet available locally
                 }
             } catch(e) {
-                console.error("Error add_tweet: remote not ready.", e, JSON.stringify(ret), JSON.stringify(request))
+                lapi.Error("Error add_tweet: remote not ready.", e, JSON.stringify(ret), JSON.stringify(request))
             }
             return ret
         } else {
@@ -79,7 +79,7 @@
             
             // Verify the request is from an authorized friend/node
             const friendId = getFriendByAppCode(request.nodeappcode)
-            console.log("add_tweet: friendId=", friendId)
+            lapi.Debug("add_tweet: friendId=", friendId)
             if (!friendId) {
                 throw new Error("Not a friend of the host")
             }
@@ -118,7 +118,7 @@
                     lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
                     lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
                 } catch(e) {
-                    console.error("add_tweet: Error sync original tweet", e, JSON.stringify(tweet))
+                    lapi.Error("add_tweet: Error sync original tweet", e, JSON.stringify(tweet))
                 }
             }
             // Create reference from author to tweet and update author data
@@ -131,22 +131,14 @@
                 userid: tweet.authorId, mid: authorId}, [])
 
             // Return success response with tweet ID
-            console.log("add_tweet local", JSON.stringify(tweet))
+            lapi.Info("add_tweet local", JSON.stringify(tweet))
             return {success: true, mid: tweetId}
         }
     } catch(e) {
-        // ========================================================================
-        // ERROR HANDLING
-        // ========================================================================
-        
-        console.error("Error add_tweet", e, JSON.stringify(request))
+        lapi.Error("Error add_tweet:", e, JSON.stringify(request))
         return {success: false, message: e}
     }
 
-    // ============================================================================
-    // HELPER FUNCTIONS
-    // ============================================================================
-    
     /**
      * Retrieves user data from the system
      * @param {string} mid - User ID to retrieve data for
@@ -182,13 +174,13 @@
             // Called from frontend, not a peer node - use user's host ID
 			return user.hostIds[0]
 		}
-		console.log("nodeAppCode=", nodeAppCode)
+		lapi.Trace("nodeAppCode=", nodeAppCode)
 
 		// Retrieve node ID and app ID from session
 		const fri = lapi.SessionGet(nodeAppCode, "nodeid")
 		const forapp = lapi.SessionGet(nodeAppCode, "forapp")
-		console.log("forapp=", forapp)
-		console.log("appid=", APP_ID)
+		lapi.Trace("forapp=", forapp)
+		lapi.Trace("appid=", APP_ID)
 
 		// Validate app ID matches expected application
 		if (APP_ID !== forapp) {

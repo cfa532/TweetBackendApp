@@ -87,7 +87,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error block_user:", e, JSON.stringify(request))
+        lapi.Error("Error block_user:", e, JSON.stringify(request))
         return {success: false}
     }
 

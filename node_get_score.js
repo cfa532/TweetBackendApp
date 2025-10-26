@@ -48,6 +48,6 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error node_get_score", e, JSON.stringify(request))
+        lapi.Error("Error node_get_score", e, JSON.stringify(request))
     }
 })(request, args)

@@ -36,6 +36,6 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error get_followings", JSON.stringify(request), e)
+        lapi.Error("Error get_followings", JSON.stringify(request), e)
     }
 })(request, args)

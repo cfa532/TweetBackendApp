@@ -31,6 +31,6 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Open mac file", JSON.stringify(request), e)
+        lapi.Error("Open mac file", JSON.stringify(request), e)
     }
 })(request, args)

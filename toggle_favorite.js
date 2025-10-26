@@ -63,11 +63,11 @@
                     lapi.MiMeiProvide(systemSid, "", tweetId)
                 // }
             } catch(e) {
-                console.error("toggle_favorite Error sync tweet", e, JSON.stringify(ret))
+                lapi.Error("toggle_favorite Error sync tweet", e, JSON.stringify(ret))
             }
             
             // Return format: {user: user, isFavorite: isFavorite, count: count}
-            console.log("toggle_favorite remote tweet", JSON.stringify(ret), appUserId, tweetId)
+            lapi.Debug("toggle_favorite remote tweet", JSON.stringify(ret), appUserId, tweetId)
             return ret
         } else {
             // ====================================================================
@@ -116,7 +116,7 @@
                 userid: appUserId, tweetid: tweetId, isfavorite: updatedTweet.favorites[0]}, []
             )
             
-            console.log("toggle_favorite local tweet", JSON.stringify(updatedTweet), JSON.stringify(updatedUser))
+            lapi.Debug("toggle_favorite local tweet", JSON.stringify(updatedTweet), JSON.stringify(updatedUser))
             return {success: true, user: updatedUser, tweet: updatedTweet }
         }
     } catch(e) {
@@ -124,7 +124,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error toggle_favorite", e, JSON.stringify(request))
+        lapi.Error("Error toggle_favorite", e, JSON.stringify(request))
         return {success: false, error: e}
     }
 

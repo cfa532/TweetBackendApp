@@ -60,7 +60,7 @@
                 tweetid: tweetId
             }, [])
             
-            console.log("update_tweet_privacy remote ret=", JSON.stringify(ret))
+            lapi.Debug("update_tweet_privacy remote ret=", JSON.stringify(ret))
             
             try {
                 if (typeof ret === 'boolean') {
@@ -69,7 +69,7 @@
                     return ret
                 }
             } catch(e) {
-                console.error("Error update_tweet_privacy: remote sync failed.", e, JSON.stringify(ret), JSON.stringify(request))
+                lapi.Error("Error update_tweet_privacy: remote sync failed.", e, JSON.stringify(ret), JSON.stringify(request))
             }
         } else {
             // ====================================================================
@@ -108,7 +108,7 @@
             lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", tweetId)
             
-            console.log("update_tweet_privacy local", JSON.stringify(tweet))
+            lapi.Debug("update_tweet_privacy local", JSON.stringify(tweet))
             return tweet.isPrivate ? true : false
         }
     } catch(e) {
@@ -116,7 +116,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error update_tweet_privacy", e, JSON.stringify(request))
+        lapi.Error("Error update_tweet_privacy", e, JSON.stringify(request))
     }
 
     // ============================================================================

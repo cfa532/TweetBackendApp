@@ -30,6 +30,6 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error open_temp_file", JSON.stringify(request), e)
+        lapi.Error("Error open_temp_file", JSON.stringify(request), e)
     }
 })(request, args)

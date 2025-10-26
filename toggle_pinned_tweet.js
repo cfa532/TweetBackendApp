@@ -47,7 +47,7 @@
             )
             
             // User mimei will be updated by system
-            console.log("Toggle top tweets remote ret=", JSON.stringify(ret))
+            lapi.Debug("Toggle top tweets remote ret=", JSON.stringify(ret))
             return ret
         } else {
             // ====================================================================
@@ -86,7 +86,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error toggle_pinned_tweet", JSON.stringify(request), e)
+        lapi.Error("Error toggle_pinned_tweet", JSON.stringify(request), e)
     }
 
     // ============================================================================

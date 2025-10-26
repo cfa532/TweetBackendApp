@@ -61,10 +61,10 @@
                     lapi.MiMeiProvide(systemSid, "", tweetId)
                 // }
             } catch(e) {
-                console.error("toggle_bookmark Error provide tweet", e, JSON.stringify(ret))
+                lapi.Error("toggle_bookmark Error provide tweet", e, JSON.stringify(ret))
             }
             
-            console.log("toggle_bookmark remote ret=", JSON.stringify(ret))
+            lapi.Debug("toggle_bookmark remote ret=", JSON.stringify(ret))
             return ret
         } else {
             // ====================================================================
@@ -83,7 +83,7 @@
                 userid: userId, tweetid: tweetId, isbookmarked: updatedTweet.favorites[1]}, []
             )
             
-            console.log("toggle_bookmark local tweet", JSON.stringify(updatedTweet), JSON.stringify(updatedUser))
+            lapi.Debug("toggle_bookmark local tweet", JSON.stringify(updatedTweet), JSON.stringify(updatedUser))
             return {success: true, user: updatedUser, tweet: updatedTweet}
         }
     } catch(e) {
@@ -91,7 +91,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("toggle_bookmark error", e, JSON.stringify(request))
+        lapi.Error("toggle_bookmark error", e, JSON.stringify(request))
         return {success: false, error: e}
     }
 
@@ -141,7 +141,7 @@
                 tweetid: tweetId, appuserid: appUserId}, []
             )
         } catch(e) {
-            console.error("Error toggleBookmarkOfTweet", JSON.stringify(request), e)
+            lapi.Error("Error toggleBookmarkOfTweet", JSON.stringify(request), e)
             return null
         }    
     }

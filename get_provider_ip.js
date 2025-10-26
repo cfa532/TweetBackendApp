@@ -74,7 +74,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error get_provider_ip:", e, JSON.stringify(request));
+        lapi.Error("Error get_provider_ip:", e, JSON.stringify(request));
         return ""
     }
 

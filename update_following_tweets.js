@@ -42,7 +42,7 @@
                 hostid: hostId, 
                 appuserid: userId
             }, [])
-            console.log("update_following_tweets ret from remote host", JSON.stringify(ret))
+            lapi.Debug("update_following_tweets ret from remote host", JSON.stringify(ret))
             
             // Get the updated score from the remote host
             const remoteScore = lapi.RunMApp("node_get_score", { 
@@ -56,7 +56,7 @@
             
             // Compare with local score and sync if different
             const localScore = lapi.Zscore(systemSid, userId, userId)
-            console.log("update_following_tweets remoteScore", remoteScore, "localScore", localScore)
+            lapi.Debug("update_following_tweets remoteScore", remoteScore, "localScore", localScore)
             
             if (remoteScore !== localScore) {
                 lapi.MiMeiSync(systemSid, "", userId, {})
@@ -67,7 +67,7 @@
 
             // Get new tweets since the last processed score
             const arr = lapi.Zrangebyscore(userSid, FOLLOWINGS_TWEETS, lastScore, Date.now(), 0, 1000)
-            console.log("update_following_tweets new tweets", lastScore, JSON.stringify(arr))
+            lapi.Debug("update_following_tweets new tweets", lastScore, JSON.stringify(arr))
             
             // Fetch tweet details for each new tweet
             const tweets = []
@@ -107,7 +107,7 @@
             // This host is the single source of truth, process followings directly.
             const mmsid = lapi.MMOpen(authSid, userId, "cur")
             const followings = lapi.Hkeys(mmsid, FOLLOWINGS_LIST) // mid list of its followings
-            console.log("update_following_tweets remote", JSON.stringify(followings))
+            lapi.Debug("update_following_tweets remote", JSON.stringify(followings))
 
             // Process each following to get their new tweets
             const tweets = []
@@ -116,7 +116,7 @@
                 tweets.push(...updateUser(uid, lastScore, mmsid))
             }
         
-            console.log("update_following_tweets remote new tweets.", JSON.stringify(tweets))
+            lapi.Debug("update_following_tweets remote new tweets.", JSON.stringify(tweets))
             
             // If we found new tweets, backup and publish the changes
             if (tweets.length > 0) {
@@ -131,7 +131,7 @@
             }
         }
     } catch(e) {
-        console.error("Error update_following_tweets:", e, JSON.stringify(request))
+        lapi.Error("Error update_following_tweets:", e, JSON.stringify(request))
         return {
             success: false,
             error: e.message
@@ -154,7 +154,7 @@
             const user = lapi.Get(mmsid, OWNER_DATA_KEY)
             
             if (!user) {
-                console.error("Error update_following_tweets: updateUser: user not found", uid, nodeId)
+                lapi.Error("Error update_following_tweets: updateUser: user not found", uid, nodeId)
                 return []
             }
             
@@ -171,7 +171,7 @@
             
             // Get new tweets since lastScore by the uid
             const arr = lapi.Zrangebyscore(mmsid, TWT_LIST_KEY, lastScore, Date.now(), 0, 1000)
-            console.log("update_following_tweets: updateUser: arr", JSON.stringify(arr), lastScore, uid)
+            lapi.Debug("update_following_tweets: updateUser: arr", JSON.stringify(arr), lastScore, uid)
             
             // Add new tweets to the followings_tweets sorted set
             if (arr.length > 0) {
@@ -196,7 +196,7 @@
             
             return tweets
         } catch(e) {
-            // console.error("Error update_following_tweets: updateUser", e, uid)
+            // lapi.Error("Error update_following_tweets: updateUser", e, uid)
             return []
         }
     }

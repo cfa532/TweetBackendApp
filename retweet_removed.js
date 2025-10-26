@@ -87,7 +87,7 @@
     // ERROR HANDLING
     // ========================================================================
     
-    console.error("Error retweet_removed", JSON.stringify(request), e)
+    lapi.Error("Error retweet_removed", JSON.stringify(request), e)
   }
 
   // ============================================================================

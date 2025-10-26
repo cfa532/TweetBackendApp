@@ -40,7 +40,7 @@
             // User not found locally, get provider IP for remote access
             const ip = lapi.RunMApp("get_provider_ip", {aid: request.aid, ver:"last",
                 mid: userId}, [])
-            console.log("get_user: new ip", ip)
+            lapi.Debug("get_user: new ip", ip)
             
             if (ip) {
                 // Return provider IP for remote user access
@@ -55,6 +55,6 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error get_user:", e, JSON.stringify(request))
+        lapi.Error("Error get_user:", e, JSON.stringify(request))
     }
 })(request, args)

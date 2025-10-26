@@ -34,7 +34,7 @@
         // Store the chunk at the specified offset
         lapi.MFSetData(fsid, chunkData, offset);
         
-        console.log(`Received chunk at offset ${offset}, size: ${chunkData.length} bytes`);
+        lapi.Debug(`Received chunk at offset ${offset}, size: ${chunkData.length} bytes`);
         
         return {
             fsid: fsid,
@@ -43,7 +43,7 @@
         };
         
     } catch(e) {
-        console.error("Error in upload_compressed_hls:", JSON.stringify(request), e);
+        lapi.Error("Error in upload_compressed_hls:", JSON.stringify(request), e);
         throw e;
     }
     
@@ -59,7 +59,7 @@
         try {
             // Create a temporary directory for extraction
             const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hls_extract_'));
-            console.log(`Extracting to temp directory: ${tempDir}`);
+            lapi.Debug(`Extracting to temp directory: ${tempDir}`);
             
             // Get the complete zip file data from the temp file
             const zipData = lapi.MFGetData(fsid, 0, -1); // Get all data
@@ -67,7 +67,7 @@
             
             // Write zip data to file
             fs.writeFileSync(zipPath, zipData);
-            console.log(`Zip file written to: ${zipPath}`);
+            lapi.Debug(`Zip file written to: ${zipPath}`);
             
             // Extract the zip file
             try {
@@ -76,14 +76,14 @@
                     stdio: 'pipe',
                     timeout: 30000 // 30 second timeout
                 });
-                console.log("Zip file extracted successfully");
+                lapi.Debug("Zip file extracted successfully");
             } catch (extractError) {
                 // If unzip fails, try with node modules if available
                 try {
                     const AdmZip = require('adm-zip');
                     const zip = new AdmZip(zipPath);
                     zip.extractAllTo(tempDir, true);
-                    console.log("Zip file extracted using AdmZip");
+                    lapi.Debug("Zip file extracted using AdmZip");
                 } catch (nodeZipError) {
                     throw new Error(`Failed to extract zip file: ${extractError.message}`);
                 }
@@ -100,7 +100,7 @@
                 throw new Error(`Invalid HLS structure: ${hlsValidation.error}`);
             }
             
-            console.log(`Valid HLS structure found with ${hlsValidation.segmentCount} segments`);
+            lapi.Debug(`Valid HLS structure found with ${hlsValidation.segmentCount} segments`);
             
             // Create a new fsid for the extracted HLS directory
             const hlsFsid = lapi.MFOpenTempFile(authSid);
@@ -129,7 +129,7 @@
             };
             
         } catch (error) {
-            console.error("Error extracting HLS:", error);
+            lapi.Error("Error extracting HLS:", error);
             throw error;
         }
     }

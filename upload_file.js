@@ -36,12 +36,12 @@
         lapi.MMBackup(authSid, userId, "", "delref=true")
         lapi.MiMeiPublish(authSid, "", userId)
 
-        console.log("Attached to user a file mid=", userId)
+        lapi.Debug("Attached to user a file mid=", userId)
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("upload_package error:", e)
+        lapi.Error("upload_package error:", e)
     }
 })(request, args);

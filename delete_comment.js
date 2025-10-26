@@ -60,7 +60,7 @@
                 lapi.MiMeiSync(systemSid, "", tweetId, {})
                 lapi.MiMeiProvide(systemSid, "", tweetId)
             } catch(e) {
-                console.error("delete_comment Error sync tweet", e, JSON.stringify(ret))
+                lapi.Error("delete_comment Error sync tweet", e, JSON.stringify(ret))
             }
             return ret
         } else {
@@ -89,7 +89,7 @@
             // Return updated comment count
             let lastSid = lapi.MMOpen("", tweetId, "last")
             const commentCount = lapi.Zcard(lastSid, COMMENT_LIST)
-            console.log("delete_comment local: ", commentCount, commentId)
+            lapi.Debug("delete_comment local: ", commentCount, commentId)
             return {success: true, commentId: commentId, count: commentCount}
         }
     } catch(e) {
@@ -97,7 +97,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error delete_comment", e, JSON.stringify(request))
+        lapi.Error("Error delete_comment", e, JSON.stringify(request))
         return {success: false, message: e}
     }
 })(request, args)

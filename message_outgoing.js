@@ -40,7 +40,7 @@
             const authSid = lapi.BELoginAsAuthor()
             const msgMid = lapi.MMCreate(authSid, APP_ID, APP_EXT, senderId+"_"+MESSAGE_MIMEI, 2, 0x07276704)
             const msgSid = lapi.MMOpen(authSid, msgMid, "cur")
-            // console.log(senderId, "outgoing message to", receiptId, request["msg"], msgMid)
+            // lapi.Debug(senderId, "outgoing message to", receiptId, request["msg"], msgMid)
 
             // Create score pair for Zset indexing
             const sp = new ScorePair()
@@ -56,7 +56,7 @@
             return true
         }
     } catch(e) {
-        console.error("Error message_outgoing", e, JSON.stringify(request))
+        lapi.Error("Error message_outgoing", e, JSON.stringify(request))
     }
 
     function ScorePair() {}

@@ -22,5 +22,5 @@
     // ============================================================================
     
     const msg = request["msg"]  // Log message to output
-    console.log(msg)  // Output message to console
+    lapi.Debug(msg)  // Output message to console
 })(request, args)

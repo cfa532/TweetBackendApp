@@ -59,7 +59,7 @@
                 nid: user.hostIds[0], sid: systemSid,
                 tweetid: tweetId, userid: userId}, []
             )
-            console.log("delete_tweet: remote ret=", JSON.stringify(ret))
+            lapi.Debug("delete_tweet: remote ret=", JSON.stringify(ret))
             return ret
         } else {
             // ====================================================================
@@ -70,7 +70,7 @@
             const authSid = lapi.BELoginAsAuthor()
             const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
             const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
-            console.log("delete_tweet: tweet=", JSON.stringify(tweet))
+            lapi.Debug("delete_tweet: tweet=", JSON.stringify(tweet))
 
             // Only tweet authors can permanently delete tweets
             // Other users can only remove tweets from their personal lists
@@ -113,7 +113,7 @@
             lapi.MMBackup(userSid, userId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", userId)
 
-            console.log("Delete tweet ", JSON.stringify(tweet), tweetId)
+            lapi.Debug("Delete tweet %s %s", tweetId, JSON.stringify(tweet))
     
             // Update the user's score in application data
             lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
@@ -122,11 +122,7 @@
             return {tweetid: tweetId, success: true}
         }
     } catch(e) {
-        // ========================================================================
-        // ERROR HANDLING
-        // ========================================================================
-        
-        console.error("Error delete_tweet:", e, JSON.stringify(request))
+        lapi.Error("Error delete_tweet", e, JSON.stringify(request))
         return {message: e, success: false}
     }
 

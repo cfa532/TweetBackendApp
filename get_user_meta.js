@@ -55,7 +55,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error('Error get_user_meta', JSON.stringify(request), e);
+        lapi.Error('Error get_user_meta', JSON.stringify(request), e);
     }
 
     // ============================================================================
@@ -79,7 +79,7 @@
                 let tweet = lapi.RunMApp('get_tweet', { aid: request.aid, ver: 'last',
                     appuserid: appUserId, tweetid: tweetId }, []);
 
-                console.log("get_user_meta:", tweetType, tweetId, JSON.stringify(tweet))
+                lapi.Debug("get_user_meta:", tweetType, tweetId, JSON.stringify(tweet))
                 return tweet;
             })
         return arr;

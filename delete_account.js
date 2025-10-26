@@ -66,14 +66,14 @@
                     )
                 })
             } catch(e) {
-                console.error("Error delete_account: delete tweets", e, JSON.stringify(request))
+                lapi.Error("Error delete_account: delete tweets", e, JSON.stringify(request))
             }
 
             // Remove user account and all associated data
             const authSid = lapi.BELoginAsAuthor()
             lapi.MiMeiUnpublish(authSid, "", userId)  // Remove user from network
             lapi.MMDelVers(authSid, userId)  // Delete all versions of user data
-            console.log("Deleted account ", userId)
+            lapi.Debug("Deleted account ", userId)
             return {success: true}
         }
     } catch(e) {
@@ -81,7 +81,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error delete_account:", e, JSON.stringify(request))
+        lapi.Error("Error delete_account:", e, JSON.stringify(request))
         return {success: false, message: e}
     }
 

@@ -58,6 +58,6 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error upload_ipfs:", JSON.stringify(request), e)
+        lapi.Error("Error upload_ipfs:", JSON.stringify(request), e)
     }
 })(request, args);

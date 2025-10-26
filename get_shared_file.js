@@ -30,6 +30,6 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error get_shared_file", JSON.stringify(request), e)
+        lapi.Error("Error get_shared_file", JSON.stringify(request), e)
     }
 })(request, args)

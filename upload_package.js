@@ -47,13 +47,13 @@
         // Publish the package to the network
         lapi.MiMeiPublish(authSid, "", mid)
         
-        console.log("upload_package"+ APP_MINI, mid)
+        lapi.Debug("upload_package"+ APP_MINI, mid)
         return mid  // Return the created Mimei ID
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("upload_package error:", e)
+        lapi.Error("upload_package error:", e)
     }
 })(request, args);

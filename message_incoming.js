@@ -56,7 +56,7 @@
             // Update the incoming_message indicator with the last message from a sender
             // Used by message_check.js to determine if there are new unread messages
             lapi.Hset(msgSid, LAST_INCOMING_MSG, senderId, sp.Member)
-            console.log("message_incoming:", senderId, "to", receiptId, request["msg"])
+            lapi.Debug("message_incoming:", senderId, "to", receiptId, request["msg"])
 
             // Store message in receiver's local database:
             // 1. Add to Zset for fast chronological querying by sender
@@ -67,7 +67,7 @@
             return {success: true}
         }
     } catch(e) {
-        console.error("Error message_incoming", JSON.stringify(request), e)
+        lapi.Error("Error message_incoming", JSON.stringify(request), e)
         return {success: false, error: e.message}
     }
 

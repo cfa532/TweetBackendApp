@@ -48,13 +48,13 @@
             })
         });
         
-        console.log(ips, ip)
+        lapi.Debug(ips, ip)
         return ip
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error get_shared_file_ip", JSON.stringify(request), e)
+        lapi.Error("Error get_shared_file_ip", JSON.stringify(request), e)
     }
 })(request, args)

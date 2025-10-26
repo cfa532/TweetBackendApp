@@ -36,6 +36,6 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error get_blocked_users", e, JSON.stringify(request))
+        lapi.Error("Error get_blocked_users", e, JSON.stringify(request))
     }
 })(request, args)

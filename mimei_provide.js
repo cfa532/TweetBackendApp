@@ -42,7 +42,7 @@
             
             // Provide content to DHT network for discovery
             let dhtreply = lapi.MiMeiProvide(authSid, "", targetId)
-            console.log("provide", targetId, JSON.stringify(dhtreply))
+            lapi.Debug("provide", targetId, JSON.stringify(dhtreply))
         } else {
             // ================================================================
             // UNPROVIDE CONTENT FROM DHT NETWORK
@@ -53,13 +53,13 @@
             
             // Delete all versions of the content
             lapi.MMDelVers(authSid, targetId)
-            console.log("Unprovide", targetId, JSON.stringify(dhtreply))
+            lapi.Debug("Unprovide", targetId, JSON.stringify(dhtreply))
         }
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error provide", JSON.stringify(request), e)
+        lapi.Error("Error provide", JSON.stringify(request), e)
     }
 })(request, args)

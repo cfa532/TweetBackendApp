@@ -81,7 +81,7 @@
         
         // If scores differ, sync and update the local score
         if (remoteScore !== localScore) {
-            console.log("node_update_mid_by_score:", mid, "new vs old score:", remoteScore, localScore, "of user", userId)
+            lapi.Debug("node_update_mid_by_score:", mid, "new vs old score:", remoteScore, localScore, "of user", userId)
             
             // Sync the mid data from remote host
             lapi.MiMeiSync(systemSid, "", mid, {})
@@ -95,7 +95,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error node_update_mid_by_score", e, JSON.stringify(request))
+        lapi.Error("Error node_update_mid_by_score", e, JSON.stringify(request))
     }
     // ============================================================================
     // HELPER FUNCTIONS

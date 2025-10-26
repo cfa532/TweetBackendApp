@@ -71,6 +71,6 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error set_user_avatar", e, JSON.stringify(request))
+        lapi.Error("Error set_user_avatar", e, JSON.stringify(request))
     }
 })(request, args)

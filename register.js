@@ -37,7 +37,7 @@
     // ============================================================================
     
     try {
-        console.log("nodeId", nodeId, request["user"], request["followings"])
+        lapi.Debug("nodeId", nodeId, request["user"], request["followings"])
         
         // ========================================================================
         // REMOTE USER REGISTRATION
@@ -103,14 +103,14 @@
                     lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
                         userid: user.mid, followingid: mid}, [])
                 } catch(e) {
-                    console.error("Error in register when toggle_following", e, JSON.stringify(request))
+                    lapi.Error("Error in register when toggle_following", e, JSON.stringify(request))
                 }
             });
     
             // Note: App data update could be implemented here
             // lapi.RunMApp("update_app_data", {aid: APP_ID, ver: "last", user: JSON.stringify(user)}, [])
             
-            console.log("User registered.", JSON.stringify(user))
+            lapi.Debug("User registered.", JSON.stringify(user))
             delete user.password  // Remove sensitive data before returning
             return {user: JSON.stringify(user), status: "success"}
         }
@@ -119,7 +119,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error register", JSON.stringify(request), e)
+        lapi.Error("Error register", JSON.stringify(request), e)
         return {status: "failure", reason: e.message || String(e)}
     }
 })(request, args)

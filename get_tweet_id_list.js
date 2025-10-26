@@ -47,7 +47,7 @@
                     return e
                 }
             } catch(e) {
-                console.error("Error get_tweet_id_list", e, JSON.stringify(request))
+                lapi.Error("Error get_tweet_id_list", e, JSON.stringify(request))
                 return null
             }
         }).filter(e=> e)  // Remove null results
@@ -58,7 +58,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error get_tweet_id_list", e, JSON.stringify(request))
+        lapi.Error("Error get_tweet_id_list", e, JSON.stringify(request))
         return []
     }
 })(request, args)

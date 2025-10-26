@@ -44,7 +44,7 @@
         // ========================================================================
         
         if (nodeId !== hostId) {
-            console.log("refresh_tweet", tweetId, "on", nodeId, "from host", hostId)
+            lapi.Debug("refresh_tweet", tweetId, "on", nodeId, "from host", hostId)
             
             // Make sure the current node is up to date by syncing from author's host
             lapi.RunMApp("node_update_mid_by_score", {aid: request["aid"], ver:"last",
@@ -63,6 +63,6 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error refresh_tweet", e, JSON.stringify(request))
+        lapi.Error("Error refresh_tweet", e, JSON.stringify(request))
     }
 })(request, args)

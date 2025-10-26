@@ -59,7 +59,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        console.error("Error get_node_ip:", e, JSON.stringify(request));
+        lapi.Error("Error get_node_ip:", e, JSON.stringify(request));
     }
 
     // ============================================================================
