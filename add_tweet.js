@@ -96,7 +96,7 @@
             // Process tweet attachments (images, videos, etc.)
             tweet.attachments?.forEach(element => {
                 element.timestamp = Number(element.timestamp)  // Ensure timestamp is numeric
-                lapi.MMAddRef(authSid, tweetId, element.mid)  // Add reference to attachment
+                lapi.MMAddRef(authSid, tweetId, element.mid)  // Add reference to parent tweet
             });
             
             // Backup tweet data and publish it
