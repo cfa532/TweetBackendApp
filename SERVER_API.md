@@ -673,6 +673,39 @@ This document describes all endpoints available in the TweetBackendApp server, i
 }
 ```
 
+**Usage:** Returns the provider IP address for a given user/resource ID. This is used for IP resolution when connecting to distributed nodes.
+
+**Client-Side Implementation:**
+
+The iOS client uses a **smart retry strategy** for IP resolution:
+
+**First Attempt:**
+- Uses cached IP address (if available)
+- Fast, minimal network overhead
+- Works when IP hasn't changed
+
+**Retry Attempts (2/3, 3/3):**
+- Calls `get_provider` to get fresh IP
+- Handles server migrations automatically
+- Updates cached IP for future use
+
+**Example Flow:**
+```swift
+// Attempt 1: Try cached IP (http://183.156.84.30:8002)
+// Fails: Connection reset by peer
+
+// Attempt 2: Call get_provider → Returns new IP (183.156.84.30:8003)
+// Success: User data fetched from new IP
+```
+
+**Benefits:**
+- ⚡ Faster first attempts (no IP lookup)
+- 🔄 Automatic recovery from IP changes
+- 💰 Reduced load on provider service
+- 🛡️ Handles server migrations gracefully
+
+**See Also:** `NETWORK_RESILIENCE.md` for complete retry strategy documentation
+
 ### Get Providers
 **Endpoint:** `get_providers`
 
@@ -681,6 +714,8 @@ This document describes all endpoints available in the TweetBackendApp server, i
 - `mid` (string): Mimei ID
 
 **Output Schema:** Array of provider IPs
+
+**Usage:** Returns multiple provider IPs for redundancy and load balancing.
 
 ### Node Get Score
 **Endpoint:** `node_get_score`
