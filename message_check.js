@@ -18,6 +18,7 @@
  * - Uses INCOMING_MESSAGE to track most recent message from each sender
  * - Uses LAST_FETCH_MSG to track last fetch time for each sender
  */
+
 ((request, args)=>{
     const LAST_FETCH_MSG = "read_message_indicator"   // Zset tracking the last time a user fetched messages from each sender
     const LAST_INCOMING_MSG = "incoming_message_indicator"   // Hset tracking the most recent message received from each sender
@@ -47,10 +48,11 @@
         } else {
             // Get all senders who have sent messages to this user
             const senders = lapi.Hkeys(msgSid, LAST_INCOMING_MSG)
-            let lastTimeFetched = 0;
-
-            // Check each sender for new unread messages
+            
+            // FIXED: lastTimeFetched is declared inside the map for each sender
             const messageList = senders.map(senderId => {
+                let lastTimeFetched = 0;  // Reset for each sender
+                
                 /**
                  * Check if the app has ever fetched messages from this sender
                  */
@@ -105,3 +107,4 @@
         return minutes + ":" + seconds
     }
 })(request, args)
+
