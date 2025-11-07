@@ -49,21 +49,29 @@
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
         const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
         const user = getUser(userId)  // Get user data to determine hosting node
+        const userHostId = Array.isArray(user?.hostIds) && user.hostIds.length > 0
+            ? user.hostIds[0]
+            : null
+
+        if (!userHostId) {
+            lapi.Error("toggle_following: missing host for user", JSON.stringify({userId, nodeId}))
+            return
+        }
 
         // ========================================================================
         // REMOTE USER HANDLING
         // ========================================================================
         
-        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
+        if (userHostId !== nodeId) {
             // User is hosted on a different node - delegate the request
             let ret = lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
-                nid: user.hostIds[0], sid: systemSid,
+                nid: userHostId, sid: systemSid,
                 userid: userId, followingid: followedId}, []
             )
             
             // Update user's score on the remote node
             lapi.RunMApp("node_update_mid_by_score", {aid: APP_ID, ver:"last",
-                hostid: user.hostIds[0], userid: userId, mid: userId}, [])
+                hostid: userHostId, userid: userId, mid: userId}, [])
                 
             lapi.Debug("Toggle following remote", ret, userId, followedId, nodeId)
             return ret
@@ -88,7 +96,14 @@
                 if (!followedUser) 
                     return  // Cannot proceed if target user is unavailable
             }
-            const hostOfOther = followedUser.hostIds[0]  // Node hosting the target user
+            const hostOfOther = Array.isArray(followedUser?.hostIds) && followedUser.hostIds.length > 0
+                ? followedUser.hostIds[0]
+                : null  // Node hosting the target user
+
+            if (!hostOfOther) {
+                lapi.Error("toggle_following: missing host for followed user", JSON.stringify({userId, followedId}))
+                return
+            }
 
             // ====================================================================
             // DETERMINE CURRENT FOLLOWING STATUS
@@ -104,12 +119,16 @@
                 lapi.Debug(userId, "unfollowing", followedId, hostOfOther, nodeId)
                 
                 // Get all tweet IDs from the user being unfollowed
-                const midList = lapi.RunMApp("get_tweet_id_list",
+                const tweetsResult = lapi.RunMApp("get_tweet_id_list",
                     {aid: APP_ID, ver: "last", userid: followedId}, [])
-                    .map(e => e.Member)
+                const midList = Array.isArray(tweetsResult)
+                    ? tweetsResult.map(e => e.Member).filter(Boolean)
+                    : []
                 
                 // Remove all their tweets from the following feed
-                lapi.Zrem(userSid, FOLLOWINGS_TWEETS, ...midList)
+                if (midList.length > 0) {
+                    lapi.Zrem(userSid, FOLLOWINGS_TWEETS, ...midList)
+                }
                 
                 // Remove user from following list
                 lapi.Hdel(userSid, FOLLOWINGS_LIST, followedId)
@@ -146,10 +165,13 @@
                 const scorepairs = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
                     nid: hostOfOther, sid: systemSid, userid: followedId
                 }, [])
-                lapi.Debug("toggle_following: Following's tweets", JSON.stringify(scorepairs))
+                const normalizedScorepairs = Array.isArray(scorepairs) ? scorepairs : []
+                lapi.Debug("toggle_following: Following's tweets", JSON.stringify(normalizedScorepairs))
                 
                 // Add all their tweets to the following feed
-                lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...scorepairs)
+                if (normalizedScorepairs.length > 0) {
+                    lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...normalizedScorepairs)
+                }
                 
                 // Backup user data and publish changes
                 lapi.MMBackup(userSid, userId, "", "delref=true")
@@ -163,16 +185,16 @@
                 // The user content sync above should handle most cases. Individual tweet
                 // syncing can be enabled if needed for specific use cases.
                 // 
-                // scorepairs.forEach(sp => {
-                //     const tweetId = sp.Member
-                //     const t = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
-                //         tweetid: tweetId, appuserid: userId}, [])
-                //     if (!t) {
-                //         lapi.Debug("Syncing tweet", tweetId, followedId)
-                //         lapi.MiMeiSync(authSid, "", tweetId, {})
-                //         // lapi.MiMeiProvide(authSid, "", tweetId)
-                //     }
-                // })
+                normalizedScorepairs.forEach(sp => {
+                    const tweetId = sp.Member
+                    const t = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
+                        tweetid: tweetId, appuserid: userId}, [])
+                    if (!t) {
+                        lapi.Debug("Syncing tweet", tweetId, followedId)
+                        lapi.MiMeiSync(authSid, "", tweetId, {})
+                        // lapi.MiMeiProvide(authSid, "", tweetId)
+                    }
+                })
 
                 // Update follower count on the target user's node
                 try {
