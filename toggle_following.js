@@ -219,10 +219,6 @@
             return !isFollowing
         }
     } catch(e) {
-        // ========================================================================
-        // ERROR HANDLING
-        // ========================================================================
-        
         lapi.Error("Error toggle_followings", JSON.stringify(request), e)
     }
 
