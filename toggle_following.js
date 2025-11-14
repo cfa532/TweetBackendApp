@@ -54,7 +54,7 @@
             : null
 
         if (!userHostId) {
-            lapi.Error("Tweet toggle_following: missing host for user %s", JSON.stringify({userId, nodeId}))
+            lapi.Error("Tweed toggle_following: missing host for user %s", JSON.stringify({userId, nodeId}))
             return
         }
 
@@ -73,7 +73,7 @@
             lapi.RunMApp("node_update_mid_by_score", {aid: APP_ID, ver:"last",
                 hostid: userHostId, userid: userId, mid: userId}, [])
                 
-            lapi.Debug("Tweet Toggle following remote: ret=%s, user: %s, followed: %s, node: %s", ret, userId, followedId, nodeId)
+            lapi.Debug("Tweed Toggle following remote: ret=%s, user: %s, followed: %s, node: %s", ret, userId, followedId, nodeId)
             return ret
         } else {
             // ====================================================================
@@ -93,7 +93,7 @@
                 followedUser = getUser(followedId)
 
                 if (!followedUser) {
-                    lapi.Error("Tweet Error toggle_followings: cannot get followed user %s", followedId)
+                    lapi.Error("Tweed Error toggle_followings: cannot get followed user %s", followedId)
                     return  // Cannot proceed if target user is unavailable
                 }
             }
@@ -102,7 +102,7 @@
                 : null  // Node hosting the target user
 
             if (!hostOfOther) {
-                lapi.Error("Tweet toggle_following: missing host for followed user %s", JSON.stringify({userId, followedId}))
+                lapi.Error("Tweed Error toggle_following: missing host for followed user %s", JSON.stringify({userId, followedId}))
                 return
             }
 
@@ -117,7 +117,7 @@
                 // UNFOLLOW OPERATION
                 // ================================================================
                 
-                lapi.Debug("Tweet %s unfollowing %s. Host: %s, Node: %s", userId, followedId, hostOfOther, nodeId)
+                lapi.Debug("Tweed toggle_following: %s unfollowing %s. Host: %s, Node: %s", userId, followedId, hostOfOther, nodeId)
                 
                 // Get all tweet IDs from the user being unfollowed
                 const tweetsResult = lapi.RunMApp("get_tweet_id_list",
@@ -150,14 +150,14 @@
                     //     lapi.MiMeiUnprovide(authSid, "", otherId)
                     // }
                 } catch(e) {
-                    lapi.Error("Tweet Error toggle_follower: %s, %s", e, JSON.stringify(request))
+                    lapi.Error("Tweed Error toggle_follower: %s, %s", e, JSON.stringify(request))
                 }
             } else {
                 // ================================================================
                 // FOLLOW OPERATION
                 // ================================================================
                 
-                lapi.Debug("Tweet toggle_following: %s following %s, host: %s, node: %s", userId, followedId, hostOfOther, nodeId)
+                lapi.Debug("Tweed toggle_following: %s following %s, host: %s, node: %s", userId, followedId, hostOfOther, nodeId)
                 
                 // Add user to following list with timestamp
                 lapi.Hset(userSid, FOLLOWINGS_LIST, followedId, Date.now())
@@ -190,7 +190,7 @@
                     const t = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
                         tweetid: tweetId, appuserid: userId}, [])
                     if (!t) {
-                        lapi.Debug("Tweet toggle_following: Syncing tweet: %s, user: %s", tweetId, followedId)
+                        lapi.Debug("Tweed toggle_following: Syncing tweet: %s, user: %s", tweetId, followedId)
                         lapi.MiMeiSync(authSid, "", tweetId, {})
                         // lapi.MiMeiProvide(authSid, "", tweetId)
                     }
@@ -203,7 +203,7 @@
                         userid: followedId, otherid: userId, isfollower: true
                     }, [])
                 } catch(e) {
-                    lapi.Error("Tweet Error toggle_following: toggle_follower failed: %s, %s", e, JSON.stringify(request))
+                    lapi.Error("Tweed Error toggle_following: toggle_follower failed: %s, %s", e, JSON.stringify(request))
                 }
             }
     
@@ -219,7 +219,7 @@
             return !isFollowing
         }
     } catch(e) {
-        lapi.Error("Tweet Error toggle_followings: %s, %s", e, JSON.stringify(request))
+        lapi.Error("Tweed Error toggle_followings: %s, %s", e, JSON.stringify(request))
     }
 
     // ============================================================================
