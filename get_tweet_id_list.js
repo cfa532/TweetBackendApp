@@ -47,7 +47,7 @@
                     return e
                 }
             } catch(e) {
-                lapi.Error("Error get_tweet_id_list", e, JSON.stringify(request))
+                lapi.Error("Tweed Error get_tweet_id_list: %s, request=%s", e, JSON.stringify(request))
                 return null
             }
         }).filter(e=> e)  // Remove null results
@@ -58,7 +58,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error get_tweet_id_list", e, JSON.stringify(request))
+        lapi.Error("Tweed Error get_tweet_id_list: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
         return []
     }
 })(request, args)

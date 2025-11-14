@@ -81,21 +81,29 @@
         
         // If scores differ, sync and update the local score
         if (remoteScore !== localScore) {
-            lapi.Debug("node_update_mid_by_score:", mid, "new vs old score:", remoteScore, localScore, "of user", userId)
+            lapi.Debug("Tweed node_update_mid_by_score: mid=%s, new score=%s, old score=%s, userId=%s", mid, remoteScore, localScore, userId)
             
             // Sync the mid data from remote host
-            lapi.MiMeiSync(systemSid, "", mid, {})
+            try {
+                lapi.MiMeiSync(systemSid, "", mid, {})
+            } catch(e) {
+                lapi.Error("Tweed node_update_mid_by_score: Failed to sync mid %s: %s", mid, e)
+            }
 
             // Update the score of the user in local AppData
-            const sp = getScorePair(remoteScore, mid)
-            lapi.Zadd(systemSid, userId, sp)
+            try {
+                const sp = getScorePair(remoteScore, mid)
+                lapi.Zadd(systemSid, userId, sp)
+            } catch(e) {
+                lapi.Error("Tweed node_update_mid_by_score: Failed to update score for mid %s: %s", mid, e)
+            }
         }
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error node_update_mid_by_score", e, JSON.stringify(request))
+        lapi.Error("Tweed Error node_update_mid_by_score: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
     }
     // ============================================================================
     // HELPER FUNCTIONS

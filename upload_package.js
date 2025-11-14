@@ -45,15 +45,20 @@
         lapi.MFSetCid(authSid, mid, request["cid"])
         
         // Publish the package to the network
-        lapi.MiMeiPublish(authSid, "", mid)
+        try {
+            lapi.MiMeiPublish(authSid, "", mid)
+        } catch(e) {
+            lapi.Error("Tweed upload_package: Failed to publish package %s: %s", mid, e)
+        }
         
-        lapi.Debug("upload_package"+ APP_MINI, mid)
+        lapi.Debug("Tweed upload_package%s: mid=%s", APP_MINI, mid)
         return mid  // Return the created Mimei ID
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("upload_package error:", e)
+        lapi.Error("Tweed Error upload_package: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return null
     }
 })(request, args);

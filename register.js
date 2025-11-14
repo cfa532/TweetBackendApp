@@ -37,7 +37,7 @@
     // ============================================================================
     
     try {
-        lapi.Debug("nodeId", nodeId, request["user"], request["followings"])
+        lapi.Debug("Tweed register: nodeId=%s, user=%s, followings=%s", nodeId, request["user"], request["followings"])
         
         // ========================================================================
         // REMOTE USER REGISTRATION
@@ -46,10 +46,17 @@
         if (user.hostIds?.length > 0 && user.hostIds[0] !== nodeId) {
             // Register user on their preferred remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            return lapi.RunMApp("register", {aid: APP_ID, ver: "last",
-                nid: user.hostIds[0], sid: systemSid,
-                user: request["user"], followings: request["followings"]}, []
-            )
+            let ret
+            try {
+                ret = lapi.RunMApp("register", {aid: APP_ID, ver: "last",
+                    nid: user.hostIds[0], sid: systemSid,
+                    user: request["user"], followings: request["followings"]}, []
+                )
+            } catch(e) {
+                lapi.Error("Tweed register: Failed to call register on remote node %s: %s, username=%s", user.hostIds[0], e, user.username)
+                throw e
+            }
+            return ret
         } else {
             // ====================================================================
             // LOCAL USER REGISTRATION
@@ -67,7 +74,7 @@
             const providerIp = lapi.RunMApp("get_provider_ip", {aid: APP_ID, ver: "last",
                 mid: userMid}, [])
             if (providerIp) {
-                console.warn("User register failed. Existing user", JSON.stringify(providerIp))
+                lapi.Error("Tweed register: User register failed. Existing user %s", JSON.stringify(providerIp))
                 return {status: "failure", reason: "Username is taken"}
             }
             
@@ -103,14 +110,14 @@
                     lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
                         userid: user.mid, followingid: mid}, [])
                 } catch(e) {
-                    lapi.Error("Error in register when toggle_following", e, JSON.stringify(request))
+                    lapi.Error("Tweed register: Error in register when toggle_following: %s, request=%s", e, JSON.stringify(request))
                 }
             });
     
             // Note: App data update could be implemented here
             // lapi.RunMApp("update_app_data", {aid: APP_ID, ver: "last", user: JSON.stringify(user)}, [])
             
-            lapi.Debug("User registered.", JSON.stringify(user))
+            lapi.Debug("Tweed register: User registered %s", JSON.stringify(user))
             delete user.password  // Remove sensitive data before returning
             return {user: JSON.stringify(user), status: "success"}
         }
@@ -119,7 +126,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error register", JSON.stringify(request), e)
+        lapi.Error("Tweed Error register: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
         return {status: "failure", reason: e.message || String(e)}
     }
 })(request, args)

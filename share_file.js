@@ -40,16 +40,28 @@
         const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)  // Open application data node
         
+        if (!user || !user.hostIds || user.hostIds.length === 0) {
+            lapi.Error("Tweed share_file: missing host for user %s", JSON.stringify({userId, nodeId, user}))
+            throw new Error("User not found or missing host")
+        }
+        
         // ========================================================================
         // REMOTE USER HANDLING
         // ========================================================================
         
-        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
+        if (user.hostIds[0] !== nodeId) {
             // Delegate file sharing to the node hosting the user
-            return lapi.RunMApp("share_file", {aid: APP_ID, ver: "last",
-                nid: user.hostIds[0], sid: systemSid,
-                userid: userId}, []
-            )
+            let ret
+            try {
+                ret = lapi.RunMApp("share_file", {aid: APP_ID, ver: "last",
+                    nid: user.hostIds[0], sid: systemSid,
+                    userid: userId, file: request["file"]}, []
+                )
+            } catch(e) {
+                lapi.Error("Tweed share_file: Failed to call share_file on remote node %s: %s, userId=%s", user.hostIds[0], e, userId)
+                throw e
+            }
+            return ret
         } else {
             // ====================================================================
             // LOCAL USER HANDLING
@@ -65,7 +77,7 @@
             // If the mid exists, it has been shared, just return it
             const sharedObj = lapi.Hget(userSid, USER_SHARE_MID, mid)
             if (sharedObj) {
-                lapi.Debug("shared file", JSON.stringify(sharedObj))
+                lapi.Debug("Tweed share_file: shared file already exists, sharedObj=%s", JSON.stringify(sharedObj))
                 return mid
             }
 
@@ -76,35 +88,52 @@
             const fsid = lapi.MMOpen(authSid, mid, "cur")  // Open file's memory space
             
             // Set file metadata
-            lapi.MFSetObject(fsid, {
-                userId: userId,  // ID of user sharing the file
-                path: file.path,  // File path on user's system
-                name: file.name,  // File name
-                size: file.size,  // File size in bytes
-                isDirectory: file.isDirectory,  // Whether it's a directory
-                modified: file.modified  // Time of sharing
-            })
+            try {
+                lapi.MFSetObject(fsid, {
+                    userId: userId,  // ID of user sharing the file
+                    path: file.path,  // File path on user's system
+                    name: file.name,  // File name
+                    size: file.size,  // File size in bytes
+                    isDirectory: file.isDirectory,  // Whether it's a directory
+                    modified: file.modified  // Time of sharing
+                })
+            } catch(e) {
+                lapi.Error("Tweed share_file: Failed to set file object %s: %s", mid, e)
+                throw e
+            }
             
             // Update file data and publish changes
-            lapi.MMBackup(fsid, mid, "", "delref=true")
-            lapi.MiMeiPublish(authSid, "", mid)
-            lapi.Debug("shared file", mid, JSON.stringify(file))
+            try {
+                lapi.MMBackup(fsid, mid, "", "delref=true")
+                lapi.MiMeiPublish(authSid, "", mid)
+            } catch(e) {
+                lapi.Error("Tweed share_file: Failed to backup/publish file %s: %s", mid, e)
+            }
+            lapi.Debug("Tweed share_file: shared file mid=%s, file=%s", mid, JSON.stringify(file))
     
             // ================================================================
             // UPDATE USER SHARING STATISTICS
             // ================================================================
             
             // Add file to user's shared files list with metadata
-            lapi.Hset(userSid, USER_SHARE_MID, mid, {
-                downloadCount: 0,  // How many times the file has been downloaded
-                authorizedFor: null,  // Anybody can see it (no restrictions)
-                validTime: 0,  // Days of sharing (0 means forever)
-                modified: Date.now()  // Time of sharing
-            })
+            try {
+                lapi.Hset(userSid, USER_SHARE_MID, mid, {
+                    downloadCount: 0,  // How many times the file has been downloaded
+                    authorizedFor: null,  // Anybody can see it (no restrictions)
+                    validTime: 0,  // Days of sharing (0 means forever)
+                    modified: Date.now()  // Time of sharing
+                })
+            } catch(e) {
+                lapi.Error("Tweed share_file: Failed to set shared file metadata %s: %s", mid, e)
+            }
             
             // Update user data and publish changes
-            lapi.MMBackup(userSid, userId, "", "delref=true")
-            lapi.MiMeiPublish(authSid, "", userId)
+            try {
+                lapi.MMBackup(userSid, userId, "", "delref=true")
+                lapi.MiMeiPublish(authSid, "", userId)
+            } catch(e) {
+                lapi.Error("Tweed share_file: Failed to backup/publish user %s: %s", userId, e)
+            }
     
             return mid  // Return the Mimei ID of the shared file
         }
@@ -113,7 +142,8 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error share_file", JSON.stringify(request), e)
+        lapi.Error("Tweed Error share_file: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return null
     }
 
     // ============================================================================
@@ -126,8 +156,13 @@
      * @returns {Object|null} User data object or null if not found
      */
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
-        const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
-        return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        try {
+            const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+            const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+            return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        } catch(e) {
+            lapi.Error("Tweed share_file: getUser failed for mid=%s: %s", mid, e)
+            throw e
+        }
     }
 })(request, args)

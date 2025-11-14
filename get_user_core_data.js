@@ -37,7 +37,8 @@
         const user = lapi.Get(mmsid, OWNER_DATA_KEY)  // Get user data
         
         if (!user) {
-            console.warn("get_user_core_data: User", userId, "not found on node", lapi.GetVar("", "hostid"))
+            const nodeId = lapi.GetVar("", "hostid")
+            lapi.Error("Tweed get_user_core_data: User %s not found on node %s", userId, nodeId)
             return null
         }
 
@@ -61,7 +62,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("ERROR get_user_core_data", JSON.stringify(request), e)
+        lapi.Error("Tweed Error get_user_core_data: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
         return null
     }
 })(request, args)

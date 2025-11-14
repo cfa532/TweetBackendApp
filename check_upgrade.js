@@ -54,13 +54,13 @@
             domain: "t1.fireshare.us",  // Base URL for deeplinks and sharing
         }
         
-        lapi.Debug("check_upgrade", JSON.stringify(ret))
+        lapi.Debug("Tweed check_upgrade: %s", JSON.stringify(ret))
         return ret
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error check_upgrade", JSON.stringify(request), e)
+        lapi.Error("Tweed Error check_upgrade: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
     }
 })(request, args)

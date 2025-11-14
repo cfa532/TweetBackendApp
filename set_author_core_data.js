@@ -74,33 +74,51 @@
         // REMOTE USER HANDLING
         // ========================================================================
         
+        if (!user.hostIds || user.hostIds.length === 0) {
+            lapi.Error("Tweed set_author_core_data: missing host for user %s", JSON.stringify({userId: user.mid, nodeId, user}))
+            throw new Error("User missing host")
+        }
+        
         // Check if we need to delegate to the primary host
-        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
-            lapi.Debug("set_author_core_data local", JSON.stringify(user))
+        if (user.hostIds[0] !== nodeId) {
+            lapi.Debug("Tweed set_author_core_data: local user=%s", JSON.stringify(user))
             
             // Delegate the update to the primary host
-            const ret = lapi.RunMApp("set_author_core_data", {
-                aid: APP_ID, 
-                ver: "last",
-                nid: user.hostIds[0], 
-                sid: systemSid, 
-                user: request["user"]
-            }, [])
+            let ret
+            try {
+                ret = lapi.RunMApp("set_author_core_data", {
+                    aid: APP_ID, 
+                    ver: "last",
+                    nid: user.hostIds[0], 
+                    sid: systemSid, 
+                    user: request["user"]
+                }, [])
+            } catch(e) {
+                lapi.Error("Tweed set_author_core_data: Failed to call set_author_core_data on remote node %s: %s, userId=%s", user.hostIds[0], e, user.mid)
+                throw e
+            }
             
-            lapi.Debug("set_author_core_data local ret=", JSON.stringify(ret))
+            lapi.Debug("Tweed set_author_core_data: local ret=%s", JSON.stringify(ret))
             
             // Sync the updated data from the remote host (assume the remote host is up to date)
-            lapi.MiMeiSync(systemSid, "", user.mid, {})
-            lapi.MiMeiProvide(systemSid, "", user.mid)
+            try {
+                lapi.MiMeiSync(systemSid, "", user.mid, {})
+                lapi.MiMeiProvide(systemSid, "", user.mid)
+            } catch(e) {
+                lapi.Error("Tweed set_author_core_data: Failed to sync/provide user %s: %s", user.mid, e)
+            }
             
             // Get the updated user data from the local host
-            const newUser = lapi.RunMApp("get_user_core_data", {
-                aid: APP_ID, 
-                ver: "last",
-                userid: user.mid
-            }, [])
-            
-            lapi.Debug("set_author_core_data local newUser=", JSON.stringify(newUser))
+            try {
+                const newUser = lapi.RunMApp("get_user_core_data", {
+                    aid: APP_ID, 
+                    ver: "last",
+                    userid: user.mid
+                }, [])
+                lapi.Debug("Tweed set_author_core_data: local newUser=%s", JSON.stringify(newUser))
+            } catch(e) {
+                lapi.Error("Tweed set_author_core_data: Failed to get user data after sync: %s", e)
+            }
             return ret
         } else {
             // ====================================================================
@@ -136,17 +154,26 @@
             // ================================================================
             
             // Save the updated user data
-            lapi.Set(userSid, OWNER_DATA_KEY, userInDB)
-            lapi.MMBackup(userSid, userInDB.mid, "", "delref=true")
-            lapi.MiMeiProvide(authSid, "", userInDB.mid)
+            try {
+                lapi.Set(userSid, OWNER_DATA_KEY, userInDB)
+                lapi.MMBackup(userSid, userInDB.mid, "", "delref=true")
+                lapi.MiMeiProvide(authSid, "", userInDB.mid)
+            } catch(e) {
+                lapi.Error("Tweed set_author_core_data: Failed to save user data %s: %s", userInDB.mid, e)
+                throw e
+            }
             
             // Update the user's score in application data
-            lapi.RunMApp("node_update_score", {
-                aid: APP_ID, 
-                ver: "last",
-                userid: userInDB.mid, 
-                mid: userInDB.mid
-            }, [])
+            try {
+                lapi.RunMApp("node_update_score", {
+                    aid: APP_ID, 
+                    ver: "last",
+                    userid: userInDB.mid, 
+                    mid: userInDB.mid
+                }, [])
+            } catch(e) {
+                lapi.Error("Tweed set_author_core_data: Failed to update user score %s: %s", userInDB.mid, e)
+            }
 
             // ================================================================
             // SECURITY: Remove sensitive data before returning
@@ -161,7 +188,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error set_auth_core_data", JSON.stringify(request), e)
+        lapi.Error("Tweed Error set_author_core_data: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
         return {status: "failure", reason: "Update failed"}
     }
 })(request, args)

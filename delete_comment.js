@@ -60,7 +60,7 @@
                 lapi.MiMeiSync(systemSid, "", tweetId, {})
                 lapi.MiMeiProvide(systemSid, "", tweetId)
             } catch(e) {
-                lapi.Error("delete_comment Error sync tweet", e, JSON.stringify(ret))
+                lapi.Error("Tweed delete_comment: Error sync tweet: %s, ret=%s", e, JSON.stringify(ret))
             }
             return ret
         } else {
@@ -70,26 +70,42 @@
             
             // Delete the comment object
             const authSid = lapi.BELoginAsAuthor()
-            const commentSid = lapi.MMOpen(authSid, commentId, "cur")
-            lapi.MMDelVers(commentSid, commentId)  // Remove all versions of the comment
+            try {
+                const commentSid = lapi.MMOpen(authSid, commentId, "cur")
+                lapi.MMDelVers(commentSid, commentId)  // Remove all versions of the comment
+            } catch(e) {
+                lapi.Error("Tweed delete_comment: Failed to delete comment versions %s: %s", commentId, e)
+            }
     
             // Remove comment from tweet's comment list and references
             const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
-            lapi.MMDelRef(tweetSid, tweetId, commentId)  // Remove reference to comment
-            lapi.Zrem(tweetSid, COMMENT_LIST, commentId)  // Remove from comment list
+            try {
+                lapi.MMDelRef(tweetSid, tweetId, commentId)  // Remove reference to comment
+                lapi.Zrem(tweetSid, COMMENT_LIST, commentId)  // Remove from comment list
+            } catch(e) {
+                lapi.Error("Tweed delete_comment: Failed to remove comment from tweet %s: %s", tweetId, e)
+            }
             
             // Backup tweet data and publish changes
-            lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
-            lapi.MiMeiPublish(authSid, "", tweetId)
+            try {
+                lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
+                lapi.MiMeiPublish(authSid, "", tweetId)
+            } catch(e) {
+                lapi.Error("Tweed delete_comment: Failed to backup/publish tweet %s: %s", tweetId, e)
+            }
     
             // Update the parent tweet's score in application data
-            lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
-                userid: appUserId, mid: tweetId}, [])
+            try {
+                lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
+                    userid: appUserId, mid: tweetId}, [])
+            } catch(e) {
+                lapi.Error("Tweed delete_comment: Failed to update tweet score %s: %s", tweetId, e)
+            }
     
             // Return updated comment count
             let lastSid = lapi.MMOpen("", tweetId, "last")
             const commentCount = lapi.Zcard(lastSid, COMMENT_LIST)
-            lapi.Debug("delete_comment local: ", commentCount, commentId)
+            lapi.Debug("Tweed delete_comment: local commentCount=%s, commentId=%s", commentCount, commentId)
             return {success: true, commentId: commentId, count: commentCount}
         }
     } catch(e) {
@@ -97,7 +113,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error delete_comment", e, JSON.stringify(request))
+        lapi.Error("Tweed Error delete_comment: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
         return {success: false, message: e}
     }
 })(request, args)

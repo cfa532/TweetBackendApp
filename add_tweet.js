@@ -51,25 +51,36 @@
         // REMOTE USER HANDLING
         // ========================================================================
         
-        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
+        if (!user || !user.hostIds || user.hostIds.length === 0) {
+            lapi.Error("Tweed add_tweet: missing host for user %s", JSON.stringify({authorId: tweet.authorId, nodeId}))
+            throw new Error("User host not found")
+        }
+
+        if (user.hostIds[0] !== nodeId) {
             // Delegate tweet creation to the node hosting the author
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
 
-            const ret = lapi.RunMApp("add_tweet", {aid: APP_ID, ver: request.ver,
-                nid: user.hostIds[0], sid: systemSid,
-                tweet: request["tweet"]}, []
-            )
+            let ret
+            try {
+                ret = lapi.RunMApp("add_tweet", {aid: APP_ID, ver: request.ver,
+                    nid: user.hostIds[0], sid: systemSid,
+                    tweet: request["tweet"]}, []
+                )
+            } catch(e) {
+                lapi.Error("Tweed add_tweet: Failed to call add_tweet on remote node %s: %s, authorId=%s", user.hostIds[0], e, tweet.authorId)
+                throw e
+            }
             
             // Sync the newly created tweet to local node for caching
             // Note: Remote host may return result directly to caller in some cases
-            lapi.Info("add_tweet remote ret=", JSON.stringify(ret))
+            lapi.Info("Tweed add_tweet: remote ret=%s", JSON.stringify(ret))
             try {
                 if (ret.success) {
                     lapi.MiMeiSync(systemSid, "", ret.mid, {})  // Sync new tweet immediately
                     lapi.MiMeiProvide(systemSid, "", ret.mid)  // Make tweet available locally
                 }
             } catch(e) {
-                lapi.Error("Error add_tweet: remote not ready.", e, JSON.stringify(ret), JSON.stringify(request))
+                lapi.Error("Tweed add_tweet: remote not ready: %s, ret=%s, request=%s", e, JSON.stringify(ret), JSON.stringify(request))
             }
             return ret
         } else {
@@ -79,7 +90,7 @@
             
             // Verify the request is from an authorized friend/node
             const friendId = getFriendByAppCode(request.nodeappcode)
-            lapi.Debug("add_tweet: friendId=", friendId)
+            lapi.Debug("Tweed add_tweet: friendId=%s", friendId)
             if (!friendId) {
                 throw new Error("Not a friend of the host")
             }
@@ -118,7 +129,7 @@
                     lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
                     lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
                 } catch(e) {
-                    lapi.Error("add_tweet: Error sync original tweet", e, JSON.stringify(tweet))
+                    lapi.Error("Tweed add_tweet: Error sync original tweet: %s, tweet=%s", e, JSON.stringify(tweet))
                 }
             }
             // Create reference from author to tweet and update author data
@@ -131,11 +142,11 @@
                 userid: tweet.authorId, mid: authorId}, [])
 
             // Return success response with tweet ID
-            lapi.Info("add_tweet local", JSON.stringify(tweet))
+            lapi.Info("Tweed add_tweet: local %s", JSON.stringify(tweet))
             return {success: true, mid: tweetId}
         }
     } catch(e) {
-        lapi.Error("Error add_tweet:", e, JSON.stringify(request))
+        lapi.Error("Tweed Error add_tweet: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
         return {success: false, message: e}
     }
 
@@ -145,9 +156,14 @@
      * @returns {Object|null} User data object or null if not found
      */
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
-        const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
-        return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        try {
+            const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+            const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+            return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        } catch(e) {
+            lapi.Error("Tweed add_tweet: getUser failed for mid=%s: %s", mid, e)
+            throw e
+        }
     }
 
     /**
@@ -174,13 +190,13 @@
             // Called from frontend, not a peer node - use user's host ID
 			return user.hostIds[0]
 		}
-		lapi.Trace("nodeAppCode=", nodeAppCode)
+		lapi.Trace("Tweed add_tweet: nodeAppCode=%s", nodeAppCode)
 
 		// Retrieve node ID and app ID from session
 		const fri = lapi.SessionGet(nodeAppCode, "nodeid")
 		const forapp = lapi.SessionGet(nodeAppCode, "forapp")
-		lapi.Trace("forapp=", forapp)
-		lapi.Trace("appid=", APP_ID)
+		lapi.Trace("Tweed add_tweet: forapp=%s", forapp)
+		lapi.Trace("Tweed add_tweet: appid=%s", APP_ID)
 
 		// Validate app ID matches expected application
 		if (APP_ID !== forapp) {

@@ -46,12 +46,23 @@
         // REMOTE AUTHOR HANDLING
         // ========================================================================
         
-        if (!author.hostIds || author.hostIds.length === 0 || author.hostIds[0] !== nodeId) {
+        if (!author || !author.hostIds || author.hostIds.length === 0) {
+            lapi.Error("Tweed toggle_bookmark: missing host for author %s", JSON.stringify({authorId, nodeId, author}))
+            throw new Error("Author host not found")
+        }
+
+        if (author.hostIds[0] !== nodeId) {
             // Delegate bookmark management to the node hosting the author
-            let ret = lapi.RunMApp("toggle_bookmark", {aid: APP_ID, ver: "last", 
-                nid: author.hostIds[0], sid: systemSid, userhostid: userHostId,
-                userid: userId, authorid: authorId, tweetid: tweetId}, []
-            )
+            let ret
+            try {
+                ret = lapi.RunMApp("toggle_bookmark", {aid: APP_ID, ver: "last", 
+                    nid: author.hostIds[0], sid: systemSid, userhostid: userHostId,
+                    userid: userId, authorid: authorId, tweetid: tweetId}, []
+                )
+            } catch(e) {
+                lapi.Error("Tweed toggle_bookmark: Failed to call toggle_bookmark on remote node %s: %s, userId=%s, tweetId=%s", author.hostIds[0], e, userId, tweetId)
+                throw e
+            }
             
             // Now sync the tweet from the remote host
             try {
@@ -61,10 +72,10 @@
                     lapi.MiMeiProvide(systemSid, "", tweetId)
                 // }
             } catch(e) {
-                lapi.Error("toggle_bookmark Error provide tweet", e, JSON.stringify(ret))
+                lapi.Error("Tweed toggle_bookmark: Error provide tweet: %s, ret=%s", e, JSON.stringify(ret))
             }
             
-            lapi.Debug("toggle_bookmark remote ret=", JSON.stringify(ret))
+            lapi.Debug("Tweed toggle_bookmark: remote ret=%s", JSON.stringify(ret))
             return ret
         } else {
             // ====================================================================
@@ -78,12 +89,18 @@
             const updatedTweet = toggleBookmarkOfTweet(userId, authorId, tweetId)
             
             // Toggle the bookmark of the tweet in appUser's node
-            const updatedUser = lapi.RunMApp("toggle_bookmark_by_user", {aid: APP_ID, ver: "last",
-                nid: userHostId, sid: systemSid,
-                userid: userId, tweetid: tweetId, isbookmarked: updatedTweet.favorites[1]}, []
-            )
+            let updatedUser
+            try {
+                updatedUser = lapi.RunMApp("toggle_bookmark_by_user", {aid: APP_ID, ver: "last",
+                    nid: userHostId, sid: systemSid,
+                    userid: userId, tweetid: tweetId, isbookmarked: updatedTweet.favorites[1]}, []
+                )
+            } catch(e) {
+                lapi.Error("Tweed toggle_bookmark: Failed to call toggle_bookmark_by_user: %s, userId=%s, tweetId=%s", e, userId, tweetId)
+                throw e
+            }
             
-            lapi.Debug("toggle_bookmark local tweet", JSON.stringify(updatedTweet), JSON.stringify(updatedUser))
+            lapi.Debug("Tweed toggle_bookmark: local tweet=%s, user=%s", JSON.stringify(updatedTweet), JSON.stringify(updatedUser))
             return {success: true, user: updatedUser, tweet: updatedTweet}
         }
     } catch(e) {
@@ -91,7 +108,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("toggle_bookmark error", e, JSON.stringify(request))
+        lapi.Error("Tweed Error toggle_bookmark: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
         return {success: false, error: e}
     }
 
@@ -141,7 +158,7 @@
                 tweetid: tweetId, appuserid: appUserId}, []
             )
         } catch(e) {
-            lapi.Error("Error toggleBookmarkOfTweet", JSON.stringify(request), e)
+            lapi.Error("Tweed toggle_bookmark: Error toggleBookmarkOfTweet: %s, request=%s", e, JSON.stringify(request))
             return null
         }    
     }
@@ -152,8 +169,13 @@
      * @returns {Object|null} User data object or null if not found
      */
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
-        const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
-        return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        try {
+            const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+            const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+            return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        } catch(e) {
+            lapi.Error("Tweed toggle_bookmark: getUser failed for mid=%s: %s", mid, e)
+            throw e
+        }
     }
 })(request, args)

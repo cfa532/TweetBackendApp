@@ -40,6 +40,6 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error get_userid:", JSON.stringify(request), e)
+        lapi.Error("Tweed Error get_userid: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
     }
 })(request, args)

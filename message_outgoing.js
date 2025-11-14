@@ -28,19 +28,31 @@
         const user = getUser(senderId)
         const nodeId = lapi.GetVar("", "hostid")
         
+        if (!user || !user.hostIds || user.hostIds.length === 0) {
+            lapi.Error("Tweed message_outgoing: missing host for user %s", JSON.stringify({senderId, nodeId, user}))
+            return false
+        }
+
         // If user's primary node is not the current node, forward to primary node
-        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
+        if (user.hostIds[0] !== nodeId) {
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            return lapi.RunMApp("message_outgoing", {aid: APP_ID, ver: "last",
-                nid: user.hostIds[0], sid: systemSid,
-                userid: senderId, receiptid: receiptId, msg: request["msg"]}, []
-            )
+            let ret
+            try {
+                ret = lapi.RunMApp("message_outgoing", {aid: APP_ID, ver: "last",
+                    nid: user.hostIds[0], sid: systemSid,
+                    userid: senderId, receiptid: receiptId, msg: request["msg"]}, []
+                )
+            } catch(e) {
+                lapi.Error("Tweed message_outgoing: Failed to call message_outgoing on remote node %s: %s, senderId=%s, receiptId=%s", user.hostIds[0], e, senderId, receiptId)
+                throw e
+            }
+            return ret
         } else {
             // Store outgoing message in sender's local Mimei
             const authSid = lapi.BELoginAsAuthor()
             const msgMid = lapi.MMCreate(authSid, APP_ID, APP_EXT, senderId+"_"+MESSAGE_MIMEI, 2, 0x07276704)
             const msgSid = lapi.MMOpen(authSid, msgMid, "cur")
-            // lapi.Debug(senderId, "outgoing message to", receiptId, request["msg"], msgMid)
+            lapi.Debug("Tweed message_outgoing: %s outgoing message to %s, msg=%s, msgMid=%s", senderId, receiptId, request["msg"], msgMid)
 
             // Create score pair for Zset indexing
             const sp = new ScorePair()
@@ -56,14 +68,19 @@
             return true
         }
     } catch(e) {
-        lapi.Error("Error message_outgoing", e, JSON.stringify(request))
+        lapi.Error("Tweed Error message_outgoing: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
     }
 
     function ScorePair() {}
 
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"
-        const mmsid = lapi.MMOpen("", mid, "last")
-        return lapi.Get(mmsid, OWNER_DATA_KEY)
+        try {
+            const OWNER_DATA_KEY = "data_of_author"
+            const mmsid = lapi.MMOpen("", mid, "last")
+            return lapi.Get(mmsid, OWNER_DATA_KEY)
+        } catch(e) {
+            lapi.Error("Tweed message_outgoing: getUser failed for mid=%s: %s", mid, e)
+            throw e
+        }
     }
 })(request, args)

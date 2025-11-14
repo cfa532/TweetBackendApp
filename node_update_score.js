@@ -45,6 +45,6 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error node_update_score", e, JSON.stringify(request))
+        lapi.Error("Tweed Error node_update_score: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
     }
 })(request, args)

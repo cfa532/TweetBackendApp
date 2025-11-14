@@ -40,16 +40,27 @@
         const user = getUser(userId)  // Get user data to determine hosting node
         const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
         
+        if (!user || !user.hostIds || user.hostIds.length === 0) {
+            lapi.Error("Tweed delete_account: missing host for user %s", JSON.stringify({userId, nodeId, user}))
+            throw new Error("User not found or missing host")
+        }
+        
         // ========================================================================
         // REMOTE USER HANDLING
         // ========================================================================
         
-        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
+        if (user.hostIds[0] !== nodeId) {
             // Delegate account deletion to the node hosting the user
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            let ret = lapi.RunMApp("delete_account", {aid: APP_ID, ver: "last",
-                nid: user.hostIds[0], sid: systemSid, userid: userId}, []
-            )
+            let ret
+            try {
+                ret = lapi.RunMApp("delete_account", {aid: APP_ID, ver: "last",
+                    nid: user.hostIds[0], sid: systemSid, userid: userId}, []
+                )
+            } catch(e) {
+                lapi.Error("Tweed delete_account: Failed to call delete_account on remote node %s: %s, userId=%s", user.hostIds[0], e, userId)
+                throw e
+            }
             return ret
         } else {
             // ====================================================================
@@ -66,14 +77,22 @@
                     )
                 })
             } catch(e) {
-                lapi.Error("Error delete_account: delete tweets", e, JSON.stringify(request))
+                lapi.Error("Tweed delete_account: Failed to delete tweets: %s, userId=%s, request=%s", e, userId, JSON.stringify(request))
             }
 
             // Remove user account and all associated data
             const authSid = lapi.BELoginAsAuthor()
-            lapi.MiMeiUnpublish(authSid, "", userId)  // Remove user from network
-            lapi.MMDelVers(authSid, userId)  // Delete all versions of user data
-            lapi.Debug("Deleted account ", userId)
+            try {
+                lapi.MiMeiUnpublish(authSid, "", userId)  // Remove user from network
+            } catch(e) {
+                lapi.Error("Tweed delete_account: Failed to unpublish user %s: %s", userId, e)
+            }
+            try {
+                lapi.MMDelVers(authSid, userId)  // Delete all versions of user data
+            } catch(e) {
+                lapi.Error("Tweed delete_account: Failed to delete user versions %s: %s", userId, e)
+            }
+            lapi.Debug("Tweed delete_account: Deleted account %s", userId)
             return {success: true}
         }
     } catch(e) {
@@ -81,7 +100,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error delete_account:", e, JSON.stringify(request))
+        lapi.Error("Tweed Error delete_account: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
         return {success: false, message: e}
     }
 
@@ -95,8 +114,13 @@
      * @returns {Object|null} User data object or null if not found
      */
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
-        const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
-        return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        try {
+            const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+            const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+            return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        } catch(e) {
+            lapi.Error("Tweed delete_account: getUser failed for mid=%s: %s", mid, e)
+            throw e
+        }
     }
 })(request, args)

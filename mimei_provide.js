@@ -41,25 +41,37 @@
             lapi.MiMeiSync(authSid, "", targetId, {})
             
             // Provide content to DHT network for discovery
-            let dhtreply = lapi.MiMeiProvide(authSid, "", targetId)
-            lapi.Debug("provide", targetId, JSON.stringify(dhtreply))
+            try {
+                let dhtreply = lapi.MiMeiProvide(authSid, "", targetId)
+                lapi.Debug("Tweed mimei_provide: provide targetId=%s, dhtreply=%s", targetId, JSON.stringify(dhtreply))
+            } catch(e) {
+                lapi.Error("Tweed mimei_provide: Failed to provide %s: %s", targetId, e)
+            }
         } else {
             // ================================================================
             // UNPROVIDE CONTENT FROM DHT NETWORK
             // ================================================================
             
             // Remove content from DHT network
-            let dhtreply = lapi.MiMeiUnprovide(authSid, "", targetId)
+            try {
+                let dhtreply = lapi.MiMeiUnprovide(authSid, "", targetId)
+                lapi.Debug("Tweed mimei_provide: Unprovide targetId=%s, dhtreply=%s", targetId, JSON.stringify(dhtreply))
+            } catch(e) {
+                lapi.Error("Tweed mimei_provide: Failed to unprovide %s: %s", targetId, e)
+            }
             
             // Delete all versions of the content
-            lapi.MMDelVers(authSid, targetId)
-            lapi.Debug("Unprovide", targetId, JSON.stringify(dhtreply))
+            try {
+                lapi.MMDelVers(authSid, targetId)
+            } catch(e) {
+                lapi.Error("Tweed mimei_provide: Failed to delete versions %s: %s", targetId, e)
+            }
         }
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error provide", JSON.stringify(request), e)
+        lapi.Error("Tweed Error mimei_provide: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
     }
 })(request, args)

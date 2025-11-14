@@ -82,7 +82,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error get_tweet_feed", JSON.stringify(request), e)
+        lapi.Error("Tweed Error get_tweet_feed: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
         return {
             success: false,
             error: e.message

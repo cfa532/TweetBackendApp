@@ -34,20 +34,31 @@
 
         const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
         
+        if (!user || !user.hostIds || user.hostIds.length === 0) {
+            lapi.Error("Tweed toggle_pinned_tweet: missing host for user %s", JSON.stringify({appUserId, nodeId, user}))
+            throw new Error("User not found or missing host")
+        }
+        
         // ========================================================================
         // REMOTE USER HANDLING
         // ========================================================================
         
-        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
+        if (user.hostIds[0] !== nodeId) {
             // Delegate pinned tweet management to the node hosting the user
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            let ret = lapi.RunMApp("toggle_pinned_tweet", {aid: APP_ID, ver: "last",
-                nid: user.hostIds[0], sid: systemSid,
-                tweetid: tweetId, appuserid: appUserId}, []
-            )
+            let ret
+            try {
+                ret = lapi.RunMApp("toggle_pinned_tweet", {aid: APP_ID, ver: "last",
+                    nid: user.hostIds[0], sid: systemSid,
+                    tweetid: tweetId, appuserid: appUserId}, []
+                )
+            } catch(e) {
+                lapi.Error("Tweed toggle_pinned_tweet: Failed to call toggle_pinned_tweet on remote node %s: %s, appUserId=%s, tweetId=%s", user.hostIds[0], e, appUserId, tweetId)
+                throw e
+            }
             
             // User mimei will be updated by system
-            lapi.Debug("Toggle top tweets remote ret=", JSON.stringify(ret))
+            lapi.Debug("Tweed toggle_pinned_tweet: remote ret=%s", JSON.stringify(ret))
             return ret
         } else {
             // ====================================================================
@@ -72,12 +83,20 @@
             }
             
             // Update user data and publish changes
-            lapi.MMBackup(authSid, appUserId, "", "delref=true")
-            lapi.MiMeiPublish(authSid, "", appUserId)
+            try {
+                lapi.MMBackup(authSid, appUserId, "", "delref=true")
+                lapi.MiMeiPublish(authSid, "", appUserId)
+            } catch(e) {
+                lapi.Error("Tweed toggle_pinned_tweet: Failed to backup/publish user %s: %s", appUserId, e)
+            }
             
             // Update user's score in AppData
-            lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
-                userid: appUserId, mid: appUserId}, [])
+            try {
+                lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
+                    userid: appUserId, mid: appUserId}, [])
+            } catch(e) {
+                lapi.Error("Tweed toggle_pinned_tweet: Failed to update user score %s: %s", appUserId, e)
+            }
 
             return !pinned  // Return new pinned status
         }
@@ -86,7 +105,8 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error toggle_pinned_tweet", JSON.stringify(request), e)
+        lapi.Error("Tweed Error toggle_pinned_tweet: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return false
     }
 
     // ============================================================================
@@ -99,8 +119,13 @@
      * @returns {Object|null} User data object or null if not found
      */
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
-        const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
-        return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        try {
+            const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+            const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+            return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        } catch(e) {
+            lapi.Error("Tweed toggle_pinned_tweet: getUser failed for mid=%s: %s", mid, e)
+            throw e
+        }
     }
 })(request, args)

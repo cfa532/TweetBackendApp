@@ -35,20 +35,30 @@
     const user = getUser(authorId)  // Get author data to determine hosting node
     const retweetId = request["retweetid"]  // ID of the retweet being removed
     const appUserId = request["appuserid"]  // ID of user removing the retweet
-
     const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
+    
+    if (!user || !user.hostIds || user.hostIds.length === 0) {
+        lapi.Error("Tweed retweet_removed: missing host for author %s", JSON.stringify({authorId, nodeId, user}))
+        throw new Error("Author not found or missing host")
+    }
     
     // ========================================================================
     // REMOTE AUTHOR HANDLING
     // ========================================================================
     
-    if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
+    if (user.hostIds[0] !== nodeId) {
         // Delegate retweet removal to the node hosting the author
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-        let ret = lapi.RunMApp("retweet_removed", {aid: APP_ID, ver: "last",
-            nid: user.hostIds[0], sid: systemSid, appuserid: appUserId,
-            tweetid: tweetId, authorid: authorId, retweetid: retweetId},
-            [])
+        let ret
+        try {
+            ret = lapi.RunMApp("retweet_removed", {aid: APP_ID, ver: "last",
+                nid: user.hostIds[0], sid: systemSid, appuserid: appUserId,
+                tweetid: tweetId, authorid: authorId, retweetid: retweetId},
+                [])
+        } catch(e) {
+            lapi.Error("Tweed retweet_removed: Failed to call retweet_removed on remote node %s: %s, authorId=%s, tweetId=%s", user.hostIds[0], e, authorId, tweetId)
+            throw e
+        }
         return ret
     } else {
       // ====================================================================
@@ -87,7 +97,8 @@
     // ERROR HANDLING
     // ========================================================================
     
-    lapi.Error("Error retweet_removed", JSON.stringify(request), e)
+    lapi.Error("Tweed Error retweet_removed: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+    return null
   }
 
   // ============================================================================
@@ -100,8 +111,13 @@
    * @returns {Object|null} User data object or null if not found
    */
   function getUser(mid) {
-    const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
-    const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
-    return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+    try {
+      const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+      const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+      return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+    } catch(e) {
+      lapi.Error("Tweed retweet_removed: getUser failed for mid=%s: %s", mid, e)
+      throw e
+    }
   }
 })(request, args)

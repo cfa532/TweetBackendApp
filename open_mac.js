@@ -31,6 +31,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Open mac file", JSON.stringify(request), e)
+        lapi.Error("Tweed Error open_mac: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return null
     }
 })(request, args)

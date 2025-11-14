@@ -31,13 +31,25 @@
         const user = getUser(receiptId)
         const nodeId = lapi.GetVar("", "hostid")
         
+        if (!user || !user.hostIds || user.hostIds.length === 0) {
+            lapi.Error("Tweed message_incoming: missing host for user %s", JSON.stringify({receiptId, nodeId, user}))
+            return {success: false, error: "User host not found"}
+        }
+
         // If user's primary node is not the current node, forward to primary node
         if (user.hostIds.findIndex(id => id === nodeId) !== 0) {
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            return lapi.RunMApp("message_incoming", {aid: APP_ID, ver: "last",
-                nid: user.hostIds[0], sid: systemSid,
-                receiptid: receiptId, senderid: senderId, msg: request["msg"]}, []
-            )
+            let ret
+            try {
+                ret = lapi.RunMApp("message_incoming", {aid: APP_ID, ver: "last",
+                    nid: user.hostIds[0], sid: systemSid,
+                    receiptid: receiptId, senderid: senderId, msg: request["msg"]}, []
+                )
+            } catch(e) {
+                lapi.Error("Tweed message_incoming: Failed to call message_incoming on remote node %s: %s, receiptId=%s, senderId=%s", user.hostIds[0], e, receiptId, senderId)
+                throw e
+            }
+            return ret
         } else {
             // Store incoming message in receiver's local Mimei
             const authSid = lapi.BELoginAsAuthor()
@@ -56,7 +68,7 @@
             // Update the incoming_message indicator with the last message from a sender
             // Used by message_check.js to determine if there are new unread messages
             lapi.Hset(msgSid, LAST_INCOMING_MSG, senderId, sp.Member)
-            lapi.Debug("message_incoming:", senderId, "to", receiptId, request["msg"])
+            lapi.Debug("Tweed message_incoming: %s to %s, msg=%s", senderId, receiptId, request["msg"])
 
             // Store message in receiver's local database:
             // 1. Add to Zset for fast chronological querying by sender
@@ -67,15 +79,20 @@
             return {success: true}
         }
     } catch(e) {
-        lapi.Error("Error message_incoming", JSON.stringify(request), e)
+        lapi.Error("Tweed Error message_incoming: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
         return {success: false, error: e.message}
     }
 
     function ScorePair() {}
 
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"
-        const mmsid = lapi.MMOpen("", mid, "last")
-        return lapi.Get(mmsid, OWNER_DATA_KEY)
+        try {
+            const OWNER_DATA_KEY = "data_of_author"
+            const mmsid = lapi.MMOpen("", mid, "last")
+            return lapi.Get(mmsid, OWNER_DATA_KEY)
+        } catch(e) {
+            lapi.Error("Tweed message_incoming: getUser failed for mid=%s: %s", mid, e)
+            throw e
+        }
     }
 })(request, args)

@@ -36,14 +36,25 @@
         const user = getUser(userId)
         const nodeId = lapi.GetVar("", "hostid")
         
+        if (!user || !user.hostIds || user.hostIds.length === 0) {
+            lapi.Error("Tweed message_check: missing host for user %s", JSON.stringify({userId, nodeId, user}))
+            return []
+        }
+
         // If user's primary node is not the current node, forward to primary node
         if (user.hostIds.findIndex(id => id === nodeId) !== 0) {
-            lapi.Debug("message_check: Forwarding to primary node", user.hostIds[0])
+            lapi.Debug("Tweed message_check: Forwarding to primary node %s", user.hostIds[0])
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            let ret = lapi.RunMApp("message_check", {aid: APP_ID, ver: "last",
-                nid: user.hostIds[0], sid: systemSid,
-                userid: userId}, []
-            )
+            let ret
+            try {
+                ret = lapi.RunMApp("message_check", {aid: APP_ID, ver: "last",
+                    nid: user.hostIds[0], sid: systemSid,
+                    userid: userId}, []
+                )
+            } catch(e) {
+                lapi.Error("Tweed message_check: Failed to call message_check on remote node %s: %s, userId=%s", user.hostIds[0], e, userId)
+                throw e
+            }
             return ret
         } else {
             // Get all senders who have sent messages to this user
@@ -68,14 +79,14 @@
                 // If the message is newer than the last fetch time, it's unread
                 if (lastIncomingTS > lastTimeFetched) {
                     const lastMsg = lapi.Hget(msgSid, senderId, lastIncomingTS)
-                    lapi.Debug("message_check: NEW MESSAGE from", senderId, JSON.stringify(lastMsg), "at", formatTime(lastIncomingTS))
+                    lapi.Debug("Tweed message_check: NEW MESSAGE from %s, msg=%s, at %s", senderId, JSON.stringify(lastMsg), formatTime(lastIncomingTS))
                     return lastMsg
                 }
             }).filter(e => e)
             return messageList  // Return list of most recent unread messages for notification
         }
     } catch(e) {
-        lapi.Error("Error message_check", JSON.stringify(request), e)
+        lapi.Error("Tweed Error message_check: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
         return []
     }
 
@@ -89,9 +100,14 @@
      * @returns {Object|null} User data object or null if not found
      */
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
-        const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
-        return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        try {
+            const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+            const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+            return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        } catch(e) {
+            lapi.Error("Tweed message_check: getUser failed for mid=%s: %s", mid, e)
+            throw e
+        }
     }
 
     /**

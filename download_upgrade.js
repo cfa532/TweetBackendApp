@@ -40,13 +40,14 @@
         // lapi.Debug("Upgrade package mid", mid, ip)
         // return mid.length>27 ? "http://"+ip+"/ipfs/"+mid : "http://"+ip+"/mm/"+mid
         
-        lapi.Debug("Upgrade package mid", mid)
+        lapi.Debug("Tweed download_upgrade: Upgrade package mid=%s", mid)
         return mid
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error download_upgrade", JSON.stringify(request), e)
+        lapi.Error("Tweed Error download_upgrade: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return null
     }
 })(request, args)

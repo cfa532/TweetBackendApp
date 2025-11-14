@@ -42,19 +42,30 @@
         const user = getUser(userId)  // Get user data to determine hosting node
         const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
         
+        if (!user || !user.hostIds || user.hostIds.length === 0) {
+            lapi.Error("Tweed toggle_favorite_by_user: missing host for user %s", JSON.stringify({userId, nodeId, user}))
+            throw new Error("User not found or missing host")
+        }
+        
         // ========================================================================
         // REMOTE USER HANDLING
         // ========================================================================
         
-        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
+        if (user.hostIds[0] !== nodeId) {
             // Delegate favorite management to the node hosting the user
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            const userData = lapi.RunMApp("toggle_favorite_by_user",
-                { aid: APP_ID, ver: "last",
-                    nid: user.hostIds[0], sid: systemSid,
-                    userid: userId, tweetid: tweetId, isfavorite: isFavorite }, []
-            )
-            lapi.Debug("toggle_favorite_by_user remote", JSON.stringify(userData))
+            let userData
+            try {
+                userData = lapi.RunMApp("toggle_favorite_by_user",
+                    { aid: APP_ID, ver: "last",
+                        nid: user.hostIds[0], sid: systemSid,
+                        userid: userId, tweetid: tweetId, isfavorite: isFavorite }, []
+                )
+            } catch(e) {
+                lapi.Error("Tweed toggle_favorite_by_user: Failed to call toggle_favorite_by_user on remote node %s: %s, userId=%s, tweetId=%s", user.hostIds[0], e, userId, tweetId)
+                throw e
+            }
+            lapi.Debug("Tweed toggle_favorite_by_user: remote userData=%s", JSON.stringify(userData))
             return userData  // User local data will be updated by Leither
         } else {
             // ====================================================================
@@ -80,14 +91,22 @@
                 // Update user data and publish changes
                 lapi.MMBackup(userSid, userId, "", "delref=true")
             } catch(e) {
-                lapi.Error("toggle_favorite_by_user error", e, JSON.stringify(request))
+                lapi.Error("Tweed toggle_favorite_by_user: Failed to update favorite list: %s, userId=%s, tweetId=%s", e, userId, tweetId)
                 throw e
             }
             
             // Publish user changes and update scores
-            lapi.MiMeiPublish(userSid, "", userId)
-            lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
-                userid: userId, mid: userId}, [])
+            try {
+                lapi.MiMeiPublish(userSid, "", userId)
+            } catch(e) {
+                lapi.Error("Tweed toggle_favorite_by_user: Failed to publish user %s: %s", userId, e)
+            }
+            try {
+                lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
+                    userid: userId, mid: userId}, [])
+            } catch(e) {
+                lapi.Error("Tweed toggle_favorite_by_user: Failed to update user score %s: %s", userId, e)
+            }
             
             // ================================================================
             // CONTENT SYNCHRONIZATION
@@ -95,11 +114,16 @@
             
             if (isFavorite) {
                 // Sync and provide favorited content to ensure availability
-                // Note: Content existence check could be implemented here
-                // if (!lapi.MFIsExist("", tweetId)) {
+                try {
                     lapi.MiMeiSync(authSid, "", tweetId, {})
+                } catch(e) {
+                    lapi.Error("Tweed toggle_favorite_by_user: Failed to sync tweet %s: %s", tweetId, e)
+                }
+                try {
                     lapi.MiMeiProvide(authSid, "", tweetId)
-                // }
+                } catch(e) {
+                    lapi.Error("Tweed toggle_favorite_by_user: Failed to provide tweet %s: %s", tweetId, e)
+                }
             } else {
                 // TODO: Prevent the tweet from being deleted if it is on the same node
                 // Note: Unproviding content is commented out to prevent premature deletion
@@ -114,7 +138,7 @@
             const updatedUser = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
                 userid: userId}, []
             )
-            lapi.Debug("toggle_favorite_by_user local", tweetId, JSON.stringify(updatedUser))
+            lapi.Debug("Tweed toggle_favorite_by_user: local tweetId=%s, userData=%s", tweetId, JSON.stringify(updatedUser))
             return updatedUser
         }
     } catch(e) {
@@ -122,12 +146,17 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("toggle_favorite_by_user error", e, JSON.stringify(request))
+        lapi.Error("Tweed Error toggle_favorite_by_user: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
         
         // Return user data even if favorite operation failed
-        return lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
-            userid: userId}, []
-        )
+        try {
+            return lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
+                userid: userId}, []
+            )
+        } catch(e2) {
+            lapi.Error("Tweed toggle_favorite_by_user: Failed to get user data after error: %s", e2)
+            return null
+        }
     }
 
     // ============================================================================
@@ -140,8 +169,13 @@
      * @returns {Object|null} User data object or null if not found
      */
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
-        const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
-        return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        try {
+            const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+            const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+            return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        } catch(e) {
+            lapi.Error("Tweed toggle_favorite_by_user: getUser failed for mid=%s: %s", mid, e)
+            throw e
+        }
     }
 })(request, args)

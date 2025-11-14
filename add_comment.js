@@ -54,10 +54,16 @@
         if (nodeId !== hostId) {
             // Delegate comment creation to the node hosting the original tweet
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            let ret = lapi.RunMApp("add_comment", {aid: APP_ID, ver: "last",
-                nid: hostId, sid: systemSid,
-                hostid: hostId, appuserid: appUserId, tweetid: tweetId, comment: request["comment"]}, []
-            )
+            let ret
+            try {
+                ret = lapi.RunMApp("add_comment", {aid: APP_ID, ver: "last",
+                    nid: hostId, sid: systemSid,
+                    hostid: hostId, appuserid: appUserId, tweetid: tweetId, comment: request["comment"]}, []
+                )
+            } catch(e) {
+                lapi.Error("Tweed add_comment: Failed to call add_comment on remote node %s: %s, appUserId=%s, tweetId=%s", hostId, e, appUserId, tweetId)
+                throw e
+            }
             
             // Sync the original tweet and new comment to local node for caching
             try {
@@ -70,10 +76,10 @@
                     lapi.MiMeiProvide(systemSid, "", ret.commentId)
                 }
             } catch(e) {
-                lapi.Error("add_comment: Error sync tweet to local node", e)
+                lapi.Error("Tweed add_comment: Error sync tweet to local node: %s", e)
             }
             
-            lapi.Debug("add_comment remote: comment count", JSON.stringify(ret), nodeId)
+            lapi.Debug("Tweed add_comment: remote comment count=%s, nodeId=%s", JSON.stringify(ret), nodeId)
             return ret
         } else {
             // ====================================================================
@@ -137,7 +143,7 @@
             // Return success response with comment details
             let lastSid = lapi.MMOpen("", tweetId, "last")
             const commentCount = lapi.Zcard(lastSid, COMMENT_LIST)  // Get current comment count
-            lapi.Debug("add_comment local: ", commentCount, commentId, retweetId)
+            lapi.Debug("Tweed add_comment: local commentCount=%s, commentId=%s, retweetId=%s", commentCount, commentId, retweetId)
             return {success: true, mid: commentId, count: commentCount, retweetid: retweetId}
         }
     } catch(e) {
@@ -145,7 +151,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error add_comment", e, JSON.stringify(request))
+        lapi.Error("Tweed Error add_comment: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
         return {success: false, message: e}
     }
 

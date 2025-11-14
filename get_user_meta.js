@@ -55,7 +55,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error('Error get_user_meta', JSON.stringify(request), e);
+        lapi.Error('Tweed Error get_user_meta: %s, request=%s, stack=%s', e, JSON.stringify(request), e.stack || "no stack");
     }
 
     // ============================================================================
@@ -79,7 +79,7 @@
                 let tweet = lapi.RunMApp('get_tweet', { aid: request.aid, ver: 'last',
                     appuserid: appUserId, tweetid: tweetId }, []);
 
-                lapi.Debug("get_user_meta:", tweetType, tweetId, JSON.stringify(tweet))
+                lapi.Debug("Tweed get_user_meta: tweetType=%s, tweetId=%s, tweet=%s", tweetType, tweetId, JSON.stringify(tweet))
                 return tweet;
             })
         return arr;

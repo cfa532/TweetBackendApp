@@ -32,6 +32,6 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error sync_user:", JSON.stringify(request), e)
+        lapi.Error("Tweed Error sync_user: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
     }
 })(request, args)

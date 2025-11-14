@@ -34,20 +34,30 @@
     const appUserId = request["appuserid"]  // ID of user who made the retweet
     const authorId = request["authorid"]  // ID of the original tweet author
     const author = getUser(authorId)  // Get author data to determine hosting node
-
     const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
+    
+    if (!author || !author.hostIds || author.hostIds.length === 0) {
+        lapi.Error("Tweed retweet_added: missing host for author %s", JSON.stringify({authorId, nodeId, author}))
+        throw new Error("Author not found or missing host")
+    }
     
     // ========================================================================
     // REMOTE AUTHOR HANDLING
     // ========================================================================
     
-    if (!author.hostIds || author.hostIds.length === 0 || author.hostIds[0] !== nodeId) {
+    if (author.hostIds[0] !== nodeId) {
         // Delegate retweet addition to the node hosting the author
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-        let ret = lapi.RunMApp("retweet_added", {aid: APP_ID, ver: "last",
-          nid: author.hostIds[0], sid: systemSid,
-          authorid: authorId, tweetid: tweetId, appuserid: appUserId, retweetid: retweetId},
-          [])
+        let ret
+        try {
+            ret = lapi.RunMApp("retweet_added", {aid: APP_ID, ver: "last",
+              nid: author.hostIds[0], sid: systemSid,
+              authorid: authorId, tweetid: tweetId, appuserid: appUserId, retweetid: retweetId},
+              [])
+        } catch(e) {
+            lapi.Error("Tweed retweet_added: Failed to call retweet_added on remote node %s: %s, authorId=%s, tweetId=%s", author.hostIds[0], e, authorId, tweetId)
+            throw e
+        }
         return ret
     } else {
       // ====================================================================
@@ -84,7 +94,8 @@
     // ERROR HANDLING
     // ========================================================================
     
-    lapi.Error("Error retweet_add", JSON.stringify(request), e)
+    lapi.Error("Tweed Error retweet_added: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+    return null
   }
 
   // ============================================================================
@@ -97,8 +108,13 @@
    * @returns {Object|null} User data object or null if not found
    */
   function getUser(mid) {
-    const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
-    const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
-    return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+    try {
+      const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+      const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+      return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+    } catch(e) {
+      lapi.Error("Tweed retweet_added: getUser failed for mid=%s: %s", mid, e)
+      throw e
+    }
   }
 })(request, args)

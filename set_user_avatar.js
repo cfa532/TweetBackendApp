@@ -36,17 +36,29 @@
 
         const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
         
+        if (!userInDB || !userInDB.hostIds || userInDB.hostIds.length === 0) {
+            lapi.Error("Tweed set_user_avatar: missing host for user %s", JSON.stringify({userId, nodeId, userInDB}))
+            throw new Error("User not found or missing host")
+        }
+        
         // ========================================================================
         // REMOTE USER HANDLING
         // ========================================================================
         
-        if (!userInDB.hostIds || userInDB.hostIds.length === 0 || userInDB.hostIds[0] !== nodeId) {
+        if (userInDB.hostIds[0] !== nodeId) {
             // Delegate avatar update to the node hosting the user
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            return lapi.RunMApp("set_user_avatar", {aid: APP_ID, ver: "last",
-                nid: userInDB.hostIds[0], sid: systemSid,
-                userid: userId, avatar: request["avatar"]}, []
-            )
+            let ret
+            try {
+                ret = lapi.RunMApp("set_user_avatar", {aid: APP_ID, ver: "last",
+                    nid: userInDB.hostIds[0], sid: systemSid,
+                    userid: userId, avatar: request["avatar"]}, []
+                )
+            } catch(e) {
+                lapi.Error("Tweed set_user_avatar: Failed to call set_user_avatar on remote node %s: %s, userId=%s", userInDB.hostIds[0], e, userId)
+                throw e
+            }
+            return ret
         } else {
             // ====================================================================
             // LOCAL USER HANDLING
@@ -56,13 +68,22 @@
             userInDB["avatar"] = request["avatar"]
             
             // Update user data and publish changes
-            lapi.Set(userSid, OWNER_DATA_KEY, userInDB)
-            lapi.MMBackup(userSid, userInDB.mid, "", "delref=true")
-            lapi.MiMeiPublish(userSid, "", userInDB.mid)
+            try {
+                lapi.Set(userSid, OWNER_DATA_KEY, userInDB)
+                lapi.MMBackup(userSid, userInDB.mid, "", "delref=true")
+                lapi.MiMeiPublish(userSid, "", userInDB.mid)
+            } catch(e) {
+                lapi.Error("Tweed set_user_avatar: Failed to save/publish user %s: %s", userId, e)
+                throw e
+            }
 
             // Update the score of the user in AppData
-            lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
-                userid: userInDB.mid, mid: userInDB.mid}, [])
+            try {
+                lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
+                    userid: userInDB.mid, mid: userInDB.mid}, [])
+            } catch(e) {
+                lapi.Error("Tweed set_user_avatar: Failed to update user score %s: %s", userId, e)
+            }
             
             return request["avatar"]  // Return updated avatar
         }
@@ -71,6 +92,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error set_user_avatar", e, JSON.stringify(request))
+        lapi.Error("Tweed Error set_user_avatar: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return null
     }
 })(request, args)

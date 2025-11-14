@@ -36,6 +36,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error get_followers", JSON.stringify(request), e)
+        lapi.Error("Tweed Error get_followers_sorted: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return {}
     }
 })(request, args)

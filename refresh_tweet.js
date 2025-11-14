@@ -44,11 +44,15 @@
         // ========================================================================
         
         if (nodeId !== hostId) {
-            lapi.Debug("refresh_tweet", tweetId, "on", nodeId, "from host", hostId)
+            lapi.Debug("Tweed refresh_tweet: tweetId=%s on nodeId=%s from hostId=%s", tweetId, nodeId, hostId)
             
             // Make sure the current node is up to date by syncing from author's host
-            lapi.RunMApp("node_update_mid_by_score", {aid: request["aid"], ver:"last",
-                hostid: hostId, userid: authorId, mid: tweetId}, [])
+            try {
+                lapi.RunMApp("node_update_mid_by_score", {aid: request["aid"], ver:"last",
+                    hostid: hostId, userid: authorId, mid: tweetId}, [])
+            } catch(e) {
+                lapi.Error("Tweed refresh_tweet: Failed to update mid by score for tweetId=%s: %s", tweetId, e)
+            }
         }
         
         // ========================================================================
@@ -63,6 +67,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error refresh_tweet", e, JSON.stringify(request))
+        lapi.Error("Tweed Error refresh_tweet: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return null
     }
 })(request, args)

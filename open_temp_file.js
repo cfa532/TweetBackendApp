@@ -30,6 +30,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error open_temp_file", JSON.stringify(request), e)
+        lapi.Error("Tweed Error open_temp_file: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return null
     }
 })(request, args)

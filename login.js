@@ -67,10 +67,17 @@
                 // Current node is not the writable host of the user data
                 // Update last login time on the remote host
                 let systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-                return lapi.RunMApp("login", {aid: APP_ID, ver: "last",
-                    nid: userInDB.hostIds[0], sid: systemSid,
-                    username: username, password: password,
-                }, [])
+                let ret
+                try {
+                    ret = lapi.RunMApp("login", {aid: APP_ID, ver: "last",
+                        nid: userInDB.hostIds[0], sid: systemSid,
+                        username: username, password: password,
+                    }, [])
+                } catch(e) {
+                    lapi.Error("Tweed login: Failed to call login on remote node %s: %s, username=%s", userInDB.hostIds[0], e, username)
+                    throw e
+                }
+                return ret
             } else {
                 // ================================================================
                 // LOCAL USER HANDLING
@@ -119,7 +126,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error login", loginOK, JSON.stringify(request), e)
+        lapi.Error("Tweed Error login: %s, loginOK=%s, request=%s, stack=%s", e, loginOK, JSON.stringify(request), e.stack || "no stack")
         
         if (loginOK) {
             // Login was successful but error occurred during processing

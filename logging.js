@@ -21,6 +21,10 @@
     // MAIN EXECUTION
     // ============================================================================
     
-    const msg = request["msg"]  // Log message to output
-    lapi.Debug(msg)  // Output message to console
+    try {
+        const msg = request["msg"]  // Log message to output
+        lapi.Debug("Tweed logging: %s", msg)  // Output message to console
+    } catch(e) {
+        lapi.Error("Tweed Error logging: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+    }
 })(request, args)

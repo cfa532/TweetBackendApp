@@ -52,14 +52,25 @@
         // REMOTE USER HANDLING
         // ========================================================================
         
-        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
+        if (!user || !user.hostIds || user.hostIds.length === 0) {
+            lapi.Error("Tweed delete_tweet: missing host for user %s", JSON.stringify({userId, nodeId, user}))
+            throw new Error("User host not found")
+        }
+
+        if (user.hostIds[0] !== nodeId) {
             // Delegate tweet deletion to the node hosting the user
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            let ret = lapi.RunMApp("delete_tweet", {aid: APP_ID, ver: "last",
-                nid: user.hostIds[0], sid: systemSid,
-                tweetid: tweetId, userid: userId}, []
-            )
-            lapi.Debug("delete_tweet: remote ret=", JSON.stringify(ret))
+            let ret
+            try {
+                ret = lapi.RunMApp("delete_tweet", {aid: APP_ID, ver: "last",
+                    nid: user.hostIds[0], sid: systemSid,
+                    tweetid: tweetId, userid: userId}, []
+                )
+            } catch(e) {
+                lapi.Error("Tweed delete_tweet: Failed to call delete_tweet on remote node %s: %s, userId=%s, tweetId=%s", user.hostIds[0], e, userId, tweetId)
+                throw e
+            }
+            lapi.Debug("Tweed delete_tweet: remote ret=%s", JSON.stringify(ret))
             return ret
         } else {
             // ====================================================================
@@ -70,7 +81,7 @@
             const authSid = lapi.BELoginAsAuthor()
             const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
             const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
-            lapi.Debug("delete_tweet: tweet=", JSON.stringify(tweet))
+            lapi.Debug("Tweed delete_tweet: tweet=%s", JSON.stringify(tweet))
 
             // Only tweet authors can permanently delete tweets
             // Other users can only remove tweets from their personal lists
@@ -113,16 +124,21 @@
             lapi.MMBackup(userSid, userId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", userId)
 
-            lapi.Debug("Delete tweet %s %s", tweetId, JSON.stringify(tweet))
+            lapi.Debug("Tweed delete_tweet: Delete tweet %s %s", tweetId, JSON.stringify(tweet))
     
             // Update the user's score in application data
-            lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
-                userid: userId, mid: userId}, [])
+            try {
+                lapi.RunMApp("node_update_score", {aid: request["aid"], ver:"last",
+                    userid: userId, mid: userId}, [])
+            } catch(e) {
+                lapi.Error("Tweed delete_tweet: Failed to update user score: %s, userId=%s", e, userId)
+                // Don't throw - this is a cleanup operation
+            }
     
             return {tweetid: tweetId, success: true}
         }
     } catch(e) {
-        lapi.Error("Error delete_tweet", e, JSON.stringify(request))
+        lapi.Error("Tweed Error delete_tweet: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
         return {message: e, success: false}
     }
 
@@ -136,8 +152,13 @@
      * @returns {Object|null} User data object or null if not found
      */
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
-        const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
-        return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        try {
+            const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+            const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+            return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        } catch(e) {
+            lapi.Error("Tweed delete_tweet: getUser failed for mid=%s: %s", mid, e)
+            throw e
+        }
     }
 })(request, args)

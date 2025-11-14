@@ -33,14 +33,23 @@
     try {
         const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
         
+        if (!user || !user.hostIds || user.hostIds.length === 0) {
+            lapi.Error("Tweed resync_user: missing host for user %s", JSON.stringify({userId, nodeId, user}))
+            throw new Error("User not found or missing host")
+        }
+        
         // ========================================================================
         // USER SYNCHRONIZATION
         // ========================================================================
         
-        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
+        if (user.hostIds[0] !== nodeId) {
             // Make sure the current user is up to date by syncing from primary host
-            lapi.RunMApp("node_update_mid_by_score", {aid: request["aid"], ver:"last",
-                hostid: user.hostIds[0], userid: userId, mid: userId}, [])
+            try {
+                lapi.RunMApp("node_update_mid_by_score", {aid: request["aid"], ver:"last",
+                    hostid: user.hostIds[0], userid: userId, mid: userId}, [])
+            } catch(e) {
+                lapi.Error("Tweed resync_user: Failed to update mid by score for userId=%s: %s", userId, e)
+            }
         }
         
         // ========================================================================
@@ -55,7 +64,8 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error resync_user:", e, JSON.stringify(request))
+        lapi.Error("Tweed Error resync_user: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return null
     }
 
     // ============================================================================
@@ -68,8 +78,13 @@
      * @returns {Object|null} User data object or null if not found
      */
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
-        const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
-        return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        try {
+            const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+            const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+            return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        } catch(e) {
+            lapi.Error("Tweed resync_user: getUser failed for mid=%s: %s", mid, e)
+            throw e
+        }
     }
 })(request, args)

@@ -34,7 +34,7 @@
         // Store the chunk at the specified offset
         lapi.MFSetData(fsid, chunkData, offset);
         
-        lapi.Debug(`Received chunk at offset ${offset}, size: ${chunkData.length} bytes`);
+        lapi.Debug("Tweed upload_compressed_hls: Received chunk at offset=%s, size=%s bytes", offset, chunkData.length);
         
         return {
             fsid: fsid,
@@ -43,7 +43,7 @@
         };
         
     } catch(e) {
-        lapi.Error("Error in upload_compressed_hls:", JSON.stringify(request), e);
+        lapi.Error("Tweed Error upload_compressed_hls: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack");
         throw e;
     }
     
@@ -59,7 +59,7 @@
         try {
             // Create a temporary directory for extraction
             const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hls_extract_'));
-            lapi.Debug(`Extracting to temp directory: ${tempDir}`);
+            lapi.Debug("Tweed upload_compressed_hls: Extracting to temp directory=%s", tempDir);
             
             // Get the complete zip file data from the temp file
             const zipData = lapi.MFGetData(fsid, 0, -1); // Get all data
@@ -67,7 +67,7 @@
             
             // Write zip data to file
             fs.writeFileSync(zipPath, zipData);
-            lapi.Debug(`Zip file written to: ${zipPath}`);
+            lapi.Debug("Tweed upload_compressed_hls: Zip file written to=%s", zipPath);
             
             // Extract the zip file
             try {
@@ -76,15 +76,16 @@
                     stdio: 'pipe',
                     timeout: 30000 // 30 second timeout
                 });
-                lapi.Debug("Zip file extracted successfully");
+                lapi.Debug("Tweed upload_compressed_hls: Zip file extracted successfully");
             } catch (extractError) {
                 // If unzip fails, try with node modules if available
                 try {
                     const AdmZip = require('adm-zip');
                     const zip = new AdmZip(zipPath);
                     zip.extractAllTo(tempDir, true);
-                    lapi.Debug("Zip file extracted using AdmZip");
+                    lapi.Debug("Tweed upload_compressed_hls: Zip file extracted using AdmZip");
                 } catch (nodeZipError) {
+                    lapi.Error("Tweed upload_compressed_hls: Failed to extract zip file: %s", extractError.message);
                     throw new Error(`Failed to extract zip file: ${extractError.message}`);
                 }
             }
@@ -97,10 +98,11 @@
             if (!hlsValidation.valid) {
                 // Cleanup temp directory on validation failure
                 fs.rmSync(tempDir, { recursive: true, force: true });
+                lapi.Error("Tweed upload_compressed_hls: Invalid HLS structure: %s", hlsValidation.error);
                 throw new Error(`Invalid HLS structure: ${hlsValidation.error}`);
             }
             
-            lapi.Debug(`Valid HLS structure found with ${hlsValidation.segmentCount} segments`);
+            lapi.Debug("Tweed upload_compressed_hls: Valid HLS structure found with segmentCount=%s", hlsValidation.segmentCount);
             
             // Create a new fsid for the extracted HLS directory
             const hlsFsid = lapi.MFOpenTempFile(authSid);
@@ -117,7 +119,11 @@
             
             // If referenceid is provided, link to parent
             if (request["referenceid"] !== undefined) {
-                lapi.MFTemp2Ipfs(hlsFsid, request["referenceid"]);
+                try {
+                    lapi.MFTemp2Ipfs(hlsFsid, request["referenceid"]);
+                } catch(e) {
+                    lapi.Error("Tweed upload_compressed_hls: Failed to convert temp to IPFS: %s", e);
+                }
             }
             
             return {
@@ -129,7 +135,7 @@
             };
             
         } catch (error) {
-            lapi.Error("Error extracting HLS:", error);
+            lapi.Error("Tweed upload_compressed_hls: Error extracting HLS: %s, stack=%s", error, error.stack || "no stack");
             throw error;
         }
     }

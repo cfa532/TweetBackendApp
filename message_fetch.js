@@ -27,14 +27,25 @@
         const user = getUser(userId)
         const nodeId = lapi.GetVar("", "hostid")
         
+        if (!user || !user.hostIds || user.hostIds.length === 0) {
+            lapi.Error("Tweed message_fetch: missing host for user %s", JSON.stringify({userId, nodeId, user}))
+            throw new Error("User not found or missing host")
+        }
+        
         // If user's primary node is not the current node, forward to primary node
         if (user.hostIds.findIndex(id => id === nodeId) !== 0) {
-            lapi.Debug("message_fetch: Forwarding to primary node", user.hostIds[0])
+            lapi.Debug("Tweed message_fetch: Forwarding to primary node %s", user.hostIds[0])
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            let ret = lapi.RunMApp("message_fetch", {aid: APP_ID, ver: "last",
-                nid: user.hostIds[0], sid: systemSid,
-                userid: userId, senderid: senderId}, []
-            )
+            let ret
+            try {
+                ret = lapi.RunMApp("message_fetch", {aid: APP_ID, ver: "last",
+                    nid: user.hostIds[0], sid: systemSid,
+                    userid: userId, senderid: senderId}, []
+                )
+            } catch(e) {
+                lapi.Error("Tweed message_fetch: Failed to call message_fetch on remote node %s: %s, userId=%s, senderId=%s", user.hostIds[0], e, userId, senderId)
+                throw e
+            }
             return ret
         } else {
             // Get message Mimei for this user
@@ -59,7 +70,7 @@
             let messages = tsList.map(e => {
                 // Messages from both parties are stored here, but we only read messages from the sender
                 const message = lapi.Hget(msgSid, senderId, e.Member)
-                lapi.Debug("message_fetch:", userId, "fetched", JSON.stringify(message), "from", senderId)
+                lapi.Debug("Tweed message_fetch: userId=%s fetched message=%s from senderId=%s", userId, JSON.stringify(message), senderId)
                 return message
             }).filter(e => e)  // Filter out any null results
             
@@ -76,7 +87,7 @@
             return messages
         }
     } catch(e) {
-        lapi.Error("Error message_fetch:", JSON.stringify(request), e)
+        lapi.Error("Tweed Error message_fetch: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
         return []
     }
 
@@ -90,9 +101,14 @@
      * @returns {Object|null} User data object or null if not found
      */
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
-        const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
-        return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        try {
+            const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+            const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+            return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        } catch(e) {
+            lapi.Error("Tweed message_fetch: getUser failed for mid=%s: %s", mid, e)
+            throw e
+        }
     }
 
     /**

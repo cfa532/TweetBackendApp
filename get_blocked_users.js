@@ -36,6 +36,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error get_blocked_users", e, JSON.stringify(request))
+        lapi.Error("Tweed Error get_blocked_users: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return []
     }
 })(request, args)

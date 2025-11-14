@@ -58,6 +58,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error upload_ipfs:", JSON.stringify(request), e)
+        lapi.Error("Tweed Error upload_ipfs: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return null
     }
 })(request, args);

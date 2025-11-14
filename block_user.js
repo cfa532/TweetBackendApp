@@ -44,17 +44,28 @@
         const user = getUser(userId)  // Get blocking user's data
         const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
         
+        if (!user || !user.hostIds || user.hostIds.length === 0) {
+            lapi.Error("Tweed block_user: missing host for user %s", JSON.stringify({userId, nodeId, user}))
+            throw new Error("User not found or missing host")
+        }
+        
         // ========================================================================
         // REMOTE USER HANDLING
         // ========================================================================
         
-        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
+        if (user.hostIds[0] !== nodeId) {
             // Delegate block action to the node hosting the blocking user
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            let ret = lapi.RunMApp("block_user", {aid: APP_ID, ver: "last",
-                nid: user.hostIds[0], sid: systemSid,
-                blocked: blockedUserId, userid: userId}, []
-            )
+            let ret
+            try {
+                ret = lapi.RunMApp("block_user", {aid: APP_ID, ver: "last",
+                    nid: user.hostIds[0], sid: systemSid,
+                    blocked: blockedUserId, userid: userId}, []
+                )
+            } catch(e) {
+                lapi.Error("Tweed block_user: Failed to call block_user on remote node %s: %s, userId=%s, blockedUserId=%s", user.hostIds[0], e, userId, blockedUserId)
+                throw e
+            }
             return ret
         } else {
             // ====================================================================
@@ -87,7 +98,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error block_user:", e, JSON.stringify(request))
+        lapi.Error("Tweed Error block_user: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
         return {success: false}
     }
 
@@ -101,8 +112,13 @@
      * @returns {Object|null} User data object or null if not found
      */
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
-        const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
-        return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        try {
+            const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+            const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+            return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        } catch(e) {
+            lapi.Error("Tweed block_user: getUser failed for mid=%s: %s", mid, e)
+            throw e
+        }
     }
 })(request, args)

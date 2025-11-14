@@ -41,6 +41,11 @@
     const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
     const user = getUser(userId)  // Get user data to determine hosting node
 
+    if (!user || !user.hostIds || user.hostIds.length === 0) {
+        lapi.Error("Tweed toggle_follower: missing host for user %s", JSON.stringify({userId, nodeId, user}))
+        return
+    }
+
     // ============================================================================
     // MAIN EXECUTION
     // ============================================================================
@@ -50,16 +55,27 @@
         // REMOTE USER HANDLING
         // ========================================================================
         
-        if (!user.hostIds || user.hostIds.length === 0 || user.hostIds[0] !== nodeId) {
+        if (user.hostIds[0] !== nodeId) {
             // Delegate follower status update to the node hosting the user
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-            lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
-                nid: user.hostIds[0], sid: systemSid,
-                userid: userId, otherid: otherId, isfollower: isFollower}, [])
+            let ret
+            try {
+                ret = lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
+                    nid: user.hostIds[0], sid: systemSid,
+                    userid: userId, otherid: otherId, isfollower: isFollower}, [])
+            } catch(e) {
+                lapi.Error("Tweed toggle_follower: Failed to call toggle_follower on remote node %s: %s, userId=%s, otherId=%s", user.hostIds[0], e, userId, otherId)
+                throw e
+            }
             
             // Update user's score on the remote node
-            lapi.RunMApp("node_update_mid_by_score", {aid: APP_ID, ver:"last",
-                hostid: user.hostIds[0], userid: userId, mid: userId}, [])
+            try {
+                lapi.RunMApp("node_update_mid_by_score", {aid: APP_ID, ver:"last",
+                    hostid: user.hostIds[0], userid: userId, mid: userId}, [])
+            } catch(e) {
+                lapi.Error("Tweed toggle_follower: Failed to update user score on remote node %s: %s, userId=%s", user.hostIds[0], e, userId)
+                // Don't throw - this is a non-critical operation
+            }
         } else {
             // ====================================================================
             // LOCAL USER HANDLING
@@ -82,17 +98,22 @@
             lapi.MiMeiPublish(authSid, "", userId)
     
             // Update the user's score in application data
-            lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
-                userid: userId, mid: userId}, [])
+            try {
+                lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
+                    userid: userId, mid: userId}, [])
+            } catch(e) {
+                lapi.Error("Tweed toggle_follower: Failed to update user score: %s, userId=%s", e, userId)
+                // Don't throw - this is a cleanup operation
+            }
             
-            lapi.Debug(userId, "with follower", otherId, isFollower)
+            lapi.Debug("Tweed toggle_follower: %s with follower %s, isFollower=%s", userId, otherId, isFollower)
         }
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error toggle_follower", JSON.stringify(request), e)
+        lapi.Error("Tweed Error toggle_follower: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
     }
 
     // ============================================================================
@@ -105,8 +126,13 @@
      * @returns {Object|null} User data object or null if not found
      */
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
-        const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
-        return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        try {
+            const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+            const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+            return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        } catch(e) {
+            lapi.Error("Tweed toggle_follower: getUser failed for mid=%s: %s", mid, e)
+            throw e
+        }
     }
 })(request, args)

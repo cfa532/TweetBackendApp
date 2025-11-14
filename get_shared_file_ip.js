@@ -48,13 +48,14 @@
             })
         });
         
-        lapi.Debug(ips, ip)
+        lapi.Debug("Tweed get_shared_file_ip: ips=%s, ip=%s", ips, ip)
         return ip
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error get_shared_file_ip", JSON.stringify(request), e)
+        lapi.Error("Tweed Error get_shared_file_ip: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return null
     }
 })(request, args)

@@ -59,7 +59,8 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error get_node_ip:", e, JSON.stringify(request));
+        lapi.Error("Tweed Error get_node_ip: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack");
+        return null;
     }
 
     // ============================================================================

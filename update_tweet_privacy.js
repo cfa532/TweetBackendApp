@@ -38,8 +38,9 @@
         
         // Get user data to determine primary host
         const user = getUser(appUserId)
-        if (!user) {
-            throw new Error("User not found")
+        if (!user || !user.hostIds || user.hostIds.length === 0) {
+            lapi.Error("Tweed update_tweet_privacy: missing host for user %s", JSON.stringify({appUserId, nodeId, user}))
+            throw new Error("User not found or missing host")
         }
 
         // ========================================================================
@@ -51,16 +52,22 @@
             // Delegate privacy update to the node hosting the user
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
 
-            const ret = lapi.RunMApp("update_tweet_privacy", {
-                aid: APP_ID, 
-                ver: "last",
-                nid: user.hostIds[0], 
-                sid: systemSid,
-                appuserid: appUserId, 
-                tweetid: tweetId
-            }, [])
+            let ret
+            try {
+                ret = lapi.RunMApp("update_tweet_privacy", {
+                    aid: APP_ID, 
+                    ver: "last",
+                    nid: user.hostIds[0], 
+                    sid: systemSid,
+                    appuserid: appUserId, 
+                    tweetid: tweetId
+                }, [])
+            } catch(e) {
+                lapi.Error("Tweed update_tweet_privacy: Failed to call update_tweet_privacy on remote node %s: %s, appUserId=%s, tweetId=%s", user.hostIds[0], e, appUserId, tweetId)
+                throw e
+            }
             
-            lapi.Debug("update_tweet_privacy remote ret=", JSON.stringify(ret))
+            lapi.Debug("Tweed update_tweet_privacy: remote ret=%s", JSON.stringify(ret))
             
             try {
                 if (typeof ret === 'boolean') {
@@ -69,7 +76,7 @@
                     return ret
                 }
             } catch(e) {
-                lapi.Error("Error update_tweet_privacy: remote sync failed.", e, JSON.stringify(ret), JSON.stringify(request))
+                lapi.Error("Tweed update_tweet_privacy: remote sync failed: %s, ret=%s, request=%s", e, JSON.stringify(ret), JSON.stringify(request))
             }
         } else {
             // ====================================================================
@@ -108,7 +115,7 @@
             lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", tweetId)
             
-            lapi.Debug("update_tweet_privacy local", JSON.stringify(tweet))
+            lapi.Debug("Tweed update_tweet_privacy: local tweet=%s", JSON.stringify(tweet))
             return tweet.isPrivate ? true : false
         }
     } catch(e) {
@@ -116,7 +123,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Error update_tweet_privacy", e, JSON.stringify(request))
+        lapi.Error("Tweed Error update_tweet_privacy: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
     }
 
     // ============================================================================
@@ -129,8 +136,13 @@
      * @returns {Object|null} User data object or null if not found
      */
     function getUser(mid) {
-        const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
-        const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
-        return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        try {
+            const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+            const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
+            return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
+        } catch(e) {
+            lapi.Error("Tweed update_tweet_privacy: getUser failed for mid=%s: %s", mid, e)
+            throw e
+        }
     }
 })(request, args)

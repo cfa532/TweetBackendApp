@@ -33,15 +33,19 @@
         lapi.MMAddRef(authSid, userId, request["cid"])
         
         // Update user data and publish changes
-        lapi.MMBackup(authSid, userId, "", "delref=true")
-        lapi.MiMeiPublish(authSid, "", userId)
+        try {
+            lapi.MMBackup(authSid, userId, "", "delref=true")
+            lapi.MiMeiPublish(authSid, "", userId)
+        } catch(e) {
+            lapi.Error("Tweed upload_file: Failed to backup/publish user %s: %s", userId, e)
+        }
 
-        lapi.Debug("Attached to user a file mid=", userId)
+        lapi.Debug("Tweed upload_file: Attached file to user mid=%s", userId)
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("upload_package error:", e)
+        lapi.Error("Tweed Error upload_file: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
     }
 })(request, args);
