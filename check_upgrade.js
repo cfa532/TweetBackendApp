@@ -51,7 +51,7 @@
             version: 38,  // Set larger than defaultConfig.versionName in build.gradle to force upgrade
             packageId: mid,  // Must match the mid of installation package created by upload_package.js
             mission: "minor",  // App stops working without upgrade (minor, major, critical)
-            domain: "t1.fireshare.store",  // Base URL for deeplinks and sharing
+            domain: "t1.fireshare.it.com",  // Base URL for deeplinks and sharing
         }
         
         lapi.Debug("check_upgrade", JSON.stringify(ret))
