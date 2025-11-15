@@ -27,17 +27,41 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const FOLLOWINGS_TWEETS = "followings_tweets"  // Redis key for user's following tweets feed
     const FOLLOWINGS_LIST = "list_of_followings_mid"  // Redis key for list of followed user IDs
     const APP_ID = request["aid"]  // Application identifier
     const userId = request["userid"]  // ID of user initiating the follow/unfollow action
     const followedId = request["followingid"]  // ID of user to follow or unfollow
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === undefined || result === null) {
+                return {success: false, message: "Operation failed"}
+            }
+            if (typeof result === 'boolean') {
+                return {success: true, data: {isFollowing: result}}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return undefined
+    }
+    
     // ============================================================================
     // VALIDATION
     // ============================================================================
     
     if (userId === followedId) {
-        return  // Prevent users from following themselves
+        return wrapError(new Error("Cannot follow yourself"))  // Prevent users from following themselves
     }
 
     // ============================================================================
@@ -55,7 +79,7 @@
 
         if (!userHostId) {
             lapi.Error("Tweed toggle_following: missing host for user %s", JSON.stringify({userId, nodeId}))
-            return
+            return wrapError(new Error("User host not found"))
         }
 
         // ========================================================================
@@ -85,7 +109,7 @@
             }
                 
             lapi.Debug("Tweed Toggle following remote: ret=%s, user: %s, followed: %s, node: %s", ret, userId, followedId, nodeId)
-            return ret
+            return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL USER HANDLING
@@ -115,7 +139,7 @@
 
                 if (!followedUser) {
                     lapi.Error("Tweed Error toggle_followings: cannot get followed user %s after sync", followedId)
-                    return  // Cannot proceed if target user is unavailable
+                    return wrapError(new Error("Cannot get followed user"))  // Cannot proceed if target user is unavailable
                 }
             }
             const hostOfOther = Array.isArray(followedUser?.hostIds) && followedUser.hostIds.length > 0
@@ -124,7 +148,7 @@
 
             if (!hostOfOther) {
                 lapi.Error("Tweed Error toggle_following: missing host for followed user %s", JSON.stringify({userId, followedId}))
-                return
+                return wrapError(new Error("Missing host for followed user"))
             }
 
             // ====================================================================
@@ -246,10 +270,11 @@
                 userid: userId, mid: userId}, [])
             
             // Return the new following status (true if now following, false if unfollowed)
-            return !isFollowing
+            return wrapResponse(!isFollowing)
         }
     } catch(e) {
         lapi.Error("Tweed Error toggle_followings: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return wrapError(e)
     }
 
     // ============================================================================

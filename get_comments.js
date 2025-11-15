@@ -26,6 +26,24 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error, data: []}
+        }
+        return []
+    }
+    
     try {
         const COMMENT_LIST = "comment_list_key"  // Redis key for tweet's comment list
         const appUserId = request["appuserid"]  // ID of user requesting comments
@@ -44,18 +62,19 @@
         const arr = lapi.Zrevrange(mmsid, COMMENT_LIST, startRank, endRank)
         
         // Convert comment IDs to full comment objects (tweets)
-        return arr.map(sp => {
+        const comments = arr.map(sp => {
             return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
                 appuserid: appUserId, tweetid: sp.Member}, [])
         })
         // Note: Filter could be added here to remove null/undefined results
         // .filter(e=> e)
+        return wrapResponse(comments)
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error get_comments: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return []
+        return wrapError(e)
     }
 })(request, args)

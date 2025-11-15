@@ -23,6 +23,28 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            // If result already has success field, return as-is
+            if (result && typeof result === 'object' && 'success' in result) {
+                return result
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error, data: {users: []}}
+        }
+        return {users: [], success: false}
+    }
+    
     try {
         const FOLLOWINGS_LIST = "list_of_followings_mid"  // Redis key for user's following list
         let userId = request["userid"]  // ID of user whose following list to retrieve
@@ -41,13 +63,13 @@
                 userid: userId}, [])
         }).filter(e=> e)  // Remove null/undefined results
         
-        return {users: users, success: true}
+        return wrapResponse({users: users, success: true})
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error get_followings: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return {users: [], success: false}
+        return wrapError(e)
     }
 })(request, args)

@@ -29,10 +29,31 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const BLOCKED_USERS = "blocked_users"  // Redis key for user's blocked users list
     const FOLLOWINGS_TWEETS = "followings_tweets"  // Redis key for following tweets feed
     const FOLLOWINGS_LIST = "list_of_followings_mid"  // Redis key for list of followed user IDs
     const APP_ID = request["aid"]  // Application identifier
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            // If result already has success field, return as-is
+            if (result && typeof result === 'object' && 'success' in result) {
+                return result
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return {success: false}
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -66,7 +87,7 @@
                 lapi.Error("Tweed block_user: Failed to call block_user on remote node %s: %s, userId=%s, blockedUserId=%s", user.hostIds[0], e, userId, blockedUserId)
                 throw e
             }
-            return ret
+            return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL USER HANDLING
@@ -91,7 +112,7 @@
             // Backup user data and publish changes
             lapi.MMBackup(userSid, userId, "", "delref=true")
             lapi.MiMeiPublish(userSid, "", userId)
-            return {success: true}
+            return wrapResponse({success: true})
         }
     } catch(e) {
         // ========================================================================
@@ -99,7 +120,7 @@
         // ========================================================================
         
         lapi.Error("Tweed Error block_user: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return {success: false}
+        return wrapError(e)
     }
 
     // ============================================================================

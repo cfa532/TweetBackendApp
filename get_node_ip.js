@@ -22,7 +22,27 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const v4Only = request["v4only"] === "true" ? true : false;  // IPv4-only filter flag
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === null || result === undefined) {
+                return {success: false, message: "Node IP not found"}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return null
+    }
     
     // ============================================================================
     // MAIN EXECUTION
@@ -51,16 +71,16 @@
             if (v4Only && isIPv6(ipAddress)) continue;
             
             // Found a valid IP, return it immediately
-            return element;
+            return wrapResponse(element);
         }
-        return null; // No valid IP found
+        return wrapResponse(null); // No valid IP found
     } catch (e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error get_node_ip: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack");
-        return null;
+        return wrapError(e);
     }
 
     // ============================================================================

@@ -26,11 +26,32 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
+    
     // Needed to find out if appUser has liked or bookmarked the tweet
     const appUserId = request["appuserid"]  // ID of user requesting the tweet (for interaction checks)
     const tweetId = request["tweetid"]  // ID of tweet to refresh
     const hostId = request["hostid"]  // Main host ID of the tweet's author
     const authorId = request["userid"]  // Author ID of the tweet
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === null || result === undefined) {
+                return {success: false, message: "Tweet not found"}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return null
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -60,14 +81,15 @@
         // ========================================================================
         
         // Get the fresh tweet data with user interaction status
-        return lapi.RunMApp("get_tweet", {aid: request.aid, ver:"last",
+        const tweet = lapi.RunMApp("get_tweet", {aid: request.aid, ver:"last",
             appuserid: appUserId, tweetid: tweetId}, [])
+        return wrapResponse(tweet)
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error refresh_tweet: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return null
+        return wrapError(e)
     }
 })(request, args)

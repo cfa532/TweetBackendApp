@@ -28,9 +28,30 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const TWT_LIST_KEY = "list_of_tweets_mid"  // Redis key for user's tweet list
     const APP_ID = request["aid"]  // Application identifier
     const userId = request["userid"]  // ID of user account to delete
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            // If result already has success field, return as-is
+            if (result && typeof result === 'object' && 'success' in result) {
+                return result
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return {success: false, message: error}
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -61,7 +82,7 @@
                 lapi.Error("Tweed delete_account: Failed to call delete_account on remote node %s: %s, userId=%s", user.hostIds[0], e, userId)
                 throw e
             }
-            return ret
+            return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL USER HANDLING
@@ -93,7 +114,7 @@
                 lapi.Error("Tweed delete_account: Failed to delete user versions %s: %s", userId, e)
             }
             lapi.Debug("Tweed delete_account: Deleted account %s", userId)
-            return {success: true}
+            return wrapResponse({success: true})
         }
     } catch(e) {
         // ========================================================================
@@ -101,7 +122,7 @@
         // ========================================================================
         
         lapi.Error("Tweed Error delete_account: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return {success: false, message: e}
+        return wrapError(e)
     }
 
     // ============================================================================

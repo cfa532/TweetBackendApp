@@ -23,6 +23,31 @@
 
 ((request, args)=>{
     // ============================================================================
+    // CONSTANTS AND INITIALIZATION
+    // ============================================================================
+    
+    const version = request.version || ""  // Version identifier for API compatibility
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === null || result === undefined) {
+                return {success: false, message: "Upload failed"}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return null
+    }
+    
+    // ============================================================================
     // MAIN EXECUTION
     // ============================================================================
     
@@ -38,11 +63,11 @@
             if (request["referenceid"] === undefined) {
                 // No reference to add, this is an attachment of a tweet
                 // It will be added as reference to the tweetId later
-                return lapi.MFTemp2Ipfs(fsid, null)
+                return wrapResponse(lapi.MFTemp2Ipfs(fsid, null))
             }
             
             // Add new IPFS as reference to a parent Mimei, usually a userId
-            return lapi.MFTemp2Ipfs(fsid, request["referenceid"])
+            return wrapResponse(lapi.MFTemp2Ipfs(fsid, request["referenceid"]))
         }
         
         // ========================================================================
@@ -52,13 +77,13 @@
         let offset = parseInt(request["offset"], 10)  // Byte offset for chunk placement
         let b = new Uint8Array(args[0])  // Key point: chunk data as ByteArray
         lapi.MFSetData(fsid, b, offset);  // Store chunk at specified offset
-        return fsid;  // Return file system ID for next chunk
+        return wrapResponse(fsid);  // Return file system ID for next chunk
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error upload_ipfs: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return null
+        return wrapError(e)
     }
 })(request, args);

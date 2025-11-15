@@ -23,8 +23,29 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
+    
     // Note: appuserid is NOT the tweet author, but the current app user
     // It's used to check if the current user has liked, bookmarked, or retweeted this tweet
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === null || result === undefined) {
+                return {success: false, message: "Tweet not found"}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return null
+    }
     
     try {
         const TWT_CONTENT_KEY = "core_data_of_tweet"  // Key for tweet content storage
@@ -39,7 +60,7 @@
         const tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)  // Get tweet content
         
         if (!tweet)
-            return null
+            return wrapResponse(null)
 
         // ========================================================================
         // MAIN EXECUTION
@@ -83,13 +104,13 @@
         if (tweet.content)
             ret["content"] = tweet.content
             
-        return ret
+        return wrapResponse(ret)
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error get_tweet: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return null
+        return wrapError(e)
     }
 })(request, args)

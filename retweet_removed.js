@@ -27,6 +27,27 @@
   // CONSTANTS AND INITIALIZATION
   // ============================================================================
   
+  const version = request.version || ""  // Version identifier for API compatibility
+  
+  // Helper function to wrap response in v2 format if needed
+  function wrapResponse(result) {
+      if (version === 'v2') {
+          if (result === null || result === undefined) {
+              return {success: false, message: "Retweet removal failed"}
+          }
+          return {success: true, data: result}
+      }
+      return result
+  }
+  
+  // Helper function to wrap error response in v2 format if needed
+  function wrapError(error) {
+      if (version === 'v2') {
+          return {success: false, message: error.message || String(error), error: error}
+      }
+      return null
+  }
+  
   try {
     const RETWEET_LIST = "tweet_retweet_list"  // Redis key for tweet's retweet list
     const APP_ID = request["aid"]  // Application identifier
@@ -59,7 +80,7 @@
             lapi.Error("Tweed retweet_removed: Failed to call retweet_removed on remote node %s: %s, authorId=%s, tweetId=%s", user.hostIds[0], e, authorId, tweetId)
             throw e
         }
-        return ret
+        return wrapResponse(ret)
     } else {
       // ====================================================================
       // LOCAL AUTHOR HANDLING
@@ -88,9 +109,10 @@
       )
       
       // Retrieve the original tweet after updating it
-      return lapi.RunMApp("get_tweet", {aid: request["aid"], ver: "last",
+      const tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver: "last",
         appuserid: appUserId, tweetid: tweetId}, []
       )
+      return wrapResponse(tweet)
     }
   } catch (e) {
     // ========================================================================
@@ -98,7 +120,7 @@
     // ========================================================================
     
     lapi.Error("Tweed Error retweet_removed: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-    return null
+    return wrapError(e)
   }
 
   // ============================================================================

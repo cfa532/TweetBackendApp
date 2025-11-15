@@ -24,10 +24,30 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const TWT_CONTENT_KEY = "core_data_of_tweet"  // Key for tweet content storage
     const APP_ID = request["aid"]  // Application identifier
     const appUserId = request["appuserid"]  // ID of user requesting privacy update
     const tweetId = request["tweetid"]  // ID of tweet to update privacy for
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (typeof result === 'boolean') {
+                return {success: true, data: {isPrivate: result}}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return undefined
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -78,6 +98,7 @@
             } catch(e) {
                 lapi.Error("Tweed update_tweet_privacy: remote sync failed: %s, ret=%s, request=%s", e, JSON.stringify(ret), JSON.stringify(request))
             }
+            return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL USER HANDLING
@@ -116,7 +137,7 @@
             lapi.MiMeiPublish(authSid, "", tweetId)
             
             lapi.Debug("Tweed update_tweet_privacy: local tweet=%s", JSON.stringify(tweet))
-            return tweet.isPrivate ? true : false
+            return wrapResponse(tweet.isPrivate ? true : false)
         }
     } catch(e) {
         // ========================================================================
@@ -124,6 +145,7 @@
         // ========================================================================
         
         lapi.Error("Tweed Error update_tweet_privacy: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return wrapError(e)
     }
 
     // ============================================================================

@@ -25,6 +25,27 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (typeof result === 'boolean') {
+                return {success: true, data: {isPinned: result}}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return false
+    }
+    
     try {
         const PINNED_TWEETS = "pinned_tweet_list"  // Redis key for user's pinned tweets list
         const APP_ID = request["aid"]  // Application identifier
@@ -59,7 +80,7 @@
             
             // User mimei will be updated by system
             lapi.Debug("Tweed toggle_pinned_tweet: remote ret=%s", JSON.stringify(ret))
-            return ret
+            return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL USER HANDLING
@@ -98,7 +119,7 @@
                 lapi.Error("Tweed toggle_pinned_tweet: Failed to update user score %s: %s", appUserId, e)
             }
 
-            return !pinned  // Return new pinned status
+            return wrapResponse(!pinned)  // Return new pinned status
         }
     } catch(e) {
         // ========================================================================
@@ -106,7 +127,7 @@
         // ========================================================================
         
         lapi.Error("Tweed Error toggle_pinned_tweet: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return false
+        return wrapError(e)
     }
 
     // ============================================================================

@@ -23,6 +23,24 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return undefined
+    }
+    
     try {
         let targetId = request["mid"]  // Mimei ID of the content to provide/unprovide
         let isProvider = request["provide"]  // String "true" to provide, "false" to unprovide
@@ -67,11 +85,13 @@
                 lapi.Error("Tweed mimei_provide: Failed to delete versions %s: %s", targetId, e)
             }
         }
+        return wrapResponse({success: true})
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error mimei_provide: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return wrapError(e)
     }
 })(request, args)

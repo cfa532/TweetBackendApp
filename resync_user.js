@@ -23,8 +23,28 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const userId = request["userid"]  // ID of user to resync
     const user = getUser(userId)  // Get user data to determine hosting node
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === null || result === undefined) {
+                return {success: false, message: "User not found"}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return null
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -57,15 +77,16 @@
         // ========================================================================
         
         // Get the fresh user data after synchronization
-        return lapi.RunMApp("get_user_core_data", {aid: request["aid"], ver:"last",
+        const userData = lapi.RunMApp("get_user_core_data", {aid: request["aid"], ver:"last",
             userid: userId}, [])
+        return wrapResponse(userData)
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error resync_user: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return null
+        return wrapError(e)
     }
 
     // ============================================================================

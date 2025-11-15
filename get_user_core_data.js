@@ -23,6 +23,27 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === null || result === undefined) {
+                return {success: false, message: "User not found"}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return null
+    }
+    
     try {
         const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
         const TWT_LIST_KEY = "list_of_tweets_mid"  // Redis key for user's tweet list
@@ -39,7 +60,7 @@
         if (!user) {
             const nodeId = lapi.GetVar("", "hostid")
             lapi.Error("Tweed get_user_core_data: User %s not found on node %s", userId, nodeId)
-            return null
+            return wrapResponse(null)
         }
 
         // ========================================================================
@@ -56,13 +77,13 @@
         
         // Remove sensitive data before returning
         delete user.password
-        return user
+        return wrapResponse(user)
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Tweed Error get_user_core_data: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return null
+        lapi.Error("Tweed Error get_user_core_data: %s, %s, %s", e, JSON.stringify(request), e.stack || "no stack")
+        return wrapError(e)
     }
 })(request, args)

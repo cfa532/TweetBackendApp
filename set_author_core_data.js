@@ -25,12 +25,38 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
     const APP_ID = request["aid"]  // Application ID assigned by Leither upon publication
     const APP_EXT = "com.example.twitterclone"  // Application extension identifier
     
     // Parse and validate user data from request
     const user = JSON.parse(request["user"])  // Parsed user data object
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            // If result already has success/status field, ensure it's in v2 format
+            if (result && typeof result === 'object') {
+                if ('status' in result && !('success' in result)) {
+                    return {success: result.status === 'success', ...result}
+                }
+                if ('success' in result) {
+                    return result
+                }
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return {status: "failure", reason: "Update failed"}
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -119,7 +145,7 @@
             } catch(e) {
                 lapi.Error("Tweed set_author_core_data: Failed to get user data after sync: %s", e)
             }
-            return ret
+            return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL USER HANDLING
@@ -181,7 +207,7 @@
             
             // Remove password from response for security
             delete userInDB.password
-            return {user: JSON.stringify(userInDB), status: "success"}
+            return wrapResponse({user: JSON.stringify(userInDB), status: "success"})
         }
     } catch(e) {
         // ========================================================================
@@ -189,6 +215,6 @@
         // ========================================================================
         
         lapi.Error("Tweed Error set_author_core_data: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return {status: "failure", reason: "Update failed"}
+        return wrapError(e)
     }
 })(request, args)

@@ -17,12 +17,36 @@
  * - Timestamp is used as both score and member for chronological ordering
  */
 ((request, args) => {
+    // ============================================================================
+    // CONSTANTS AND INITIALIZATION
+    // ============================================================================
+    
+    const version = request.version || ""  // Version identifier for API compatibility
     const MESSAGE_MIMEI = "message_mimei_1"
     const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
     const APP_EXT = "us.fireshare.tweet"
     const receiptId = request["receiptid"]  // ID of the message recipient
     const senderId = request["userid"]        // ID of the message sender
     const msg = JSON.parse(request["msg"])  // Parsed message object with timestamp
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (typeof result === 'boolean') {
+                return {success: result, data: {sent: result}}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return false
+    }
 
     try {        
         const user = getUser(senderId)
@@ -46,7 +70,7 @@
                 lapi.Error("Tweed message_outgoing: Failed to call message_outgoing on remote node %s: %s, senderId=%s, receiptId=%s", user.hostIds[0], e, senderId, receiptId)
                 throw e
             }
-            return ret
+            return wrapResponse(ret)
         } else {
             // Store outgoing message in sender's local Mimei
             const authSid = lapi.BELoginAsAuthor()
@@ -65,10 +89,11 @@
             lapi.Zadd(msgSid, receiptId, sp)
             lapi.Hset(msgSid, receiptId, sp.Member, msg)
             lapi.MMBackup(msgSid, msgMid, "", "delref=true")
-            return true
+            return wrapResponse(true)
         }
     } catch(e) {
         lapi.Error("Tweed Error message_outgoing: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return wrapError(e)
     }
 
     function ScorePair() {}

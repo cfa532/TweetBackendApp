@@ -19,6 +19,11 @@
  * - Timestamp is used as both score and member for chronological ordering
  */
 ((request, args) => {
+    // ============================================================================
+    // CONSTANTS AND INITIALIZATION
+    // ============================================================================
+    
+    const version = request.version || ""  // Version identifier for API compatibility
     const LAST_INCOMING_MSG = "incoming_message_indicator"  // Tracks most recent unread message from each sender
     const MESSAGE_MIMEI = "message_mimei_1"
     const APP_EXT = "us.fireshare.tweet"
@@ -26,6 +31,26 @@
     const senderId = request["senderid"]     // ID of the message sender
     const receiptId = request["receiptid"]      // ID of the message receiver (owner of the data Mimei)
     const msg = JSON.parse(request["msg"])   // Parsed message object with timestamp
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            // If result already has success field, return as-is
+            if (result && typeof result === 'object' && 'success' in result) {
+                return result
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return {success: false, error: error.message}
+    }
 
     try {
         const user = getUser(receiptId)
@@ -49,7 +74,7 @@
                 lapi.Error("Tweed message_incoming: Failed to call message_incoming on remote node %s: %s, receiptId=%s, senderId=%s", user.hostIds[0], e, receiptId, senderId)
                 throw e
             }
-            return ret
+            return wrapResponse(ret)
         } else {
             // Store incoming message in receiver's local Mimei
             const authSid = lapi.BELoginAsAuthor()
@@ -76,11 +101,11 @@
             lapi.Zadd(msgSid, senderId, sp)
             lapi.Hset(msgSid, senderId, sp.Member, msg)
             lapi.MMBackup(authSid, msgMid, "", "delref=true")
-            return {success: true}
+            return wrapResponse({success: true})
         }
     } catch(e) {
         lapi.Error("Tweed Error message_incoming: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return {success: false, error: e.message}
+        return wrapError(e)
     }
 
     function ScorePair() {}

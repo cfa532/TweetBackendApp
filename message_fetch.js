@@ -14,6 +14,11 @@
  * 4. Return the fetched messages
  */
 ((request, args)=>{
+    // ============================================================================
+    // CONSTANTS AND INITIALIZATION
+    // ============================================================================
+    
+    const version = request.version || ""  // Version identifier for API compatibility
     // Zset tracking the last time messages from each sender were read.
     // The timestamp is the score, and the member is the sender ID.
     const LAST_FETCH_MSG = "read_message_indicator"
@@ -22,6 +27,22 @@
     const APP_ID = request["aid"]       // App ID assigned by Leither upon publication
     const userId = request["userid"]    // ID of the user fetching messages
     const senderId = request["senderid"] // ID of the sender whose messages to fetch
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error, data: []}
+        }
+        return []
+    }
 
     try {
         const user = getUser(userId)
@@ -46,7 +67,7 @@
                 lapi.Error("Tweed message_fetch: Failed to call message_fetch on remote node %s: %s, userId=%s, senderId=%s", user.hostIds[0], e, userId, senderId)
                 throw e
             }
-            return ret
+            return wrapResponse(ret)
         } else {
             // Get message Mimei for this user
             const authSid = lapi.BELoginAsAuthor()
@@ -84,11 +105,11 @@
             
             // Backup the Mimei to ensure data persistence
             lapi.MMBackup(authSid, msgMid, "", "delref=true")
-            return messages
+            return wrapResponse(messages)
         }
     } catch(e) {
         lapi.Error("Tweed Error message_fetch: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return []
+        return wrapError(e)
     }
 
     // ============================================================================

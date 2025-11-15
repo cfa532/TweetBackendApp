@@ -19,19 +19,45 @@
 
 ((request, args)=>{
     // ============================================================================
+    // CONSTANTS AND INITIALIZATION
+    // ============================================================================
+    
+    const version = request.version || ""  // Version identifier for API compatibility
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === null || result === undefined) {
+                return {success: false, message: "File not found"}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return null
+    }
+    
+    // ============================================================================
     // MAIN EXECUTION
     // ============================================================================
     
     try {
         const authSid = lapi.BELoginAsAuthor()  // Get authentication session
         let fsid = lapi.MFOpenMacFile(authSid, "", request["mac"])  // Open Mac file
-        return lapi.MFGetData(fsid, 0, -1)  // Get all file data (0 to end)
+        const data = lapi.MFGetData(fsid, 0, -1)  // Get all file data (0 to end)
+        return wrapResponse(data)
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error open_mac: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return null
+        return wrapError(e)
     }
 })(request, args)

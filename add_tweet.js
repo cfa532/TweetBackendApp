@@ -31,6 +31,7 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const APP_EXT = "com.example.twitterclone"  // Application extension identifier
     const TWT_CONTENT_KEY = "core_data_of_tweet"  // Key for tweet content storage
     const TWT_LIST_KEY = "list_of_tweets_mid"  // Redis key for user's tweet list
@@ -39,6 +40,27 @@
     let tweetId = ""; // Initialize tweetId outside the try block for error handling
     let tweet = JSON.parse(request["tweet"])  // Parsed tweet object
     const user = getUser(tweet.authorId)  // Get author's user data
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            // If result already has success field, return as-is
+            if (result && typeof result === 'object' && 'success' in result) {
+                return result
+            }
+            // Otherwise wrap in success object
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return {success: false, message: error}
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -82,7 +104,7 @@
             } catch(e) {
                 lapi.Error("Tweed add_tweet: remote not ready: %s, ret=%s, request=%s", e, JSON.stringify(ret), JSON.stringify(request))
             }
-            return ret
+            return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL USER HANDLING
@@ -143,11 +165,11 @@
 
             // Return success response with tweet ID
             lapi.Info("Tweed add_tweet: local %s", JSON.stringify(tweet))
-            return {success: true, mid: tweetId}
+            return wrapResponse({success: true, mid: tweetId})
         }
     } catch(e) {
         lapi.Error("Tweed Error add_tweet: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return {success: false, message: e}
+        return wrapError(e)
     }
 
     /**

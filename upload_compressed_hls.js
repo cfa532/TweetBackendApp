@@ -4,6 +4,35 @@
  */
 
 ((request, args) => {
+    // ============================================================================
+    // CONSTANTS AND INITIALIZATION
+    // ============================================================================
+    
+    const version = request.version || ""  // Version identifier for API compatibility
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            // If result already has success/status field, ensure it's in v2 format
+            if (result && typeof result === 'object' && ('success' in result || 'status' in result)) {
+                if ('status' in result && !('success' in result)) {
+                    return {success: true, ...result}
+                }
+                return result
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        throw error
+    }
+    
     try {
         const fs = require('fs');
         const path = require('path');
@@ -36,15 +65,15 @@
         
         lapi.Debug("Tweed upload_compressed_hls: Received chunk at offset=%s, size=%s bytes", offset, chunkData.length);
         
-        return {
+        return wrapResponse({
             fsid: fsid,
             offset: offset + chunkData.length,
             status: "chunk_received"
-        };
+        });
         
     } catch(e) {
         lapi.Error("Tweed Error upload_compressed_hls: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack");
-        throw e;
+        return wrapError(e);
     }
     
     /**
@@ -126,13 +155,13 @@
                 }
             }
             
-            return {
+            return wrapResponse({
                 fsid: hlsFsid,
                 tempDir: tempDir,
                 segmentCount: hlsValidation.segmentCount,
                 playlistFiles: hlsValidation.playlistFiles,
                 status: "extracted_and_validated"
-            };
+            });
             
         } catch (error) {
             lapi.Error("Tweed upload_compressed_hls: Error extracting HLS: %s, stack=%s", error, error.stack || "no stack");

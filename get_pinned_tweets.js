@@ -24,6 +24,24 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error, data: []}
+        }
+        return []
+    }
+    
     try {
         const PINNED_TWEETS = "pinned_tweet_list"  // Redis key for user's pinned tweets
         const appUserId = request["appuserid"]  // ID of user requesting pinned tweets
@@ -35,7 +53,7 @@
         // ========================================================================
         
         // Get pinned tweet IDs and convert to full tweet objects with timestamps
-        return lapi.Hkeys(mmsid, PINNED_TWEETS).map(tweetId => {
+        const result = lapi.Hkeys(mmsid, PINNED_TWEETS).map(tweetId => {
             let ts = lapi.Hget(mmsid, PINNED_TWEETS, tweetId).toString()  // Pinning timestamp
             let tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
                 appuserid: appUserId, tweetid: tweetId}, [])
@@ -44,12 +62,13 @@
                 return {tweet: tweet, timestamp: ts}
             }
         }).filter(e=> e);  // Remove null/undefined results
+        return wrapResponse(result)
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error get_pinned_tweets: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return []
+        return wrapError(e)
     }
 })(request, args)

@@ -22,6 +22,27 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === null || result === undefined) {
+                return {success: false, message: "Failed to get upgrade package ID"}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return null
+    }
+    
     try {
         const APP_ID = request["aid"]  // Application ID assigned by Leither upon publication
         const APP_EXT = "com.example.twitterclone"  // Application extension identifier
@@ -41,13 +62,13 @@
         // return mid.length>27 ? "http://"+ip+"/ipfs/"+mid : "http://"+ip+"/mm/"+mid
         
         lapi.Debug("Tweed download_upgrade: Upgrade package mid=%s", mid)
-        return mid
+        return wrapResponse(mid)
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error download_upgrade: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return null
+        return wrapError(e)
     }
 })(request, args)

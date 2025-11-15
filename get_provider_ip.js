@@ -27,9 +27,29 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const v4Only = request["v4only"] === "true" ? true : false;  // IPv4-only filter flag
     const mid = request["mid"];  // Mimei ID to get provider IP for
     let rawData = lapi.GetVar("", "mmprovsips", mid);  // Get provider IP data
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === null || result === undefined || result === "") {
+                return {success: false, message: "Provider IP not found"}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return ""
+    }
     
     // Handle double-encoded JSON (some data may be encoded twice)
     let providers = JSON.parse(rawData);
@@ -68,14 +88,14 @@
                 }
             });
         });
-        return ip;
+        return wrapResponse(ip || null);
     } catch (e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error get_provider_ip: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack");
-        return ""
+        return wrapError(e)
     }
 
     // ============================================================================

@@ -22,6 +22,27 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === null || result === undefined || result === "") {
+                return {success: false, message: "Shared file IP not found"}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return null
+    }
+    
     try {
         const ips = lapi.GetVar("", "mmprovsips", request["mid"])  // Get provider IP data
         if (!ips) return null
@@ -49,13 +70,13 @@
         });
         
         lapi.Debug("Tweed get_shared_file_ip: ips=%s, ip=%s", ips, ip)
-        return ip
+        return wrapResponse(ip || null)
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error get_shared_file_ip: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return null
+        return wrapError(e)
     }
 })(request, args)

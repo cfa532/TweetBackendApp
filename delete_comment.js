@@ -29,6 +29,29 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            // If result already has success field, return as-is
+            if (result && typeof result === 'object' && 'success' in result) {
+                return result
+            }
+            // Otherwise wrap in success object
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return {success: false, message: error}
+    }
+    
     try {
         const COMMENT_LIST = "comment_list_key"  // Redis key for tweet's comment list
         const APP_ID = request["aid"]  // Application identifier
@@ -62,7 +85,7 @@
             } catch(e) {
                 lapi.Error("Tweed delete_comment: Error sync tweet: %s, ret=%s", e, JSON.stringify(ret))
             }
-            return ret
+            return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL TWEET HANDLING
@@ -106,7 +129,7 @@
             let lastSid = lapi.MMOpen("", tweetId, "last")
             const commentCount = lapi.Zcard(lastSid, COMMENT_LIST)
             lapi.Debug("Tweed delete_comment: local commentCount=%s, commentId=%s", commentCount, commentId)
-            return {success: true, commentId: commentId, count: commentCount}
+            return wrapResponse({success: true, commentId: commentId, count: commentCount})
         }
     } catch(e) {
         // ========================================================================
@@ -114,6 +137,6 @@
         // ========================================================================
         
         lapi.Error("Tweed Error delete_comment: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return {success: false, message: e}
+        return wrapError(e)
     }
 })(request, args)

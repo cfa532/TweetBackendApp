@@ -25,12 +25,38 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const APP_ID = request["aid"]  // Application ID assigned by Leither upon publication
     const APP_EXT = "com.example.twitterclone"  // Application extension identifier
     const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
     const user = JSON.parse(request["user"])  // Parsed user data object
     const followings = request["followings"] ? JSON.parse(request["followings"]) : []  // Initial following list
     const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            // If result already has success/status field, ensure it's in v2 format
+            if (result && typeof result === 'object') {
+                if ('status' in result && !('success' in result)) {
+                    return {success: result.status === 'success', ...result}
+                }
+                if ('success' in result) {
+                    return result
+                }
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return {status: "failure", reason: error.message || String(error)}
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -56,7 +82,7 @@
                 lapi.Error("Tweed register: Failed to call register on remote node %s: %s, username=%s", user.hostIds[0], e, user.username)
                 throw e
             }
-            return ret
+            return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL USER REGISTRATION
@@ -75,7 +101,7 @@
                 mid: userMid}, [])
             if (providerIp) {
                 lapi.Error("Tweed register: User register failed. Existing user %s", JSON.stringify(providerIp))
-                return {status: "failure", reason: "Username is taken"}
+                return wrapError(new Error("Username is taken"))
             }
             
             // ================================================================
@@ -119,7 +145,7 @@
             
             lapi.Debug("Tweed register: User registered %s", JSON.stringify(user))
             delete user.password  // Remove sensitive data before returning
-            return {user: JSON.stringify(user), status: "success"}
+            return wrapResponse({user: JSON.stringify(user), status: "success"})
         }
     } catch(e) {
         // ========================================================================
@@ -127,6 +153,6 @@
         // ========================================================================
         
         lapi.Error("Tweed Error register: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return {status: "failure", reason: e.message || String(e)}
+        return wrapError(e)
     }
 })(request, args)

@@ -25,10 +25,30 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const APP_ID = request["aid"]  // Application identifier
     const APP_EXT = "com.example.twitterclone"  // Application extension identifier
     const USER_SHARE_MID = "shared_mid_of_user"  // Redis key for user's shared files
     const userId = request["userid"]  // ID of user sharing the file
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === null || result === undefined) {
+                return {success: false, message: "File sharing failed"}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return null
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -61,7 +81,7 @@
                 lapi.Error("Tweed share_file: Failed to call share_file on remote node %s: %s, userId=%s", user.hostIds[0], e, userId)
                 throw e
             }
-            return ret
+            return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL USER HANDLING
@@ -78,7 +98,7 @@
             const sharedObj = lapi.Hget(userSid, USER_SHARE_MID, mid)
             if (sharedObj) {
                 lapi.Debug("Tweed share_file: shared file already exists, sharedObj=%s", JSON.stringify(sharedObj))
-                return mid
+                return wrapResponse(mid)
             }
 
             // ================================================================
@@ -135,7 +155,7 @@
                 lapi.Error("Tweed share_file: Failed to backup/publish user %s: %s", userId, e)
             }
     
-            return mid  // Return the Mimei ID of the shared file
+            return wrapResponse(mid)  // Return the Mimei ID of the shared file
         }
     } catch(e) {
         // ========================================================================
@@ -143,7 +163,7 @@
         // ========================================================================
         
         lapi.Error("Tweed Error share_file: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return null
+        return wrapError(e)
     }
 
     // ============================================================================

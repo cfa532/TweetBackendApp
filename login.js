@@ -26,6 +26,7 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const APP_EXT = "com.example.twitterclone"  // Application extension identifier
     const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
     const APP_ID = request["aid"]  // Application identifier
@@ -35,6 +36,31 @@
     const userId = lapi.MMCreate(authSid, APP_ID, APP_EXT, username, 2, 0x07276704)  // Create user ID
     const userSid = lapi.MMOpen(authSid, userId, "cur")  // Open user's memory space
     const userInDB = lapi.Get(userSid, OWNER_DATA_KEY)  // Get user data from storage
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            // If result already has success/status field, ensure it's in v2 format
+            if (result && typeof result === 'object') {
+                if ('status' in result && !('success' in result)) {
+                    return {success: result.status === 'success', ...result}
+                }
+                if ('success' in result) {
+                    return result
+                }
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return {status: "failure", reason: error.message || String(error)}
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -77,7 +103,7 @@
                     lapi.Error("Tweed login: Failed to call login on remote node %s: %s, username=%s", userInDB.hostIds[0], e, username)
                     throw e
                 }
-                return ret
+                return wrapResponse(ret)
             } else {
                 // ================================================================
                 // LOCAL USER HANDLING
@@ -112,14 +138,14 @@
                 
                 // Make sure to remove password from user data right before sending it back to client
                 delete userInDB.password
-                return {user: userInDB, status: "success"}
+                return wrapResponse({user: userInDB, status: "success"})
             }
         } else {
             // ====================================================================
             // AUTHENTICATION FAILURE
             // ====================================================================
             
-            return {status: "failure", reason: "Wrong password"}
+            return wrapError(new Error("Wrong password"))
         }
     } catch(e) {
         // ========================================================================
@@ -131,10 +157,10 @@
         if (loginOK) {
             // Login was successful but error occurred during processing
             delete userInDB.password  // Remove sensitive data
-            return {user: userInDB, status: "success"}
+            return wrapResponse({user: userInDB, status: "success"})
         } else {
             // Login failed due to error
-            return {status: "failure", reason: "Unknown error"}
+            return wrapError(new Error("Unknown error"))
         }
     }
 })(request, args)

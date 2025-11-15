@@ -32,6 +32,7 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const TWT_LIST_KEY = "list_of_tweets_mid"  // Redis key for user's tweet list
     const TWT_CONTENT_KEY = "core_data_of_tweet"  // Key for tweet content storage
     const FOLLOWINGS_TWEETS = "followings_tweets"  // Redis key for following tweets feed
@@ -39,6 +40,27 @@
     const tweetId = request["tweetid"]  // ID of tweet to be removed
     const userId = request["userid"]  // ID of user requesting deletion
     const APP_ID = request["aid"]  // Application identifier
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            // If result already has success field, return as-is
+            if (result && typeof result === 'object' && 'success' in result) {
+                return result
+            }
+            // Otherwise wrap in success object
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return {message: error, success: false}
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -71,7 +93,7 @@
                 throw e
             }
             lapi.Debug("Tweed delete_tweet: remote ret=%s", JSON.stringify(ret))
-            return ret
+            return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL USER HANDLING
@@ -135,11 +157,11 @@
                 // Don't throw - this is a cleanup operation
             }
     
-            return {tweetid: tweetId, success: true}
+            return wrapResponse({tweetid: tweetId, success: true})
         }
     } catch(e) {
         lapi.Error("Tweed Error delete_tweet: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return {message: e, success: false}
+        return wrapError(e)
     }
 
     // ============================================================================

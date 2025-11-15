@@ -25,16 +25,33 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     // Extract request parameters
     const APP_ID = request["aid"]  // Application identifier
     const hostId = request["hostid"]  // Remote host ID to compare scores with
     const userId = request["userid"]  // User ID associated with the mimei
     const mid = request["mid"]  // Mimei ID to compare and update
     const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return undefined
+    }
 
     // Skip processing if we're already on the target host
     if (nodeId === hostId) {
-        return
+        return wrapResponse({success: true, message: "Already on target host"})
     }
 
     // ============================================================================
@@ -98,12 +115,14 @@
                 lapi.Error("Tweed node_update_mid_by_score: Failed to update score for mid %s: %s", mid, e)
             }
         }
+        return wrapResponse({success: true})
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error node_update_mid_by_score: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return wrapError(e)
     }
     // ============================================================================
     // HELPER FUNCTIONS

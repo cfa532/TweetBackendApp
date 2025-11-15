@@ -9,7 +9,11 @@
  */
 
 ((request, args) => {
-    // Constants for data storage keys
+    // ============================================================================
+    // CONSTANTS AND INITIALIZATION
+    // ============================================================================
+    
+    const version = request.version || ""  // Version identifier for API compatibility
     const FOLLOWINGS_TWEETS = "followings_tweets"   // sorted set of followings' tweets
     const FOLLOWINGS_LIST = "list_of_followings_mid"
     const TWT_LIST_KEY = "list_of_tweets_mid"   // sorted set of user's own tweets
@@ -18,6 +22,26 @@
     const APP_ID = request["aid"]
     const userId = request["appuserid"]    // appUser
     const hostId = request["hostid"]
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            // If result already has success field, return as-is
+            if (result && typeof result === 'object' && 'success' in result) {
+                return result
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return {success: false, error: error.message}
+    }
     
     // Initialize authentication and get current node ID
     const authSid = lapi.BELoginAsAuthor()
@@ -104,11 +128,11 @@
                 }
             }
 
-            return {
+            return wrapResponse({
                 success: true,
                 tweets: tweets,
                 originalTweets: []
-            }
+            })
         } else {
             // This host is the single source of truth, process followings directly.
             const mmsid = lapi.MMOpen(authSid, userId, "cur")
@@ -130,18 +154,15 @@
                 lapi.MiMeiPublish(mmsid, "", userId)
             }
             
-            return {
+            return wrapResponse({
                 success: true,
                 tweets: tweets,
                 originalTweets: []
-            }
+            })
         }
     } catch(e) {
         lapi.Error("Tweed Error update_following_tweets: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return {
-            success: false,
-            error: e.message
-        }
+        return wrapError(e)
     }
 
     /**

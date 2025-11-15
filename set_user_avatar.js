@@ -25,6 +25,27 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === null || result === undefined) {
+                return {success: false, message: "Avatar update failed"}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return null
+    }
+    
     try {
         const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
         const APP_ID = request["aid"]  // Application identifier
@@ -58,7 +79,7 @@
                 lapi.Error("Tweed set_user_avatar: Failed to call set_user_avatar on remote node %s: %s, userId=%s", userInDB.hostIds[0], e, userId)
                 throw e
             }
-            return ret
+            return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL USER HANDLING
@@ -85,7 +106,7 @@
                 lapi.Error("Tweed set_user_avatar: Failed to update user score %s: %s", userId, e)
             }
             
-            return request["avatar"]  // Return updated avatar
+            return wrapResponse(request["avatar"])  // Return updated avatar
         }
     } catch(e) {
         // ========================================================================
@@ -93,6 +114,6 @@
         // ========================================================================
         
         lapi.Error("Tweed Error set_user_avatar: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return null
+        return wrapError(e)
     }
 })(request, args)

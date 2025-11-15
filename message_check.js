@@ -20,12 +20,33 @@
  */
 
 ((request, args)=>{
+    // ============================================================================
+    // CONSTANTS AND INITIALIZATION
+    // ============================================================================
+    
+    const version = request.version || ""  // Version identifier for API compatibility
     const LAST_FETCH_MSG = "read_message_indicator"   // Zset tracking the last time a user fetched messages from each sender
     const LAST_INCOMING_MSG = "incoming_message_indicator"   // Hset tracking the most recent message received from each sender
     const APP_ID = request["aid"]
     const APP_EXT = "us.fireshare.tweet"
     const MESSAGE_MIMEI = "message_mimei_1"
     const userId = request["userid"]
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error, data: []}
+        }
+        return []
+    }
 
     try {
         // Get authentication and create/open message Mimei
@@ -38,7 +59,7 @@
         
         if (!user || !user.hostIds || user.hostIds.length === 0) {
             lapi.Error("Tweed message_check: missing host for user %s", JSON.stringify({userId, nodeId, user}))
-            return []
+            return wrapError(new Error("User host not found"))
         }
 
         // If user's primary node is not the current node, forward to primary node
@@ -55,7 +76,7 @@
                 lapi.Error("Tweed message_check: Failed to call message_check on remote node %s: %s, userId=%s", user.hostIds[0], e, userId)
                 throw e
             }
-            return ret
+            return wrapResponse(ret)
         } else {
             // Get all senders who have sent messages to this user
             const senders = lapi.Hkeys(msgSid, LAST_INCOMING_MSG)
@@ -83,11 +104,11 @@
                     return lastMsg
                 }
             }).filter(e => e)
-            return messageList  // Return list of most recent unread messages for notification
+            return wrapResponse(messageList)  // Return list of most recent unread messages for notification
         }
     } catch(e) {
         lapi.Error("Tweed Error message_check: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return []
+        return wrapError(e)
     }
 
     // ============================================================================

@@ -24,10 +24,30 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const APP_ID = request["aid"]  // Application identifier
     const mmsid = lapi.BEOpenAppDataNode("cur", APP_ID)  // Open application data node
     const userId = request["userid"]  // User ID associated with the score
     const mid = request["mid"]  // Mimei ID to get score for
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === null || result === undefined) {
+                return {success: false, message: "Score not found"}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return null
+    }
     
     // ============================================================================
     // MAIN EXECUTION
@@ -42,13 +62,14 @@
         }
         
         // Get and return the score (Zscore will throw exception if the scorepair doesn't exist)
-        return lapi.Zscore(mmsid, userId, mid)
+        const score = lapi.Zscore(mmsid, userId, mid)
+        return wrapResponse(score)
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error node_get_score: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return null
+        return wrapError(e)
     }
 })(request, args)

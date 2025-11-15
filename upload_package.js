@@ -25,6 +25,27 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === null || result === undefined) {
+                return {success: false, message: "Failed to create package"}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return null
+    }
+    
     try {
         // Given a CID, assign a Mimei ID to it
         const APP_ID = request["aid"]  // Application ID assigned by Leither upon publication
@@ -52,13 +73,13 @@
         }
         
         lapi.Debug("Tweed upload_package%s: mid=%s", APP_MINI, mid)
-        return mid  // Return the created Mimei ID
+        return wrapResponse(mid)  // Return the created Mimei ID
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error upload_package: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return null
+        return wrapError(e)
     }
 })(request, args);

@@ -27,6 +27,7 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const COMMENT_LIST = 'comment_list';  // Redis key for user's comments
     const BOOKMARK_LIST = 'bookmark_list';  // Redis key for user's bookmarks
     const FAVORITE_LIST = 'favorite_list';  // Redis key for user's favorites
@@ -36,6 +37,22 @@
     const pageSize = request['ps'];  // Number of items per page
     const startRank = pageNumber * pageSize;  // Starting index for pagination
     const endRank = startRank + pageSize - 1;  // Ending index for pagination
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error, data: []}
+        }
+        return []
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -45,10 +62,10 @@
         if (request['type'] === COMMENT_LIST) {
             // Return comments as field-value pairs
             const mmsid = lapi.MMOpen('', userId, 'last');
-            return lapi.Hgetall(mmsid, COMMENT_LIST);
+            return wrapResponse(lapi.Hgetall(mmsid, COMMENT_LIST));
         } else {
             // Return tweets (bookmarks or favorites) as tweet objects
-            return getTweets(request['type']);
+            return wrapResponse(getTweets(request['type']));
         }
     } catch (e) {
         // ========================================================================
@@ -56,6 +73,7 @@
         // ========================================================================
         
         lapi.Error('Tweed Error get_user_meta: %s, request=%s, stack=%s', e, JSON.stringify(request), e.stack || "no stack");
+        return wrapError(e);
     }
 
     // ============================================================================

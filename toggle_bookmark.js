@@ -26,12 +26,34 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const BOOKMARK_LIST = "tweet_bookmark_list"  // Redis key for tweet's bookmark list
     const APP_ID = request["aid"]  // Application identifier
     const userId = request["userid"]  // ID of user bookmarking the tweet
     const tweetId = request["tweetid"]  // ID of tweet being bookmarked
     const authorId = request["authorid"]  // ID of tweet author
     const userHostId = request["userhostid"]  // Host ID of the user
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            // If result already has success field, return as-is
+            if (result && typeof result === 'object' && 'success' in result) {
+                return result
+            }
+            // Otherwise wrap in success object
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return {success: false, error: error}
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -76,7 +98,7 @@
             }
             
             lapi.Debug("Tweed toggle_bookmark: remote ret=%s", JSON.stringify(ret))
-            return ret
+            return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL AUTHOR HANDLING
@@ -101,7 +123,7 @@
             }
             
             lapi.Debug("Tweed toggle_bookmark: local tweet=%s, user=%s", JSON.stringify(updatedTweet), JSON.stringify(updatedUser))
-            return {success: true, user: updatedUser, tweet: updatedTweet}
+            return wrapResponse({success: true, user: updatedUser, tweet: updatedTweet})
         }
     } catch(e) {
         // ========================================================================
@@ -109,7 +131,7 @@
         // ========================================================================
         
         lapi.Error("Tweed Error toggle_bookmark: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return {success: false, error: e}
+        return wrapError(e)
     }
 
     // ============================================================================

@@ -25,11 +25,31 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const BOOKMARK_LIST = "bookmark_list"  // Redis key for user's bookmark list
     const APP_ID = request["aid"]  // Application identifier
     const userId = request["userid"]  // ID of user whose bookmarks to update
     const tweetId = request["tweetid"]  // ID of tweet to add/remove from bookmarks
     const isBookmarked = request["isbookmarked"] === "true" ? true : false  // Convert string to boolean
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === null || result === undefined) {
+                return {success: false, message: "User not found"}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return null
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -65,7 +85,7 @@
                 throw e
             }
             lapi.Debug("Tweed toggle_bookmark_by_user: remote userData=%s", JSON.stringify(userData))
-            return userData
+            return wrapResponse(userData)
         } else {
             // ====================================================================
             // LOCAL USER HANDLING
@@ -138,7 +158,7 @@
                 userid: userId}, []
             )
             lapi.Debug("Tweed toggle_bookmark_by_user: local tweetId=%s, userData=%s", tweetId, JSON.stringify(updatedUser))
-            return updatedUser
+            return wrapResponse(updatedUser)
         }
     } catch(e) {
         // ========================================================================
@@ -149,12 +169,13 @@
         
         // Return user data even if bookmark operation failed
         try {
-            return lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
+            const userData = lapi.RunMApp("get_user_core_data", {aid: APP_ID, ver:"last",
                 userid: userId}, []
             )
+            return wrapResponse(userData)
         } catch(e2) {
             lapi.Error("Tweed toggle_bookmark_by_user: Failed to get user data after error: %s", e2)
-            return null
+            return wrapError(e2)
         }
     }
 

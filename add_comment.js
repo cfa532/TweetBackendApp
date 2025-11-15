@@ -31,6 +31,7 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const COMMENT_LIST = "comment_list_key"  // Redis key for tweet's comment list
     const TWT_CONTENT_KEY = "core_data_of_tweet"  // Key for tweet content storage
     const APP_EXT = "com.example.twitterclone"  // Application extension identifier
@@ -39,6 +40,27 @@
     const tweetId = request["tweetid"]  // ID of tweet being commented on
     const hostId = request["hostid"]  // Node ID where the original tweet is hosted
     const comment = JSON.parse(request['comment'])  // Parsed comment object (tweet format)
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            // If result already has success field, return as-is
+            if (result && typeof result === 'object' && 'success' in result) {
+                return result
+            }
+            // Otherwise wrap in success object
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return {success: false, message: error}
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -80,7 +102,7 @@
             }
             
             lapi.Debug("Tweed add_comment: remote comment count=%s, nodeId=%s", JSON.stringify(ret), nodeId)
-            return ret
+            return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL TWEET HANDLING
@@ -144,7 +166,7 @@
             let lastSid = lapi.MMOpen("", tweetId, "last")
             const commentCount = lapi.Zcard(lastSid, COMMENT_LIST)  // Get current comment count
             lapi.Debug("Tweed add_comment: local commentCount=%s, commentId=%s, retweetId=%s", commentCount, commentId, retweetId)
-            return {success: true, mid: commentId, count: commentCount, retweetid: retweetId}
+            return wrapResponse({success: true, mid: commentId, count: commentCount, retweetid: retweetId})
         }
     } catch(e) {
         // ========================================================================
@@ -152,7 +174,7 @@
         // ========================================================================
         
         lapi.Error("Tweed Error add_comment: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return {success: false, message: e}
+        return wrapError(e)
     }
 
     // ============================================================================

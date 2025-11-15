@@ -25,6 +25,28 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            // If result already has success field, return as-is
+            if (result && typeof result === 'object' && 'success' in result) {
+                return result
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return {success: false, error: error.message}
+    }
+    
     try {
         const TWT_LIST_KEY = "list_of_tweets_mid"  // Redis key for user's tweet list
         const pageNum = parseInt(request["pn"], 10)  // Page number (0-based)
@@ -71,21 +93,18 @@
             }
         })
         
-        return {
+        return wrapResponse({
             success: true,
             tweets: tweets,
             originalTweets: originalTweets,
             tidList: arr.map(sp => sp.Member)
-        }
+        })
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error get_tweets_by_user: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return {
-            success: false,
-            error: e.message
-        }
+        return wrapError(e)
     }
 })(request, args)

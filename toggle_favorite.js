@@ -27,12 +27,34 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const FAVORITE_LIST = "tweet_like_list"  // Redis key for tweet's favorite list
     const APP_ID = request["aid"]  // Application identifier
     const appUserId = request["appuserid"]  // ID of user favoriting the tweet
     const tweetId = request["tweetid"]  // ID of tweet being favorited
     const authorId = request["authorid"]  // ID of tweet author
     const userHostId = request["userhostid"]  // Host ID of the user
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            // If result already has success field, return as-is
+            if (result && typeof result === 'object' && 'success' in result) {
+                return result
+            }
+            // Otherwise wrap in success object
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return {success: false, error: error}
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -79,7 +101,7 @@
             
             // Return format: {user: user, isFavorite: isFavorite, count: count}
             lapi.Debug("Tweed toggle_favorite: remote tweet=%s, appUserId=%s, tweetId=%s", JSON.stringify(ret), appUserId, tweetId)
-            return ret
+            return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL AUTHOR HANDLING
@@ -134,7 +156,7 @@
             }
             
             lapi.Debug("Tweed toggle_favorite: local tweet=%s, user=%s", JSON.stringify(updatedTweet), JSON.stringify(updatedUser))
-            return {success: true, user: updatedUser, tweet: updatedTweet }
+            return wrapResponse({success: true, user: updatedUser, tweet: updatedTweet })
         }
     } catch(e) {
         // ========================================================================
@@ -142,7 +164,7 @@
         // ========================================================================
         
         lapi.Error("Tweed Error toggle_favorite: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return {success: false, error: e}
+        return wrapError(e)
     }
 
     // ============================================================================

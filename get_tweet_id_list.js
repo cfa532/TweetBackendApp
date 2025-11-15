@@ -22,9 +22,26 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
     const TWT_CONTENT_KEY = "core_data_of_tweet"  // Key for tweet content storage
     const TWT_LIST_KEY = "list_of_tweets_mid"  // Redis key for user's tweet list
     const userId = request["userid"]  // ID of user whose tweets to retrieve
+    
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error, data: []}
+        }
+        return []
+    }
 
     // ============================================================================
     // MAIN EXECUTION
@@ -52,13 +69,13 @@
             }
         }).filter(e=> e)  // Remove null results
         
-        return arr  // Return the list of score pairs
+        return wrapResponse(arr)  // Return the list of score pairs
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
         
         lapi.Error("Tweed Error get_tweet_id_list: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
-        return []
+        return wrapError(e)
     }
 })(request, args)

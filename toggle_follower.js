@@ -26,6 +26,8 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
+    const version = request.version || ""  // Version identifier for API compatibility
+    
     // IMPORTANT: Boolean values are passed as strings "true"/"false"
     
     const isFollower = request["isfollower"]  // String "true" or "false" indicating follower status
@@ -33,9 +35,28 @@
     const userId = request["userid"]  // ID of user whose follower status is being updated
     const otherId = request["otherid"]  // ID of user whose follower status is being toggled
     
+    // Helper function to wrap response in v2 format if needed
+    function wrapResponse(result) {
+        if (version === 'v2') {
+            if (result === undefined || result === null) {
+                return {success: false, message: "Operation failed"}
+            }
+            return {success: true, data: result}
+        }
+        return result
+    }
+    
+    // Helper function to wrap error response in v2 format if needed
+    function wrapError(error) {
+        if (version === 'v2') {
+            return {success: false, message: error.message || String(error), error: error}
+        }
+        return undefined
+    }
+    
     // Prevent self-following scenarios
     if (userId === otherId) {
-        return  // Don't allow users to follow themselves
+        return wrapError(new Error("Cannot follow yourself"))  // Don't allow users to follow themselves
     }
 
     const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
@@ -43,7 +64,7 @@
 
     if (!user || !user.hostIds || user.hostIds.length === 0) {
         lapi.Error("Tweed toggle_follower: missing host for user %s", JSON.stringify({userId, nodeId, user}))
-        return
+        return wrapError(new Error("User host not found"))
     }
 
     // ============================================================================
@@ -76,6 +97,7 @@
                 lapi.Error("Tweed toggle_follower: Failed to update user score on remote node %s: %s, userId=%s", user.hostIds[0], e, userId)
                 // Don't throw - this is a non-critical operation
             }
+            return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL USER HANDLING
@@ -107,6 +129,7 @@
             }
             
             lapi.Debug("Tweed toggle_follower: %s with follower %s, isFollower=%s", userId, otherId, isFollower)
+            return wrapResponse({success: true, isFollower: isFollower === "true"})
         }
     } catch(e) {
         // ========================================================================
@@ -114,6 +137,7 @@
         // ========================================================================
         
         lapi.Error("Tweed Error toggle_follower: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        return wrapError(e)
     }
 
     // ============================================================================
