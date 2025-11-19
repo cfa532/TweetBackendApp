@@ -37,6 +37,11 @@
     const userSid = lapi.MMOpen(authSid, userId, "cur")  // Open user's memory space
     const userInDB = lapi.Get(userSid, OWNER_DATA_KEY)  // Get user data from storage
     
+    if (!userInDB) {
+        lapi.Error("Tweed Error login: User not found for username: %s", username);
+        return wrapError(new Error("User not found"));
+    }
+    
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
         if (version === 'v2') {
@@ -152,7 +157,8 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Tweed Error login: %s, loginOK=%s, request=%s, stack=%s", e, loginOK, JSON.stringify(request), e.stack || "no stack")
+        lapi.Error("Tweed Error login: %s, loginOK=%s, userInDB=%s, request=%s", e, 
+            loginOK, JSON.stringify(userInDB), JSON.stringify(request))
         
         if (loginOK) {
             // Login was successful but error occurred during processing
