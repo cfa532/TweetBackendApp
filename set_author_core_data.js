@@ -170,9 +170,27 @@
             userInDB.name = user.name  // Update user's display name
             userInDB.profile = user.profile  // Update user's profile information
 
-            // Update cloudDrivePort if provided
-            if (user.cloudDrivePort !== undefined && user.cloudDrivePort !== null) {
-                userInDB.cloudDrivePort = user.cloudDrivePort
+            // Update cloudDrivePort - trim whitespace, remove if empty or not provided
+            if ('cloudDrivePort' in user) {
+                const trimmedPort = String(user.cloudDrivePort || '').trim()
+                if (trimmedPort === '') {
+                    delete userInDB.cloudDrivePort
+                } else {
+                    userInDB.cloudDrivePort = trimmedPort
+                }
+            } else {
+                delete userInDB.cloudDrivePort
+            }
+            // Update domainToShare - trim whitespace, remove if empty or not provided
+            if ('domainToShare' in user) {
+                const trimmedDomain = String(user.domainToShare || '').trim()
+                if (trimmedDomain === '') {
+                    delete userInDB.domainToShare
+                } else {
+                    userInDB.domainToShare = trimmedDomain
+                }
+            } else {
+                delete userInDB.domainToShare
             }
 
             // ================================================================
