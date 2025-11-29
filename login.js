@@ -34,11 +34,11 @@
     const password = request["password"]  // Password for authentication
     const authSid = lapi.BELoginAsAuthor()  // Get authentication session
     const userId = lapi.MMCreate(authSid, APP_ID, APP_EXT, username, 2, 0x07276704)  // Create user ID
-    const userSid = lapi.MMOpen(authSid, userId, "cur")  // Open user's memory space
+    const userSid = lapi.MMOpen(authSid, userId, "last")  // Open user's memory space
     const userInDB = lapi.Get(userSid, OWNER_DATA_KEY)  // Get user data from storage
     
     if (!userInDB) {
-        lapi.Error("Tweed Error login: User not found for username: %s", username);
+        lapi.Error("Tweed Error login: User not found for username: %s %s", username, userId);
         return wrapError(new Error("User not found"));
     }
     
@@ -133,6 +133,7 @@
                 }
                 
                 // Update user data and publish changes
+                const userSid = lapi.MMOpen(authSid, userId, "cur")
                 lapi.Set(userSid, OWNER_DATA_KEY, userInDB)
                 lapi.MMBackup(authSid, userInDB.mid, "", "delref=true")
                 lapi.MiMeiPublish(authSid, "", userInDB.mid)

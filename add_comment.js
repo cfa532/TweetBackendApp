@@ -165,7 +165,7 @@
             // Return success response with comment details
             let lastSid = lapi.MMOpen("", tweetId, "last")
             const commentCount = lapi.Zcard(lastSid, COMMENT_LIST)  // Get current comment count
-            lapi.Debug("Tweed add_comment: local commentCount=%s, commentId=%s, retweetId=%s", commentCount, commentId, retweetId)
+            lapi.Debug("Tweed add_comment: local commentCount=%s, commentId=%s, retweetId=%s", String(commentCount), commentId, retweetId)
             return wrapResponse({success: true, mid: commentId, count: commentCount, retweetid: retweetId})
         }
     } catch(e) {

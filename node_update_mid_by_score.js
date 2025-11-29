@@ -98,7 +98,7 @@
         
         // If scores differ, sync and update the local score
         if (remoteScore !== localScore) {
-            lapi.Debug("Tweed node_update_mid_by_score: mid=%s, new score=%s, old score=%s, userId=%s", mid, remoteScore, localScore, userId)
+            lapi.Debug("Tweed node_update_mid_by_score: mid=%s, new score=%s, old score=%s, userId=%s", mid, String(remoteScore), String(localScore), userId)
             
             // Sync the mid data from remote host
             try {

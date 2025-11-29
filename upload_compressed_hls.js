@@ -63,7 +63,7 @@
         // Store the chunk at the specified offset
         lapi.MFSetData(fsid, chunkData, offset);
         
-        lapi.Debug("Tweed upload_compressed_hls: Received chunk at offset=%s, size=%s bytes", offset, chunkData.length);
+        lapi.Debug("Tweed upload_compressed_hls: Received chunk at offset=%s, size=%s bytes", String(offset), String(chunkData.length));
         
         return wrapResponse({
             fsid: fsid,
@@ -131,7 +131,7 @@
                 throw new Error(`Invalid HLS structure: ${hlsValidation.error}`);
             }
             
-            lapi.Debug("Tweed upload_compressed_hls: Valid HLS structure found with segmentCount=%s", hlsValidation.segmentCount);
+            lapi.Debug("Tweed upload_compressed_hls: Valid HLS structure found with segmentCount=%s", String(hlsValidation.segmentCount));
             
             // Create a new fsid for the extracted HLS directory
             const hlsFsid = lapi.MFOpenTempFile(authSid);

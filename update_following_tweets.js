@@ -86,7 +86,7 @@
             
             // Compare with local score and sync if different
             const localScore = lapi.Zscore(systemSid, userId, userId)
-            lapi.Debug("Tweed update_following_tweets: remoteScore=%s, localScore=%s", remoteScore, localScore)
+            lapi.Debug("Tweed update_following_tweets: remoteScore=%s, localScore=%s", String(remoteScore), String(localScore))
             
             if (remoteScore !== localScore) {
                 lapi.MiMeiSync(systemSid, "", userId, {})
@@ -97,7 +97,7 @@
 
             // Get new tweets since the last processed score
             const arr = lapi.Zrangebyscore(userSid, FOLLOWINGS_TWEETS, lastScore, Date.now(), 0, 1000)
-            lapi.Debug("Tweed update_following_tweets: new tweets, lastScore=%s, arr=%s", lastScore, JSON.stringify(arr))
+            lapi.Debug("Tweed update_following_tweets: new tweets, lastScore=%s, arr=%s", String(lastScore), JSON.stringify(arr))
             
             // Fetch tweet details for each new tweet
             const tweets = []
@@ -203,7 +203,7 @@
             
             // Get new tweets since lastScore by the uid
             const arr = lapi.Zrangebyscore(mmsid, TWT_LIST_KEY, lastScore, Date.now(), 0, 1000)
-            lapi.Debug("Tweed update_following_tweets: updateUser: arr=%s, lastScore=%s, uid=%s", JSON.stringify(arr), lastScore, uid)
+            lapi.Debug("Tweed update_following_tweets: updateUser: arr=%s, lastScore=%s, uid=%s", JSON.stringify(arr), String(lastScore), uid)
             
             // Add new tweets to the followings_tweets sorted set
             if (arr.length > 0) {
