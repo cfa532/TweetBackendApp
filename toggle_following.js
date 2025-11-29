@@ -124,7 +124,7 @@
             if (!followedUser) {
                 // Target user not available locally - attempt to sync and provide
                 try {
-                    lapi.MiMeiSync(authSid, "", followedId, {})
+                    lapi.MiMeiSync(authSid, "", followedId, {}) // Failure of sync will not throw an error
                     lapi.MiMeiProvide(authSid, "", followedId)
                 } catch(e) {
                     lapi.Error("Tweed toggle_following: Failed to sync followed user %s: %s", followedId, e)
