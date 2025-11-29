@@ -120,6 +120,7 @@
 
             // Get the user to be followed/unfollowed
             let followedUser = getUser(followedId)
+            lapi.Debug("Tweed toggle_following: user=%s %s", followedId, JSON.stringify(followedUser))
             if (!followedUser) {
                 // Target user not available locally - attempt to sync and provide
                 try {
@@ -201,7 +202,7 @@
                 lapi.Debug("Tweed toggle_following: %s following %s, host: %s, node: %s", userId, followedId, hostOfOther, nodeId)
                 
                 // Add user to following list with timestamp
-                const userSid = lapi.MMOpen(authSid, userId, "cur")
+                userSid = lapi.MMOpen(authSid, userId, "cur")
                 lapi.Hset(userSid, FOLLOWINGS_LIST, followedId, Date.now())
 
                 // Get all existing tweets from the user being followed
