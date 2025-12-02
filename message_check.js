@@ -107,7 +107,7 @@
             return wrapResponse(messageList)  // Return list of most recent unread messages for notification
         }
     } catch(e) {
-        lapi.Error("Tweed Error message_check: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        lapi.Error("Tweed Error message_check: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }
 

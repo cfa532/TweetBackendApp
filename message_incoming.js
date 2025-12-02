@@ -104,7 +104,7 @@
             return wrapResponse({success: true})
         }
     } catch(e) {
-        lapi.Error("Tweed Error message_incoming: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        lapi.Error("Tweed Error message_incoming: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }
 

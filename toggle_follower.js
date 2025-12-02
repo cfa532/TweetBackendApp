@@ -136,7 +136,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Tweed Error toggle_follower: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        lapi.Error("Tweed Error toggle_follower: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }
 

@@ -75,7 +75,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Tweed Error get_tweet_id_list: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        lapi.Error("Tweed Error get_tweet_id_list: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }
 })(request, args)

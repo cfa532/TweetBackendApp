@@ -94,7 +94,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Tweed Error get_provider_ip: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack");
+        lapi.Error("Tweed Error get_provider_ip: %s, request=%s", e, JSON.stringify(request));
         return wrapError(e)
     }
 

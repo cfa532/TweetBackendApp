@@ -166,7 +166,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Tweed Error toggle_favorite_by_user: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        lapi.Error("Tweed Error toggle_favorite_by_user: %s, request=%s", e, JSON.stringify(request))
         
         // Return user data even if favorite operation failed
         try {

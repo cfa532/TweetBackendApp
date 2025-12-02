@@ -126,7 +126,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Tweed Error toggle_pinned_tweet: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        lapi.Error("Tweed Error toggle_pinned_tweet: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }
 

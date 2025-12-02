@@ -165,7 +165,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Tweed Error toggle_bookmark_by_user: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        lapi.Error("Tweed Error toggle_bookmark_by_user: %s, request=%s", e, JSON.stringify(request))
         
         // Return user data even if bookmark operation failed
         try {

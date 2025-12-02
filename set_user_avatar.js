@@ -113,7 +113,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Tweed Error set_user_avatar: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        lapi.Error("Tweed Error set_user_avatar: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }
 })(request, args)

@@ -83,7 +83,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Tweed Error get_user_core_data: %s, %s, %s", e, JSON.stringify(request), e.stack || "no stack")
+        lapi.Error("Tweed Error get_user_core_data: %s, %s", e, JSON.stringify(request))
         return wrapError(e)
     }
 })(request, args)

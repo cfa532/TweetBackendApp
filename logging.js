@@ -48,7 +48,7 @@
         lapi.Debug("Tweed logging: %s", msg)  // Output message to console
         return wrapResponse({success: true, message: "Logged successfully"})
     } catch(e) {
-        lapi.Error("Tweed Error logging: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        lapi.Error("Tweed Error logging: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }
 })(request, args)

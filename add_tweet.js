@@ -168,7 +168,7 @@
             return wrapResponse({success: true, mid: tweetId})
         }
     } catch(e) {
-        lapi.Error("Tweed Error add_tweet: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        lapi.Error("Tweed Error add_tweet: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }
 

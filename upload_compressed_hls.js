@@ -164,7 +164,7 @@
             });
             
         } catch (error) {
-            lapi.Error("Tweed upload_compressed_hls: Error extracting HLS: %s, stack=%s", error, error.stack || "no stack");
+            lapi.Error("Tweed upload_compressed_hls: Error extracting HLS: %s", error);
             throw error;
         }
     }

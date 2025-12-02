@@ -79,7 +79,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Tweed Error upload_package: %s, request=%s, stack=%s", e, JSON.stringify(request), e.stack || "no stack")
+        lapi.Error("Tweed Error upload_package: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }
 })(request, args);
