@@ -28,7 +28,6 @@
     const APP_ID = request["aid"]  // Application ID assigned by Leither upon publication
     const APP_EXT = "com.example.twitterclone"  // Application extension identifier
     const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
-    const user = JSON.parse(request["user"])  // Parsed user data object
     const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
     
     // Helper function to wrap response in v2 format if needed
@@ -63,46 +62,121 @@
     }
 
     // ============================================================================
+    // INPUT VALIDATION
+    // ============================================================================
+
+    // Validate required request parameters
+    if (!request || !request["aid"]) {
+        return wrapError(new Error("Missing application ID"))
+    }
+
+    if (!request["user"]) {
+        return wrapError(new Error("Missing user data"))
+    }
+
+    // Parse and validate user data
+    let user
+    try {
+        user = JSON.parse(request["user"])
+    } catch (e) {
+        lapi.Error("Tweed register: Invalid user JSON: %s", request["user"])
+        return wrapError(new Error("Invalid user data format"))
+    }
+
+    // Validate required user fields
+    if (!user.username || typeof user.username !== 'string' || user.username.trim().length === 0) {
+        return wrapError(new Error("Username is required"))
+    }
+
+    if (!user.password || typeof user.password !== 'string' || user.password.trim().length === 0) {
+        return wrapError(new Error("Password is required"))
+    }
+
+    // Validate username format (basic check)
+    if (user.username.length > 100 || !/^[a-zA-Z0-9_-]+$/.test(user.username)) {
+        return wrapError(new Error("Invalid username format"))
+    }
+
+    // Validate hostIds if provided (should contain valid node IDs, not empty strings)
+    if (user.hostIds && Array.isArray(user.hostIds)) {
+        // Filter out empty strings and invalid entries
+        user.hostIds = user.hostIds.filter(id => id && typeof id === 'string' && id.trim().length > 0)
+    }
+
+    // ============================================================================
     // MAIN EXECUTION
     // ============================================================================
-    
+
     try {
         lapi.Debug("Tweed register: nodeId=%s, user=%s", nodeId, request["user"])
-        
+
         // ========================================================================
         // REMOTE USER REGISTRATION
         // ========================================================================
-        
-        if (user.hostIds?.length > 0 && user.hostIds[0] !== nodeId) {
+
+        // Check if user wants to register on a different node
+        // Only proceed if hostIds contains at least one valid node ID different from current node
+        const shouldRegisterRemote = user.hostIds && user.hostIds.length > 0 &&
+                                   user.hostIds[0] && user.hostIds[0] !== nodeId
+
+        if (shouldRegisterRemote) {
+            // Validate remote node ID
+            const targetNodeId = user.hostIds[0]
+            if (!targetNodeId || targetNodeId.trim().length === 0) {
+                lapi.Error("Tweed register: Invalid remote node ID: %s", targetNodeId)
+                return wrapError(new Error("Invalid remote node ID"))
+            }
+
             // Register user on their preferred remote host
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             let ret
             try {
                 ret = lapi.RunMApp("register", {aid: APP_ID, ver: "last",
-                    nid: user.hostIds[0], sid: systemSid,
+                    nid: targetNodeId, sid: systemSid,
                     user: request["user"]}, []
                 )
             } catch(e) {
-                lapi.Error("Tweed register: Failed to call register on remote node %s: %s, username=%s", user.hostIds[0], e, user.username)
-                throw e
+                lapi.Error("Tweed register: Failed to call register on remote node %s: %s, username=%s", targetNodeId, e, user.username)
+                return wrapError(new Error(`Remote registration failed: ${e.message || String(e)}`))
             }
             return wrapResponse(ret)
         } else {
             // ====================================================================
             // LOCAL USER REGISTRATION
             // ====================================================================
+
+            // Additional validation for local registration
+            if (user.username.length < 3) {
+                return wrapError(new Error("Username must be at least 3 characters long"))
+            }
+
+            if (user.password.length < 4) {
+                return wrapError(new Error("Password must be at least 4 characters long"))
+            }
+
             // Register user on current node
             const authSid = lapi.BELoginAsAuthor()
-            const userMid = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.username, 2, 0x07276704)
-    
+            let userMid
+            try {
+                userMid = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.username, 2, 0x07276704)
+            } catch (e) {
+                lapi.Error("Tweed register: Failed to create user MID for %s: %s", user.username, e)
+                return wrapError(new Error("Failed to create user account"))
+            }
+
             // ================================================================
             // USERNAME UNIQUENESS VALIDATION
             // ================================================================
-            
+
             // Check if username is already taken by looking for existing provider
-            // Result of GetVar is a string literal "[]", we need to parse it to an array
-            const providerIp = lapi.RunMApp("get_provider_ip", {aid: APP_ID, ver: "last",
-                mid: userMid}, [])
+            let providerIp
+            try {
+                providerIp = lapi.RunMApp("get_provider_ip", {aid: APP_ID, ver: "last",
+                    mid: userMid}, [])
+            } catch (e) {
+                lapi.Error("Tweed register: Failed to check provider for user %s: %s", user.username, e)
+                return wrapError(new Error("Failed to validate username uniqueness"))
+            }
 
             if (providerIp) {
                 lapi.Error("Tweed register: User register failed. Existing %s at %s", user.username, providerIp)
@@ -112,26 +186,79 @@
             // ================================================================
             // USER DATA SETUP
             // ================================================================
-            
+
+            // Sanitize and set user data
             user["mid"] = userMid  // Set user's unique identifier
-            user["password"] = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)  // Hash password
+
+            // Hash password securely
+            try {
+                user["password"] = lapi.MMCreate(authSid, APP_ID, APP_EXT, user.password, 1, 0x07276704)
+            } catch (e) {
+                lapi.Error("Tweed register: Failed to hash password for user %s: %s", user.username, e)
+                return wrapError(new Error("Failed to process password"))
+            }
+
             user["timestamp"] = Date.now()  // Set creation timestamp
-            
-            // Set host IDs if not provided
-            if (!user["hostIds"] || user["hostIds"].length < 1) {
+            user["lastLogin"] = Date.now()  // Set initial last login time
+
+            // Ensure name and profile are strings
+            user["name"] = (user["name"] || "").toString().trim()
+            user["profile"] = (user["profile"] || "").toString().trim()
+
+            // Validate cloudDrivePort
+            const cloudDrivePort = parseInt(user["cloudDrivePort"]) || 0
+            user["cloudDrivePort"] = Math.max(0, Math.min(65535, cloudDrivePort)) // Clamp to valid port range
+
+            // Set host IDs if not provided or invalid
+            if (!user["hostIds"] || !Array.isArray(user["hostIds"]) || user["hostIds"].length < 1) {
                 user["hostIds"] = [nodeId]
+            } else {
+                // Ensure all hostIds are valid strings
+                user["hostIds"] = user["hostIds"].filter(id => id && typeof id === 'string' && id.trim().length > 0)
+                if (user["hostIds"].length === 0) {
+                    user["hostIds"] = [nodeId]
+                }
             }
             
             // ================================================================
             // USER DATA STORAGE
             // ================================================================
-            
-            const userSid = lapi.MMOpen(authSid, userMid, "cur")
-            lapi.Set(userSid, OWNER_DATA_KEY, user)  // Create default user data area
-            lapi.MMBackup(userSid, userMid, "", "delref=true")
-            lapi.MiMeiPublish(authSid, "", userMid)  // Publish user data so toggle_following can find the new user
-    
-            lapi.RunMApp("node_update_score", {aid: APP_ID, ver: "last", userid: userMid, mid: userMid}, [])
+
+            let userSid
+            try {
+                userSid = lapi.MMOpen(authSid, userMid, "cur")
+            } catch (e) {
+                lapi.Error("Tweed register: Failed to open user storage for %s: %s", user.username, e)
+                return wrapError(new Error("Failed to create user storage"))
+            }
+
+            try {
+                lapi.Set(userSid, OWNER_DATA_KEY, user)  // Create default user data area
+            } catch (e) {
+                lapi.Error("Tweed register: Failed to save user data for %s: %s", user.username, e)
+                return wrapError(new Error("Failed to save user data"))
+            }
+
+            try {
+                lapi.MMBackup(userSid, userMid, "", "delref=true")
+            } catch (e) {
+                lapi.Error("Tweed register: Failed to backup user data for %s: %s", user.username, e)
+                // This is not critical, continue
+            }
+
+            try {
+                lapi.MiMeiPublish(authSid, "", userMid)  // Publish user data so toggle_following can find the new user
+            } catch (e) {
+                lapi.Error("Tweed register: Failed to publish user %s: %s", user.username, e)
+                // This is not critical, continue
+            }
+
+            try {
+                lapi.RunMApp("node_update_score", {aid: APP_ID, ver: "last", userid: userMid, mid: userMid}, [])
+            } catch (e) {
+                lapi.Error("Tweed register: Failed to update node score for %s: %s", user.username, e)
+                // This is not critical, continue
+            }
             
             lapi.Debug("Tweed register: User registered %s", JSON.stringify(user))
             delete user.password  // Remove sensitive data before returning
