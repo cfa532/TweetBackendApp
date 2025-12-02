@@ -241,7 +241,11 @@
                 // Note: Individual tweet syncing is unnecessary if Mimei DB sync works properly.
                 // but it is not, so we still need to sync individual tweets.
                 normalizedScorepairs.forEach(sp => {
-                    const tweetId = sp.Member
+                    const tweetId = sp?.Member
+                    // Skip invalid tweet IDs (defensive check, get_tweet_id_list should already filter these)
+                    if (!tweetId) {
+                        return
+                    }
                     const t = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
                         tweetid: tweetId, appuserid: userId}, [])
                     if (!t) {

@@ -56,6 +56,10 @@
         
         // Filter to include only public tweets
         const filteredArr = arr.map(element => {
+            // Skip elements with invalid Member (null, undefined, or empty string)
+            if (!element || !element.Member) {
+                return null
+            }
             try {
                 const mmsid = lapi.MMOpen("", element.Member, "last")  // Open tweet's memory space
                 const tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)  // Get tweet content
@@ -67,7 +71,7 @@
                 lapi.Error("Tweed Error get_tweet_id_list: %s, request=%s", e, JSON.stringify(request))
                 return null
             }
-        }).filter(e=> e)  // Remove null results
+        }).filter(e => e)  // Remove null/undefined results
         
         return wrapResponse(filteredArr)  // Return the filtered list of score pairs
     } catch(e) {
