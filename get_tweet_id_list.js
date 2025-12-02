@@ -55,13 +55,13 @@
         const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, 0, 100)
         
         // Filter to include only public tweets
-        arr.map(e => {
+        const filteredArr = arr.map(element => {
             try {
-                const mmsid = lapi.MMOpen("", e.Member, "last")  // Open tweet's memory space
+                const mmsid = lapi.MMOpen("", element.Member, "last")  // Open tweet's memory space
                 const tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)  // Get tweet content
                 if (tweet && !tweet.isPrivate) {
                     // Only return the tweet if it is public
-                    return e
+                    return element
                 }
             } catch(e) {
                 lapi.Error("Tweed Error get_tweet_id_list: %s, request=%s", e, JSON.stringify(request))
@@ -69,7 +69,7 @@
             }
         }).filter(e=> e)  // Remove null results
         
-        return wrapResponse(arr)  // Return the list of score pairs
+        return wrapResponse(filteredArr)  // Return the filtered list of score pairs
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING

@@ -17,7 +17,6 @@
  * @param {string} request.aid - Application ID
  * @param {string} request.user - JSON string of user data object
  * @param {string} [request.followings] - JSON string of initial following list
- * @param {Array} args - Additional arguments (unused)
  * @returns {Object} Registration result with user data and status
  */
 ((request, args)=>{
@@ -30,7 +29,6 @@
     const APP_EXT = "com.example.twitterclone"  // Application extension identifier
     const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
     const user = JSON.parse(request["user"])  // Parsed user data object
-    const followings = request["followings"] ? JSON.parse(request["followings"]) : []  // Initial following list
     const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
     
     // Helper function to wrap response in v2 format if needed
@@ -38,6 +36,12 @@
         if (version === 'v2') {
             // If result already has success/status field, ensure it's in v2 format
             if (result && typeof result === 'object') {
+                // Special handling for success status: return user object directly
+                if ('status' in result && result.status === 'success' && 'user' in result) {
+                    // Parse user if it's a string, otherwise use as-is
+                    const userObj = typeof result.user === 'string' ? JSON.parse(result.user) : result.user
+                    return {success: true, user: userObj}
+                }
                 if ('status' in result && !('success' in result)) {
                     return {success: result.status === 'success', ...result}
                 }
@@ -63,7 +67,7 @@
     // ============================================================================
     
     try {
-        lapi.Debug("Tweed register: nodeId=%s, user=%s, followings=%s", nodeId, request["user"], request["followings"])
+        lapi.Debug("Tweed register: nodeId=%s, user=%s", nodeId, request["user"])
         
         // ========================================================================
         // REMOTE USER REGISTRATION
@@ -76,7 +80,7 @@
             try {
                 ret = lapi.RunMApp("register", {aid: APP_ID, ver: "last",
                     nid: user.hostIds[0], sid: systemSid,
-                    user: request["user"], followings: request["followings"]}, []
+                    user: request["user"]}, []
                 )
             } catch(e) {
                 lapi.Error("Tweed register: Failed to call register on remote node %s: %s, username=%s", user.hostIds[0], e, user.username)
@@ -99,8 +103,9 @@
             // Result of GetVar is a string literal "[]", we need to parse it to an array
             const providerIp = lapi.RunMApp("get_provider_ip", {aid: APP_ID, ver: "last",
                 mid: userMid}, [])
+
             if (providerIp) {
-                lapi.Error("Tweed register: User register failed. Existing user %s", JSON.stringify(providerIp))
+                lapi.Error("Tweed register: User register failed. Existing %s at %s", user.username, providerIp)
                 return wrapError(new Error("Username is taken"))
             }
             
@@ -126,22 +131,7 @@
             lapi.MMBackup(userSid, userMid, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", userMid)  // Publish user data so toggle_following can find the new user
     
-            // ================================================================
-            // INITIAL FOLLOWING SETUP
-            // ================================================================
-            
-            // Set up initial following relationships
-            followings?.forEach(mid => {
-                try {
-                    lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
-                        userid: user.mid, followingid: mid}, [])
-                } catch(e) {
-                    lapi.Error("Tweed register: Error in register when toggle_following: %s, request=%s", e, JSON.stringify(request))
-                }
-            });
-    
-            // Note: App data update could be implemented here
-            // lapi.RunMApp("update_app_data", {aid: APP_ID, ver: "last", user: JSON.stringify(user)}, [])
+            lapi.RunMApp("node_update_score", {aid: APP_ID, ver: "last", userid: userMid, mid: userMid}, [])
             
             lapi.Debug("Tweed register: User registered %s", JSON.stringify(user))
             delete user.password  // Remove sensitive data before returning
