@@ -83,15 +83,6 @@
         return wrapError(new Error("Invalid user data format"))
     }
 
-    // Validate required user fields
-    if (!user.username || typeof user.username !== 'string' || user.username.trim().length === 0) {
-        return wrapError(new Error("Username is required"))
-    }
-
-    if (!user.password || typeof user.password !== 'string' || user.password.trim().length === 0) {
-        return wrapError(new Error("Password is required"))
-    }
-
     // Validate username format (basic check)
     if (user.username.length > 100 || !/^[a-zA-Z0-9_-]+$/.test(user.username)) {
         return wrapError(new Error("Invalid username format"))
@@ -144,15 +135,6 @@
             // ====================================================================
             // LOCAL USER REGISTRATION
             // ====================================================================
-
-            // Additional validation for local registration
-            if (user.username.length < 3) {
-                return wrapError(new Error("Username must be at least 3 characters long"))
-            }
-
-            if (user.password.length < 4) {
-                return wrapError(new Error("Password must be at least 4 characters long"))
-            }
 
             // Register user on current node
             const authSid = lapi.BELoginAsAuthor()
