@@ -100,9 +100,14 @@
         // REMOTE USER HANDLING
         // ========================================================================
         
+        // If user has no valid hostIds, keep existing hostIds
         if (!user.hostIds || user.hostIds.length === 0) {
-            lapi.Error("Tweed set_author_core_data: missing host for user %s", JSON.stringify({userId: user.mid, nodeId, user}))
-            throw new Error("User missing host")
+            if (!userInDB.hostIds || userInDB.hostIds.length === 0) {
+                lapi.Error("Tweed set_author_core_data: missing host for user %s", JSON.stringify({userId: user.mid, nodeId, user}))
+                throw new Error("User missing host")
+            }
+            // Use existing hostIds from database
+            user.hostIds = userInDB.hostIds
         }
         
         // Check if we need to delegate to the primary host

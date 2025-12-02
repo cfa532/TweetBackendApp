@@ -107,8 +107,8 @@
 
         // Check if user wants to register on a different node
         // Only proceed if hostIds contains at least one valid node ID different from current node
-        const shouldRegisterRemote = user.hostIds && user.hostIds.length > 0 &&
-                                   user.hostIds[0] && user.hostIds[0] !== nodeId
+        const shouldRegisterRemote = user.hostIds && user.hostIds.length > 0 && user.hostIds[0] &&
+                                   user.hostIds[0].length == 27 && user.hostIds[0] !== nodeId
 
         if (shouldRegisterRemote) {
             // Validate remote node ID
