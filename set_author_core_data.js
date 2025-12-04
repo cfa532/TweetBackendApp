@@ -186,9 +186,9 @@
             } else {
                 delete userInDB.cloudDrivePort
             }
-            // Update domainToShare - trim whitespace, remove if empty or not provided
+            // Update domainToShare - trim whitespace, remove if null or empty or not provided, otherwise save its value
             if ('domainToShare' in user) {
-                const trimmedDomain = String(user.domainToShare || '').trim()
+                const trimmedDomain = user.domainToShare == null ? '' : String(user.domainToShare).trim()
                 if (trimmedDomain === '') {
                     delete userInDB.domainToShare
                 } else {
