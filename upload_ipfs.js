@@ -60,14 +60,20 @@
         // ========================================================================
         
         if (request["finished"] === "true") {
-            if (request["referenceid"] === undefined) {
-                // No reference to add, this is an attachment of a tweet
-                // It will be added as reference to the tweetId later
-                return wrapResponse(lapi.MFTemp2Ipfs(fsid, null))
+            let cid = lapi.MFTemp2Ipfs(fsid, null)
+            let referenceId = request["referenceid"]
+            if (referenceId) {
+                // Add new IPFS as reference to a parent Mimei, usually a userId
+                lapi.Debug("Tweed upload_ipfs: Adding %s as reference to mid=%s", cid, referenceId)
+                let authSid = lapi.BELoginAsAuthor()
+                let sid = lapi.MMOpen(authSid, referenceId, "cur")
+                lapi.MMAddRef(sid, referenceId, cid)
+                lapi.MMBackup(sid, referenceId, "", "delref=true")
             }
-            
-            // Add new IPFS as reference to a parent Mimei, usually a userId
-            return wrapResponse(lapi.MFTemp2Ipfs(fsid, request["referenceid"]))
+
+            // No reference to add, this is an attachment of a tweet
+            // It will be added as reference to the tweetId later
+            return wrapResponse(cid)
         }
         
         // ========================================================================

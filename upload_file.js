@@ -49,14 +49,14 @@
         const userId = request["userid"]  // ID of user to attach file to
 
         let authSid = lapi.BELoginAsAuthor()  // Get authentication session
-        lapi.MMOpen(authSid, userId, "cur")  // Open user's memory space
+        let sid = lapi.MMOpen(authSid, userId, "cur")  // Open user's memory space
         
         // Add file reference to user's data
-        lapi.MMAddRef(authSid, userId, request["cid"])
+        lapi.MMAddRef(sid, userId, request["cid"])
         
         // Update user data and publish changes
         try {
-            lapi.MMBackup(authSid, userId, "", "delref=true")
+            lapi.MMBackup(sid, userId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", userId)
         } catch(e) {
             lapi.Error("Tweed upload_file: Failed to backup/publish user %s: %s", userId, e)
