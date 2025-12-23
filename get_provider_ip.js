@@ -19,6 +19,7 @@
  * @param {Object} request - The request object containing provider data
  * @param {string} request.mid - Mimei ID to get provider IP for
  * @param {string} [request.v4only] - If "true", only return IPv4 addresses
+ * @param {string} [request.allowlocal] - If "true", allow local/private IP addresses
  * @param {Array} args - Additional arguments (unused)
  * @returns {string|null} Best provider IP address with port, or null if none found
  */
@@ -29,6 +30,7 @@
     
     const version = request.version || ""  // Version identifier for API compatibility
     const v4Only = request["v4only"] === "true" ? true : false;  // IPv4-only filter flag
+    const allowLocal = request["allowlocal"] === "true" ? true : false;  // Allow local/private IPs flag
     const mid = request["mid"];  // Mimei ID to get provider IP for
     let rawData = lapi.GetVar("", "mmprovsips", mid);  // Get provider IP data
     
@@ -75,8 +77,8 @@
                 // Validate port range (8000-9000)
                 if (port < 8000 || port > 9000) return;
                 
-                // Skip private IP addresses
-                if (isPrivateIP(ipAddress)) return;
+                // Skip private IP addresses (unless allowLocal is true)
+                if (!allowLocal && isPrivateIP(ipAddress)) return;
                 
                 // Skip IPv6 if IPv4-only mode is enabled
                 if (v4Only && !isIPv4(ipAddress)) return;
