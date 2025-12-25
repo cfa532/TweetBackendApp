@@ -58,7 +58,14 @@
             // User found locally, return user data
             return wrapResponse(user)
         } else {
-            // User not found locally, get provider IP for remote access
+            // User not found locally, but the node could be a provider by error, remove it.
+            try {
+                let authSid = lapi.BELoginAsAuthor()
+                lapi.MiMeiUnprovide(authSid, "", userId)
+            } catch(e) {
+                lapi.Error("Tweed get_user: Failed to unprovide user %s: %s", userId, e)
+            }
+            // get provider IP for remote access
             const ip = lapi.RunMApp("get_provider_ip", {aid: request.aid, ver:"last",
                 mid: userId}, [])
             
