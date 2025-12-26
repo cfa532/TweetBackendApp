@@ -67,6 +67,9 @@
         const arr = lapi.Zrevrange(mmsid, FOLLOWINGS_TWEETS, startRank, endRank)
         .map(sp => {
             const tweetId = sp.Member
+            if (tweetId === null) {
+                return null
+            }
             const tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
                 appuserid: appUserId, tweetid: tweetId}, [])
             
