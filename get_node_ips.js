@@ -6,7 +6,6 @@
  * 
  * Key Features:
  * - Filters out private IP addresses (IPv4 and IPv6)
- * - Validates port ranges (8000-9000)
  * - Optional IPv4-only filtering
  * - Handles both IPv4 and IPv6 addresses
  * - Supports bracketed IPv6 notation
@@ -64,9 +63,6 @@
         for (let element of ips) {
             // element format: ip:port
             const { ipAddress, port } = extractIPAndPort(element);
-            
-            // Validate port range (8000-9000)
-            if (port < 8000 || port > 9000) continue;
             
             // Skip private IP addresses
             if (isPrivateIP(ipAddress)) continue;

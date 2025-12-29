@@ -63,19 +63,34 @@
                 let authSid = lapi.BELoginAsAuthor()
                 lapi.MiMeiUnprovide(authSid, "", userId)
             } catch(e) {
-                lapi.Error("Tweed get_user: Failed to unprovide user %s: %s", userId, e)
+                // Version-specific behavior when unprovide fails
+                if (version === 'v3') {
+                    // v3: Return error immediately
+                    lapi.Error("Tweed get_user: Cannot find user %s: %s", userId, e)
+                    return wrapError(e)
+                } else {
+                    // v2 or no version: Log but continue to get provider IP
+                    lapi.Error("Tweed get_user: Failed to unprovide user %s: %s", userId, e)
+                }
             }
-            // get provider IP for remote access
-            const ip = lapi.RunMApp("get_provider_ip", {aid: request.aid, ver:"last",
-                mid: userId}, [])
             
-            if (ip) {
-                // Return provider IP for remote user access
-                lapi.Debug("Tweed get_user: new ip %s", ip)
-                return wrapResponse(ip)
+            // Version-specific behavior for provider IP lookup
+            if (version === 'v3') {
+                // v3: Don't attempt to get provider IP, already returned above or return null
+                return wrapResponse(null)
             } else {
-                // No provider found, throw error
-                throw new Error("No provider IP found.")
+                // v2 or no version: Get provider IP for remote access
+                const ip = lapi.RunMApp("get_provider_ip", {aid: request.aid, ver:"last",
+                    mid: userId}, [])
+                
+                if (ip) {
+                    // Return provider IP for remote user access
+                    lapi.Debug("Tweed get_user: new ip %s", ip)
+                    return wrapResponse(ip)
+                } else {
+                    // No provider found, throw error
+                    throw new Error("No provider IP found.")
+                }
             }
         }
     } catch(e) {
