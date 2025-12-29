@@ -48,37 +48,29 @@
     
     try {
         // Given a CID, assign a Mimei ID to it
-        const APP_ID = request["aid"]  // Application ID assigned by Leither upon publication
+        const APP_ID = request.aid  // Application ID assigned by Leither upon publication
         const APP_EXT = "com.example.twitterclone"  // Application extension identifier
-        const APP_MINI = request["mini"] ? "_" + request["mini"] : ""  // Optional mini package suffix
+        const APP_MINI = request.mini ? "_" + request.mini : ""  // Optional mini package suffix
         const APP_MARK = "package upgrade download" + APP_MINI  // Package identifier string
         
         let authSid = lapi.BELoginAsAuthor()  // Get authentication session
         
-        // ========================================================================
-        // PACKAGE CREATION
-        // ========================================================================
-        
         // Create Mimei ID for the package
         let mid = lapi.MMCreate(authSid, APP_ID, APP_EXT, APP_MARK, 1, 0x07276704)
+        lapi.Debug("Tweed upload_package: Setting package CID %s to %s", request.cid, mid)
         
-        // Associate the package with its content identifier
-        lapi.MFSetCid(authSid, mid, request["cid"])
-        
-        // Publish the package to the network
         try {
+            // Associate the package with its content identifier
+            lapi.MFSetCid(authSid, mid, request.cid)
             lapi.MiMeiPublish(authSid, "", mid)
         } catch(e) {
             lapi.Error("Tweed upload_package: Failed to publish package %s: %s", mid, e)
+            throw e
         }
         
         lapi.Debug("Tweed upload_package%s: mid=%s", APP_MINI, mid)
         return wrapResponse(mid)  // Return the created Mimei ID
     } catch(e) {
-        // ========================================================================
-        // ERROR HANDLING
-        // ========================================================================
-        
         lapi.Error("Tweed Error upload_package: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }
