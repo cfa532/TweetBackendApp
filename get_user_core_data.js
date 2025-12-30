@@ -56,9 +56,9 @@
         const userId = request["userid"]  // ID of user whose data to retrieve
         const mmsid = lapi.MMOpen("", userId, "last")  // Open user's memory space
         const user = lapi.Get(mmsid, OWNER_DATA_KEY)  // Get user data
+        const nodeId = lapi.GetVar("", "hostid")
         
         if (!user) {
-            const nodeId = lapi.GetVar("", "hostid")
             lapi.Error("Tweed get_user_core_data: User %s not found on node %s", userId, nodeId)
             return wrapResponse(null)
         }
@@ -68,6 +68,7 @@
         // ========================================================================
         
         // Add engagement metrics and statistics to user object
+        user.hostIds[1] = nodeId
         user["tweetCount"] = lapi.Zcard(mmsid, TWT_LIST_KEY)  // Number of tweets
         user["followingCount"] = lapi.Hlen(mmsid, FOLLOWINGS_LIST)  // Number of following
         user["followersCount"] = lapi.Hlen(mmsid, FOLLOWERS_LIST)  // Number of followers
