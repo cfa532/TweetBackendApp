@@ -65,9 +65,8 @@
             } catch(e) {
                 // Version-specific behavior when unprovide fails
                 if (version === 'v3') {
-                    // v3: Return error immediately
-                    lapi.Error("Tweed get_user: Cannot find user %s: %s", userId, e)
-                    return wrapError(e)
+                    // v3: Log error but continue (will return null below)
+                    lapi.Error("Tweed get_user: Failed to unprovide user %s: %s", userId, e)
                 } else {
                     // v2 or no version: Log but continue to get provider IP
                     lapi.Error("Tweed get_user: Failed to unprovide user %s: %s", userId, e)

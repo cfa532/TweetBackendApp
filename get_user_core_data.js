@@ -53,7 +53,7 @@
         const BOOKMARK_LIST = "bookmark_list"  // Redis key for user's bookmarks
         const FAVORITE_LIST = "favorite_list"  // Redis key for user's favorites
 
-        const userId = request["userid"]  // ID of user whose data to retrieve
+        const userId = request.userid  // ID of user whose data to retrieve
         const mmsid = lapi.MMOpen("", userId, "last")  // Open user's memory space
         const user = lapi.Get(mmsid, OWNER_DATA_KEY)  // Get user data
         const nodeId = lapi.GetVar("", "hostid")
@@ -68,16 +68,16 @@
         // ========================================================================
         
         // Add engagement metrics and statistics to user object
-        user.hostIds[1] = nodeId
-        user["tweetCount"] = lapi.Zcard(mmsid, TWT_LIST_KEY)  // Number of tweets
-        user["followingCount"] = lapi.Hlen(mmsid, FOLLOWINGS_LIST)  // Number of following
-        user["followersCount"] = lapi.Hlen(mmsid, FOLLOWERS_LIST)  // Number of followers
-        user["bookmarksCount"] = lapi.Hlen(mmsid, BOOKMARK_LIST)  // Number of bookmarks
-        user["favoritesCount"] = lapi.Hlen(mmsid, FAVORITE_LIST)  // Number of favorites
-        user["commentsCount"] = lapi.Hlen(mmsid, COMMENT_LIST)  // Number of comments
-        
+        user.hostIds = [user.hostIds[0], nodeId]
+        user.tweetCount = lapi.Zcard(mmsid, TWT_LIST_KEY)  // Number of tweets
+        user.followingCount = lapi.Hlen(mmsid, FOLLOWINGS_LIST)  // Number of following
+        user.followersCount = lapi.Hlen(mmsid, FOLLOWERS_LIST)  // Number of followers
+        user.bookmarksCount = lapi.Hlen(mmsid, BOOKMARK_LIST)  // Number of bookmarks
+        user.favoritesCount = lapi.Hlen(mmsid, FAVORITE_LIST)  // Number of favorites
+        user.commentsCount = lapi.Hlen(mmsid, COMMENT_LIST)  // Number of comments
         // Remove sensitive data before returning
         delete user.password
+        lapi.Debug("Tweed get_user_core_data: user=%s", JSON.stringify(user))
         return wrapResponse(user)
     } catch(e) {
         // ========================================================================
