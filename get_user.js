@@ -24,23 +24,17 @@
     
     const version = request.version || ""  // Version identifier for API compatibility
     
-    // Helper function to wrap response in v2 format if needed
+    // Helper function to wrap response in JSON format for both v2 and v3
     function wrapResponse(result) {
-        if (version === 'v2') {
-            if (result === null || result === undefined) {
-                return {success: false, message: "User not found"}
-            }
-            return {success: true, data: result}
+        if (result === null || result === undefined) {
+            return {success: false, message: "User not found"}
         }
-        return result
+        return {success: true, data: result}
     }
-    
-    // Helper function to wrap error response in v2 format if needed
+
+    // Helper function to wrap error response in JSON format for both v2 and v3
     function wrapError(error) {
-        if (version === 'v2') {
-            return {success: false, message: error.message || String(error), error: error}
-        }
-        return null
+        return {success: false, message: error.message || String(error), error: error}
     }
     
     try {
