@@ -202,8 +202,9 @@
         if (cleanIp.startsWith('[') && cleanIp.includes(']')) {
             cleanIp = cleanIp.slice(1, cleanIp.indexOf(']'));
         }
-        // IPv6 addresses contain colons and are typically longer than IPv4
-        return cleanIp.includes(':');
+        // IPv6 addresses have multiple colons (7+ typically), IPv4:port has only one
+        const colonCount = (cleanIp.match(/:/g) || []).length;
+        return colonCount > 1;
     }
 })(request, args)
 

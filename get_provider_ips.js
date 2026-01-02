@@ -192,13 +192,13 @@
         if (ip.startsWith('[')) {
             return false;
         }
-        // Split out port if present
-        const ipPart = ip.split(':')[0];
-        if (ipPart.includes(':')) {
-            // IPv6 without brackets
+        // Count colons - IPv6 has multiple colons, IPv4 with port has only one
+        const colonCount = (ip.match(/:/g) || []).length;
+        if (colonCount > 1) {
+            // Multiple colons = IPv6
             return false;
         }
-        // IPv4
+        // IPv4 (with or without port)
         return true;
     }
 
