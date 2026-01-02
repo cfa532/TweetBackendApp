@@ -69,10 +69,15 @@
         const rank = lapi.Zrank(systemSid, userId, mid)
         if (rank === -1) {
             // The mid has never been synced before, add it to AppData
-            // Add a score pair with system sequence number as score
-            lapi.Zaddwithseq(systemSid, userId, mid)
-            lapi.MiMeiSync(systemSid, "", mid, {})
-            lapi.MiMeiProvide(systemSid, "", mid)
+            try {
+                // Add a score pair with system sequence number as score
+                lapi.Zaddwithseq(systemSid, userId, mid)
+                lapi.MiMeiSync(systemSid, "", mid, {})
+                lapi.MiMeiProvide(systemSid, "", mid)
+            } catch(e) {
+                lapi.Error("Tweed node_update_mid_by_score: Failed to add new mid %s: %s", mid, e)
+                throw new Error(`Failed to initialize new mid: ${e.message || e}`)
+            }
         }
 
         // ========================================================================
@@ -100,20 +105,17 @@
         if (remoteScore !== localScore) {
             lapi.Debug("Tweed node_update_mid_by_score: mid=%s, new score=%s, old score=%s, userId=%s", mid, String(remoteScore), String(localScore), userId)
             
-            // Sync the mid data from remote host
-            try {
-                lapi.MiMeiSync(systemSid, "", mid, {})
-            } catch(e) {
-                lapi.Error("Tweed node_update_mid_by_score: Failed to sync mid %s: %s", mid, e)
+            // Validate remote score before proceeding
+            if (remoteScore === null || remoteScore === undefined) {
+                throw new Error(`Invalid remote score for mid ${mid}: ${remoteScore}`)
             }
+            
+            // Sync the mid data from remote host
+            lapi.MiMeiSync(systemSid, "", mid, {})
 
             // Update the score of the user in local AppData
-            try {
-                const sp = getScorePair(remoteScore, mid)
-                lapi.Zadd(systemSid, userId, sp)
-            } catch(e) {
-                lapi.Error("Tweed node_update_mid_by_score: Failed to update score for mid %s: %s", mid, e)
-            }
+            const sp = getScorePair(remoteScore, mid)
+            lapi.Zadd(systemSid, userId, sp)
         }
         return wrapResponse({success: true})
     } catch(e) {
@@ -135,9 +137,12 @@
      * @returns {Object} ScorePair object with Score and Member properties
      */
     function getScorePair(score, member) {
+        if (score === null || score === undefined) {
+            throw new Error(`Invalid score value: ${score}`)
+        }
         function ScorePair() {}
         const sp = new ScorePair()
-        sp.Score = score ? score : 0  // Use provided score or default to 0
+        sp.Score = score  // Use provided score (validation ensures it's valid)
         sp.Member = member  // Set the member identifier
         return sp
     }

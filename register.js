@@ -221,26 +221,9 @@
                 return wrapError(new Error("Failed to save user data"))
             }
 
-            try {
-                lapi.MMBackup(userSid, userMid, "", "delref=true")
-            } catch (e) {
-                lapi.Error("Tweed register: Failed to backup user data for %s: %s", user.username, e)
-                // This is not critical, continue
-            }
-
-            try {
-                lapi.MiMeiPublish(authSid, "", userMid)  // Publish user data so toggle_following can find the new user
-            } catch (e) {
-                lapi.Error("Tweed register: Failed to publish user %s: %s", user.username, e)
-                // This is not critical, continue
-            }
-
-            try {
-                lapi.RunMApp("node_update_score", {aid: APP_ID, ver: "last", userid: userMid, mid: userMid}, [])
-            } catch (e) {
-                lapi.Error("Tweed register: Failed to update node score for %s: %s", user.username, e)
-                // This is not critical, continue
-            }
+            lapi.MMBackup(userSid, userMid, "", "delref=true")
+            lapi.MiMeiPublish(authSid, "", userMid)  // Publish user data so toggle_following can find the new user
+            lapi.RunMApp("node_update_score", {aid: APP_ID, ver: "last", userid: userMid, mid: userMid}, [])
             
             lapi.Debug("Tweed register: User registered %s", JSON.stringify(user))
             delete user.password  // Remove sensitive data before returning

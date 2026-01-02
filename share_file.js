@@ -108,27 +108,18 @@
             const fsid = lapi.MMOpen(authSid, mid, "cur")  // Open file's memory space
             
             // Set file metadata
-            try {
-                lapi.MFSetObject(fsid, {
-                    userId: userId,  // ID of user sharing the file
-                    path: file.path,  // File path on user's system
-                    name: file.name,  // File name
-                    size: file.size,  // File size in bytes
-                    isDirectory: file.isDirectory,  // Whether it's a directory
-                    modified: file.modified  // Time of sharing
-                })
-            } catch(e) {
-                lapi.Error("Tweed share_file: Failed to set file object %s: %s", mid, e)
-                throw e
-            }
+            lapi.MFSetObject(fsid, {
+                userId: userId,  // ID of user sharing the file
+                path: file.path,  // File path on user's system
+                name: file.name,  // File name
+                size: file.size,  // File size in bytes
+                isDirectory: file.isDirectory,  // Whether it's a directory
+                modified: file.modified  // Time of sharing
+            })
             
             // Update file data and publish changes
-            try {
-                lapi.MMBackup(fsid, mid, "", "delref=true")
-                lapi.MiMeiPublish(authSid, "", mid)
-            } catch(e) {
-                lapi.Error("Tweed share_file: Failed to backup/publish file %s: %s", mid, e)
-            }
+            lapi.MMBackup(fsid, mid, "", "delref=true")
+            lapi.MiMeiPublish(authSid, "", mid)
             lapi.Debug("Tweed share_file: shared file mid=%s, file=%s", mid, JSON.stringify(file))
     
             // ================================================================
@@ -136,24 +127,16 @@
             // ================================================================
             
             // Add file to user's shared files list with metadata
-            try {
-                lapi.Hset(userSid, USER_SHARE_MID, mid, {
-                    downloadCount: 0,  // How many times the file has been downloaded
-                    authorizedFor: null,  // Anybody can see it (no restrictions)
-                    validTime: 0,  // Days of sharing (0 means forever)
-                    modified: Date.now()  // Time of sharing
-                })
-            } catch(e) {
-                lapi.Error("Tweed share_file: Failed to set shared file metadata %s: %s", mid, e)
-            }
+            lapi.Hset(userSid, USER_SHARE_MID, mid, {
+                downloadCount: 0,  // How many times the file has been downloaded
+                authorizedFor: null,  // Anybody can see it (no restrictions)
+                validTime: 0,  // Days of sharing (0 means forever)
+                modified: Date.now()  // Time of sharing
+            })
             
             // Update user data and publish changes
-            try {
-                lapi.MMBackup(userSid, userId, "", "delref=true")
-                lapi.MiMeiPublish(authSid, "", userId)
-            } catch(e) {
-                lapi.Error("Tweed share_file: Failed to backup/publish user %s: %s", userId, e)
-            }
+            lapi.MMBackup(userSid, userId, "", "delref=true")
+            lapi.MiMeiPublish(authSid, "", userId)
     
             return wrapResponse(mid)  // Return the Mimei ID of the shared file
         }

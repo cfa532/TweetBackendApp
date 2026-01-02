@@ -96,13 +96,9 @@
             // Sync the newly created tweet to local node for caching
             // Note: Remote host may return result directly to caller in some cases
             lapi.Info("Tweed add_tweet: remote ret=%s", JSON.stringify(ret))
-            try {
-                if (ret.success) {
-                    lapi.MiMeiSync(systemSid, "", ret.mid, {})  // Sync new tweet immediately
-                    lapi.MiMeiProvide(systemSid, "", ret.mid)  // Make tweet available locally
-                }
-            } catch(e) {
-                lapi.Error("Tweed add_tweet: remote not ready: %s, ret=%s, request=%s", e, JSON.stringify(ret), JSON.stringify(request))
+            if (ret.success) {
+                lapi.MiMeiSync(systemSid, "", ret.mid, {})  // Sync new tweet immediately
+                lapi.MiMeiProvide(systemSid, "", ret.mid)  // Make tweet available locally
             }
             return wrapResponse(ret)
         } else {
@@ -147,10 +143,12 @@
             if (tweet.originalTweetId) {
                 try {
                     // Create reference to original tweet and sync it locally
+                    // Note: Original tweet may not be available if deleted or on unreachable node
                     lapi.MMAddRef(authSid, authorId, tweet.originalTweetId)
                     lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
                     lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
                 } catch(e) {
+                    // This is acceptable - retweet can exist without original tweet data
                     lapi.Error("Tweed add_tweet: Error sync original tweet: %s, tweet=%s", e, JSON.stringify(tweet))
                 }
             }

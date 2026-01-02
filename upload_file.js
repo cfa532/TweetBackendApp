@@ -55,12 +55,8 @@
         lapi.MMAddRef(sid, userId, request["cid"])
         
         // Update user data and publish changes
-        try {
-            lapi.MMBackup(sid, userId, "", "delref=true")
-            lapi.MiMeiPublish(authSid, "", userId)
-        } catch(e) {
-            lapi.Error("Tweed upload_file: Failed to backup/publish user %s: %s", userId, e)
-        }
+        lapi.MMBackup(sid, userId, "", "delref=true")
+        lapi.MiMeiPublish(authSid, "", userId)
 
         lapi.Debug("Tweed upload_file: Attached file to user mid=%s", userId)
         return wrapResponse({success: true})

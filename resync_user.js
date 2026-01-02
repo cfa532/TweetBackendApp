@@ -25,7 +25,6 @@
     
     const version = request.version || ""  // Version identifier for API compatibility
     const userId = request["userid"]  // ID of user to resync
-    const user = getUser(userId)  // Get user data to determine hosting node
     
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
@@ -51,6 +50,7 @@
     // ============================================================================
     
     try {
+        const user = getUser(userId)  // Get user data to determine hosting node (moved inside try block)
         const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
         
         if (!user || !user.hostIds || user.hostIds.length === 0) {
@@ -64,12 +64,8 @@
         
         if (user.hostIds[0] !== nodeId) {
             // Make sure the current user is up to date by syncing from primary host
-            try {
-                lapi.RunMApp("node_update_mid_by_score", {aid: request["aid"], ver:"last",
-                    hostid: user.hostIds[0], userid: userId, mid: userId}, [])
-            } catch(e) {
-                lapi.Error("Tweed resync_user: Failed to update mid by score for userId=%s: %s", userId, e)
-            }
+            lapi.RunMApp("node_update_mid_by_score", {aid: request["aid"], ver:"last",
+                hostid: user.hostIds[0], userid: userId, mid: userId}, [])
         }
         
         // ========================================================================
@@ -79,6 +75,11 @@
         // Get the fresh user data after synchronization
         const userData = lapi.RunMApp("get_user_core_data", {aid: request["aid"], ver:"last",
             userid: userId}, [])
+        
+        if (!userData) {
+            throw new Error("Failed to retrieve user data after synchronization")
+        }
+        
         return wrapResponse(userData)
     } catch(e) {
         // ========================================================================

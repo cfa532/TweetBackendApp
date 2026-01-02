@@ -132,14 +132,10 @@
             lapi.Debug("Tweed set_author_core_data: local ret=%s", JSON.stringify(ret))
             
             // Sync the updated data from the remote host (assume the remote host is up to date)
-            try {
-                lapi.MiMeiSync(systemSid, "", user.mid, {})
-                lapi.MiMeiProvide(systemSid, "", user.mid)
-            } catch(e) {
-                lapi.Error("Tweed set_author_core_data: Failed to sync/provide user %s: %s", user.mid, e)
-            }
+            lapi.MiMeiSync(systemSid, "", user.mid, {})
+            lapi.MiMeiProvide(systemSid, "", user.mid)
             
-            // Get the updated user data from the local host
+            // Get the updated user data from the local host for logging
             try {
                 const newUser = lapi.RunMApp("get_user_core_data", {
                     aid: APP_ID, 
@@ -148,6 +144,7 @@
                 }, [])
                 lapi.Debug("Tweed set_author_core_data: local newUser=%s", JSON.stringify(newUser))
             } catch(e) {
+                // This is just for logging, so it's OK if it fails
                 lapi.Error("Tweed set_author_core_data: Failed to get user data after sync: %s", e)
             }
             return wrapResponse(ret)
@@ -213,16 +210,12 @@
             }
             
             // Update the user's score in application data
-            try {
-                lapi.RunMApp("node_update_score", {
-                    aid: APP_ID, 
-                    ver: "last",
-                    userid: userInDB.mid, 
-                    mid: userInDB.mid
-                }, [])
-            } catch(e) {
-                lapi.Error("Tweed set_author_core_data: Failed to update user score %s: %s", userInDB.mid, e)
-            }
+            lapi.RunMApp("node_update_score", {
+                aid: APP_ID, 
+                ver: "last",
+                userid: userInDB.mid, 
+                mid: userInDB.mid
+            }, [])
 
             // ================================================================
             // SECURITY: Remove sensitive data before returning

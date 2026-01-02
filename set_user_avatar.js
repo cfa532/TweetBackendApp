@@ -99,12 +99,8 @@
             }
 
             // Update the score of the user in AppData
-            try {
-                lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
-                    userid: userInDB.mid, mid: userInDB.mid}, [])
-            } catch(e) {
-                lapi.Error("Tweed set_user_avatar: Failed to update user score %s: %s", userId, e)
-            }
+            lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
+                userid: userInDB.mid, mid: userInDB.mid}, [])
             
             return wrapResponse(request["avatar"])  // Return updated avatar
         }
