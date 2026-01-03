@@ -50,7 +50,7 @@
     // ============================================================================
     
     try {
-        const user = getUser(userId)  // Get user data to determine hosting node (moved inside try block)
+        const user = getUser(userId)  // Get user data to determine hosting node
         const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
         
         if (!user || !user.hostIds || user.hostIds.length === 0) {

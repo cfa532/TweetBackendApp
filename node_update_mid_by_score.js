@@ -74,6 +74,7 @@
                 lapi.Zaddwithseq(systemSid, userId, mid)
                 lapi.MiMeiSync(systemSid, "", mid, {})
                 lapi.MiMeiProvide(systemSid, "", mid)
+                return wrapResponse({success: true})
             } catch(e) {
                 lapi.Error("Tweed node_update_mid_by_score: Failed to add new mid %s: %s", mid, e)
                 throw new Error(`Failed to initialize new mid: ${e.message || e}`)
