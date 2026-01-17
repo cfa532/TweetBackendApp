@@ -88,17 +88,14 @@
     function getTweets(tweetType) {
         const mmsid = lapi.MMOpen('', userId, 'last');
         
-        // Get all items, sort by timestamp (newest first), and paginate
+        // Get all items, sort by timestamp the tweet is added to the list (newest first), and paginate
         const arr = lapi.Hgetall(mmsid, tweetType)
-            .sort((a, b) => b.Value - a.Value)  // Sort by timestamp (newest first)
+            .sort((a, b) => b.Value - a.Value)
             .slice(startRank, endRank)  // Slice to get only the items for the current page
             .map(fv => {
                 const tweetId = fv.Field;
-                let tweet = lapi.RunMApp('get_tweet', { aid: request.aid, ver: 'last',
+                return lapi.RunMApp('get_tweet', { aid: request.aid, ver: 'last',
                     appuserid: appUserId, tweetid: tweetId }, []);
-
-                lapi.Debug("Tweed get_user_meta: tweetType=%s, tweetId=%s, tweet=%s", tweetType, tweetId, JSON.stringify(tweet))
-                return tweet;
             })
         return arr;
     }
