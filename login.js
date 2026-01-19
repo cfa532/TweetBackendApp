@@ -83,7 +83,7 @@
         // ========================================================================
         
         // Check hashed password against stored password
-        if (userInDB.password == lapi.MMCreate(authSid, APP_ID, APP_EXT, password, 1, 0x07276704)) {
+        if (userInDB.password === lapi.MMCreate(authSid, APP_ID, APP_EXT, password, 1, 0x07276704)) {
             // Login successful
             loginOK = true
             
@@ -115,21 +115,22 @@
                 // ================================================================
                 // Update last login timestamp
                 userInDB["lastLogin"] = Date.now()
-                
+
+                lapi.Debug("Tweed login: user=%s", userInDB["username"])
                 // ================================================================
                 // TIMESTAMP VALIDATION
                 // ================================================================
                 
                 // Check and validate user timestamp - must be in the past and not more than 2 years old
-                const currentTime = userInDB["lastLogin"]
-                const twoYearsAgo = currentTime - (2 * 365 * 24 * 60 * 60 * 1000)  // 2 years in milliseconds
+                const lastLoginTime = userInDB["lastLogin"]
+                const twoYearsAgo = lastLoginTime - (2 * 365 * 24 * 60 * 60 * 1000)  // 2 years in milliseconds
                 
-                if (!userInDB.timestamp || 
-                    typeof userInDB.timestamp !== 'number' || 
-                    userInDB.timestamp <= 0 || 
-                    userInDB.timestamp > currentTime || 
+                if (!userInDB.timestamp ||
+                    typeof userInDB.timestamp !== 'number' ||
+                    userInDB.timestamp <= 0 ||
+                    userInDB.timestamp > lastLoginTime ||
                     userInDB.timestamp < twoYearsAgo) {
-                    userInDB.timestamp = currentTime  // Set to current time if invalid
+                    userInDB.timestamp = lastLoginTime  // Set to last login time if invalid
                 }
                 
                 // Update user data and publish changes
@@ -144,6 +145,7 @@
                 
                 // Make sure to remove password from user data right before sending it back to client
                 delete userInDB.password
+                lapi.Debug("Tweed login succeeded: user=%s", JSON.stringify(userInDB))
                 return wrapResponse({user: userInDB, status: "success"})
             }
         } else {
