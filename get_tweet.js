@@ -103,7 +103,23 @@
         // Add content if present (prevent null from becoming empty string)
         if (tweet.content)
             ret["content"] = tweet.content
-            
+
+        // For v3, return array with current tweet and original tweet if it exists and is not null
+        if (version === 'v3') {
+            const resultArray = [ret]
+            if (tweet.originalTweetId) {
+                const originalTweet = lapi.RunMApp("get_tweet", {
+                    tweetid: tweet.originalTweetId,
+                    appuserid: appUserId,
+                    version: version
+                })
+                if (originalTweet) {
+                    resultArray.push(originalTweet)
+                }
+            }
+            return wrapResponse(resultArray)
+        }
+
         return wrapResponse(ret)
     } catch(e) {
         // ========================================================================

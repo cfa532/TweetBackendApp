@@ -69,7 +69,7 @@
             version: 44,  // Set larger than defaultConfig.versionName in build.gradle to force upgrade
             packageId: mid,  // Must match the mid of installation package created by upload_package.js
             mission: "minor",  // App stops working without upgrade (minor, major, critical)
-            domain: "t1.xyhrtdjgkufc.online",  // Base URL for deeplinks and sharing
+            domain: "t1.web3forge.space",  // Base URL for deeplinks and sharing
         }
         
         lapi.Debug("Tweed check_upgrade: %s", JSON.stringify(ret))
