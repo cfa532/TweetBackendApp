@@ -95,11 +95,9 @@
                 const tweetId = fv.Field;
                 const t = lapi.RunMApp('get_tweet', { aid: request.aid, ver: 'last',
                     appuserid: appUserId, tweetid: tweetId }, []);
-                // lapi.Debug('Tweed get_user_meta: fetched %s', JSON.stringify(t));
                 return t;
             })
 
-        lapi.Debug('Tweed get_user_meta: returning %d %d %d %s items after slice.', startRank, endRank, arr.length, tweetType);
         return arr;
     }
 })(request, args);
