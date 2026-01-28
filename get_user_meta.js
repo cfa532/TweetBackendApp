@@ -29,14 +29,12 @@
     
     const version = request.version || ""  // Version identifier for API compatibility
     const COMMENT_LIST = 'comment_list';  // Redis key for user's comments
-    const BOOKMARK_LIST = 'bookmark_list';  // Redis key for user's bookmarks
-    const FAVORITE_LIST = 'favorite_list';  // Redis key for user's favorites
     const userId = request['userid'];  // ID of user whose metadata to retrieve
     const appUserId = request['appuserid'];  // ID of user requesting the metadata
-    const pageNumber = request['pn'];  // Page number (0-based)
-    const pageSize = request['ps'];  // Number of items per page
+    const pageNumber = parseInt(request['pn'], 10);  // Page number (0-based)
+    const pageSize = parseInt(request['ps'], 10);  // Number of items per page
     const startRank = pageNumber * pageSize;  // Starting index for pagination
-    const endRank = startRank + pageSize - 1;  // Ending index for pagination
+    const endRank = startRank + pageSize;  // Ending index for pagination (exclusive for slice)
     
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
@@ -87,16 +85,21 @@
      */
     function getTweets(tweetType) {
         const mmsid = lapi.MMOpen('', userId, 'last');
-        
+
         // Get all items, sort by timestamp the tweet is added to the list (newest first), and paginate
-        const arr = lapi.Hgetall(mmsid, tweetType)
+        const allItems = lapi.Hgetall(mmsid, tweetType);
+        const arr = allItems
             .sort((a, b) => b.Value - a.Value)
             .slice(startRank, endRank)  // Slice to get only the items for the current page
             .map(fv => {
                 const tweetId = fv.Field;
-                return lapi.RunMApp('get_tweet', { aid: request.aid, ver: 'last',
+                const t = lapi.RunMApp('get_tweet', { aid: request.aid, ver: 'last',
                     appuserid: appUserId, tweetid: tweetId }, []);
+                // lapi.Debug('Tweed get_user_meta: fetched %s', JSON.stringify(t));
+                return t;
             })
+
+        lapi.Debug('Tweed get_user_meta: returning %d %d %d %s items after slice.', startRank, endRank, arr.length, tweetType);
         return arr;
     }
 })(request, args);

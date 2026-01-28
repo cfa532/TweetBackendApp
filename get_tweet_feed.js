@@ -54,7 +54,7 @@
         const pageNum = parseInt(request["pn"], 10)  // Page number (0-based)
         const pageSize = parseInt(request["ps"], 10)  // Number of tweets per page
         const startRank = pageNum * pageSize  // Starting index for pagination
-        const endRank = startRank + pageSize - 1  // Ending index for pagination
+        const endRank = startRank + pageSize  // Ending index for pagination
         const userId = request["userid"]  // ID of user whose feed to retrieve
         const appUserId = request["appuserid"]  // ID of user requesting the feed
         const mmsid = lapi.MMOpen("", userId, "last")  // Open user's memory space
