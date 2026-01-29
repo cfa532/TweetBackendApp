@@ -85,6 +85,7 @@
             "originalTweetId": tweet.originalTweetId,
             "originalAuthorId": tweet.originalAuthorId,
             "timestamp": tweet.timestamp,
+            "contentType": tweet.contentType,
             
             // Engagement metrics
             "bookmarkCount": lapi.Hlen(mmsid, BOOKMARK_LIST),
