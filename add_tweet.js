@@ -11,6 +11,7 @@
  * - Supports retweets (quoted tweets)
  * - Updates user feeds and following lists
  * - Syncs content across distributed nodes
+ * - Supports AI agent authentication via agentAuth parameter
  * 
  * Flow:
  * 1. Determines if tweet author is on local or remote node
@@ -19,10 +20,18 @@
  * 4. Handles retweet references and original tweet syncing
  * 5. Updates user scores and publishes changes
  * 
+ * Authentication:
+ * - Traditional: Frontend calls with nodeappcode validation
+ * - Agent Auth: AI agents call with agentAuth containing signed request
+ * 
  * @param {Object} request - The request object containing tweet data
  * @param {string} request.aid - Application ID
  * @param {string} request.tweet - JSON string of tweet object
  * @param {string} request.nodeappcode - Node application code for friend verification
+ * @param {Object} request.agentAuth - Optional agent authentication object
+ * @param {string} request.agentAuth.mimeiId - User's Mimei ID
+ * @param {number} request.agentAuth.timestamp - Request timestamp
+ * @param {string} request.agentAuth.signature - Ed25519 signature
  * @param {string} request.ver - Version identifier
  * @param {Array} args - Additional arguments (unused)
  */
@@ -36,7 +45,10 @@
     const TWT_CONTENT_KEY = "core_data_of_tweet"  // Key for tweet content storage
     const TWT_LIST_KEY = "list_of_tweets_mid"  // Redis key for user's tweet list
     const FOLLOWINGS_TWEETS = "followings_tweets"  // Redis key for following tweets feed
+    const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
+    const MAX_REQUEST_AGE_MS = 5 * 60 * 1000  // 5 minutes for agent auth
     const APP_ID = request["aid"]  // Application identifier
+    const agentAuth = request["agentAuth"]  // Optional agent authentication
     let tweetId = ""; // Initialize tweetId outside the try block for error handling
     let tweet = JSON.parse(request["tweet"])  // Parsed tweet object
     const user = getUser(tweet.authorId)  // Get author's user data
@@ -84,10 +96,18 @@
 
             let ret
             try {
-                ret = lapi.RunMApp("add_tweet", {aid: APP_ID, ver: request.ver,
-                    nid: user.hostIds[0], sid: systemSid,
-                    tweet: request["tweet"]}, []
-                )
+                // Build params, including agentAuth if present for agent-based posting
+                const remoteParams = {
+                    aid: APP_ID, 
+                    ver: request.ver,
+                    nid: user.hostIds[0], 
+                    sid: systemSid,
+                    tweet: request["tweet"]
+                }
+                if (agentAuth) {
+                    remoteParams.agentAuth = agentAuth
+                }
+                ret = lapi.RunMApp("add_tweet", remoteParams, [])
             } catch(e) {
                 lapi.Error("Tweed add_tweet: Failed to call add_tweet on remote node %s: %s, authorId=%s", user.hostIds[0], e, tweet.authorId)
                 throw e
@@ -106,12 +126,42 @@
             // LOCAL USER HANDLING
             // ====================================================================
             
-            // Verify the request is from an authorized friend/node
-            const friendId = getFriendByAppCode(request.nodeappcode)
-            lapi.Debug("Tweed add_tweet: friendId=%s", friendId)
-            if (!friendId) {
-                throw new Error("Not a friend of the host")
+            // Verify the request is authorized (either via nodeappcode or agentAuth)
+            let isAuthorized = false
+            let authMethod = "none"
+            
+            // Option 1: Agent authentication (AI agents posting on behalf of users)
+            if (agentAuth) {
+                const agentVerification = verifyAgentAuth(agentAuth, tweet)
+                if (agentVerification.valid) {
+                    // Ensure agent is posting as the correct user
+                    if (agentVerification.mimeiId !== tweet.authorId) {
+                        throw new Error("Agent cannot post as different user")
+                    }
+                    isAuthorized = true
+                    authMethod = "agent"
+                    lapi.Info("Tweed add_tweet: Agent authentication successful for user %s", tweet.authorId)
+                } else {
+                    lapi.Warn("Tweed add_tweet: Agent authentication failed: %s", agentVerification.error)
+                    throw new Error("Agent authentication failed: " + agentVerification.error)
+                }
             }
+            
+            // Option 2: Traditional friend/node authentication
+            if (!isAuthorized) {
+                const friendId = getFriendByAppCode(request.nodeappcode)
+                lapi.Debug("Tweed add_tweet: friendId=%s", friendId)
+                if (friendId) {
+                    isAuthorized = true
+                    authMethod = "friend"
+                }
+            }
+            
+            if (!isAuthorized) {
+                throw new Error("Not authorized to post")
+            }
+            
+            lapi.Debug("Tweed add_tweet: Authorized via %s", authMethod)
             
             // Create the tweet object
             const tweet = JSON.parse(request['tweet'])
@@ -224,4 +274,137 @@
 		}
 		return fri
 	}
+
+    /**
+     * Verifies agent authentication for AI agent requests
+     * @param {Object} auth - Agent authentication object
+     * @param {Object} tweetData - Tweet data that was signed
+     * @returns {Object} {valid: boolean, error?: string, mimeiId?: string}
+     */
+    function verifyAgentAuth(auth, tweetData) {
+        try {
+            // Validate auth structure
+            if (!auth || !auth.mimeiId || !auth.timestamp || !auth.signature) {
+                return { valid: false, error: "Missing required agentAuth fields" }
+            }
+            
+            // Check timestamp freshness (prevent replay attacks)
+            const now = Date.now()
+            const requestAge = now - auth.timestamp
+            if (requestAge > MAX_REQUEST_AGE_MS) {
+                return { valid: false, error: "Request expired" }
+            }
+            if (requestAge < -60000) {  // Allow 1 minute clock skew
+                return { valid: false, error: "Invalid timestamp" }
+            }
+            
+            // Get user's agent public key
+            const userMmsid = lapi.MMOpen("", auth.mimeiId, "last")
+            const userData = lapi.Get(userMmsid, OWNER_DATA_KEY)
+            
+            if (!userData || !userData.agentPublicKey) {
+                return { valid: false, error: "Agent not configured for this user" }
+            }
+            
+            // Reconstruct signed data (must match client-side signing)
+            const signedData = {
+                authorId: tweetData.authorId,
+                content: tweetData.content || "",
+                mimeiId: auth.mimeiId,
+                timestamp: auth.timestamp
+            }
+            
+            // Sort keys for consistent serialization
+            const sortedKeys = Object.keys(signedData).sort()
+            const sortedData = {}
+            sortedKeys.forEach(k => { sortedData[k] = signedData[k] })
+            const messageString = JSON.stringify(sortedData)
+            
+            // Verify signature using Leither's built-in Ed25519 or fallback
+            const isValid = verifyEd25519(
+                messageString,
+                auth.signature,
+                userData.agentPublicKey
+            )
+            
+            if (isValid) {
+                return { valid: true, mimeiId: auth.mimeiId }
+            } else {
+                return { valid: false, error: "Invalid signature" }
+            }
+            
+        } catch(e) {
+            lapi.Error("Tweed add_tweet: Agent verification error: %s", e)
+            return { valid: false, error: "Verification failed: " + e.message }
+        }
+    }
+
+    /**
+     * Verify Ed25519 signature
+     * @param {string} message - The message that was signed
+     * @param {string} signatureBase64 - Base64-encoded signature
+     * @param {string} publicKeyBase64 - Base64-encoded public key
+     * @returns {boolean} True if signature is valid
+     */
+    function verifyEd25519(message, signatureBase64, publicKeyBase64) {
+        // Use Leither's built-in verification if available
+        if (typeof lapi.Ed25519Verify === 'function') {
+            const messageBytes = stringToBytes(message)
+            const sigBytes = base64ToBytes(signatureBase64)
+            const pubKeyBytes = base64ToBytes(publicKeyBase64)
+            return lapi.Ed25519Verify(messageBytes, sigBytes, pubKeyBytes)
+        }
+        
+        // Fallback: Use nacl if available in the environment
+        if (typeof nacl !== 'undefined' && nacl.sign && nacl.sign.detached) {
+            const messageBytes = stringToBytes(message)
+            const sigBytes = base64ToBytes(signatureBase64)
+            const pubKeyBytes = base64ToBytes(publicKeyBase64)
+            return nacl.sign.detached.verify(messageBytes, sigBytes, pubKeyBytes)
+        }
+        
+        lapi.Error("Tweed add_tweet: No Ed25519 verification available")
+        return false
+    }
+
+    /**
+     * Convert string to Uint8Array (UTF-8)
+     */
+    function stringToBytes(str) {
+        if (typeof TextEncoder !== 'undefined') {
+            return new TextEncoder().encode(str)
+        }
+        // Fallback for environments without TextEncoder
+        const bytes = []
+        for (let i = 0; i < str.length; i++) {
+            const code = str.charCodeAt(i)
+            if (code < 0x80) {
+                bytes.push(code)
+            } else if (code < 0x800) {
+                bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f))
+            } else {
+                bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f))
+            }
+        }
+        return new Uint8Array(bytes)
+    }
+
+    /**
+     * Convert Base64 string to Uint8Array
+     */
+    function base64ToBytes(base64) {
+        if (typeof atob === 'function') {
+            const binary = atob(base64)
+            const bytes = new Uint8Array(binary.length)
+            for (let i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i)
+            }
+            return bytes
+        }
+        // Fallback for Node.js
+        if (typeof Buffer !== 'undefined') {
+            return new Uint8Array(Buffer.from(base64, 'base64'))
+        }
+        return new Uint8Array(0)
+    }
 })(request, args)

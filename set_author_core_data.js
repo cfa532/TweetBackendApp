@@ -169,8 +169,21 @@
             }
             
             // Update user profile information
-            userInDB.name = user.name  // Update user's display name
-            userInDB.profile = user.profile  // Update user's profile information
+            if (user.name !== undefined) {
+                userInDB.name = user.name  // Update user's display name
+            }
+            if (user.profile !== undefined) {
+                userInDB.profile = user.profile  // Update user's profile information
+            }
+            
+            // Update agent public key for AI agent authentication
+            if (user.agentPublicKey !== undefined) {
+                if (user.agentPublicKey === null || user.agentPublicKey === '') {
+                    delete userInDB.agentPublicKey  // Remove agent key (revoke access)
+                } else {
+                    userInDB.agentPublicKey = user.agentPublicKey  // Set new agent public key
+                }
+            }
 
             // Update cloudDrivePort - trim whitespace, remove if empty or not provided
             if ('cloudDrivePort' in user) {
