@@ -84,7 +84,7 @@
     }
 
     // Validate username format (basic check)
-    if (user.username.length > 100 || !/^[a-zA-Z0-9_-]+$/.test(user.username)) {
+    if (user.username.length > 20 || !/^[a-zA-Z0-9_-]+$/.test(user.username)) {
         return wrapError(new Error("Invalid username format"))
     }
 
