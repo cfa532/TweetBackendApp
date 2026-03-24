@@ -51,9 +51,9 @@
     // Helper function to wrap error response in v2 format if needed
     function wrapError(error) {
         if (version === 'v2') {
-            return {success: false, message: error.message || String(error), error: error}
+            return {success: false, message: error.message || String(error), error: String(error)}
         }
-        return {success: false, error: error}
+        return {success: false, error: String(error)}
     }
 
     // ============================================================================
@@ -81,6 +81,7 @@
             try {
                 ret = lapi.RunMApp("toggle_favorite", {aid: APP_ID, ver: "last",
                     nid: author.hostIds[0], sid: systemSid, userhostid: userHostId,
+                    version: version,
                     appuserid: appUserId, authorid: authorId, tweetid: tweetId}, []
                 )
             } catch(e) {

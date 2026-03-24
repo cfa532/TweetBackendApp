@@ -73,7 +73,8 @@
         let ret
         try {
             ret = lapi.RunMApp("retweet_removed", {aid: APP_ID, ver: "last",
-                nid: user.hostIds[0], sid: systemSid, appuserid: appUserId,
+                nid: user.hostIds[0], sid: systemSid,
+                version: version, appuserid: appUserId,
                 tweetid: tweetId, authorid: authorId, retweetid: retweetId},
                 [])
         } catch(e) {

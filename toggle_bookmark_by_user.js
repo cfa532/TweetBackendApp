@@ -30,7 +30,7 @@
     const APP_ID = request["aid"]  // Application identifier
     const userId = request["userid"]  // ID of user whose bookmarks to update
     const tweetId = request["tweetid"]  // ID of tweet to add/remove from bookmarks
-    const isBookmarked = request["isbookmarked"] === "true" ? true : false  // Convert string to boolean
+    const isBookmarked = request["isbookmarked"] === true || request["isbookmarked"] === "true"  // Accept both boolean and string
     
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
@@ -78,6 +78,7 @@
                 userData = lapi.RunMApp("toggle_bookmark_by_user",
                     { aid: APP_ID, ver: "last",
                         nid: user.hostIds[0], sid: systemSid,
+                        version: version,
                         userid: userId, tweetid: tweetId, isbookmarked: isBookmarked}, []
                 )
             } catch(e) {

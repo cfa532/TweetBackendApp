@@ -100,10 +100,11 @@
             try {
                 // Build params, including agentAuth if present for agent-based posting
                 const remoteParams = {
-                    aid: APP_ID, 
+                    aid: APP_ID,
                     ver: request.ver,
-                    nid: user.hostIds[0], 
+                    nid: user.hostIds[0],
                     sid: systemSid,
+                    version: version,
                     tweet: request["tweet"]
                 }
                 if (agentAuth) {

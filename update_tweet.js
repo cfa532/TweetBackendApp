@@ -58,6 +58,7 @@
                     ver: "last",
                     nid: user.hostIds[0],
                     sid: systemSid,
+                    version: version,
                     appuserid: appUserId,
                     tweetid: tweetId,
                     content: content

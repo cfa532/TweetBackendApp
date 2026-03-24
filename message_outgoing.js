@@ -64,6 +64,7 @@
             try {
                 ret = lapi.RunMApp("message_outgoing", {aid: APP_ID, ver: "last",
                     nid: user.hostIds[0], sid: systemSid,
+                    version: version,
                     userid: senderId, receiptid: receiptId, msg: request["msg"]}, []
                 )
             } catch(e) {

@@ -76,7 +76,8 @@
             let ret
             try {
                 ret = lapi.RunMApp("delete_account", {aid: APP_ID, ver: "last",
-                    nid: user.hostIds[0], sid: systemSid, userid: userId}, []
+                    nid: user.hostIds[0], sid: systemSid,
+                    version: version, userid: userId}, []
                 )
             } catch(e) {
                 lapi.Error("Tweed delete_account: Failed to call delete_account on remote node %s: %s, userId=%s", user.hostIds[0], e, userId)

@@ -88,10 +88,11 @@
         if (user.hostIds && user.hostIds[0] && userInDB.hostIds && user.hostIds[0] !== userInDB.hostIds[0]) {
             // Make sure user mimei is available on the new hostId
             lapi.RunMApp("sync_user", {
-                aid: APP_ID, 
+                aid: APP_ID,
                 ver: "last",
-                nid: user.hostIds[0], 
-                sid: systemSid, 
+                nid: user.hostIds[0],
+                sid: systemSid,
+                version: version,
                 mid: user.mid
             }, [])
         }
@@ -118,10 +119,11 @@
             let ret
             try {
                 ret = lapi.RunMApp("set_author_core_data", {
-                    aid: APP_ID, 
+                    aid: APP_ID,
                     ver: "last",
-                    nid: user.hostIds[0], 
-                    sid: systemSid, 
+                    nid: user.hostIds[0],
+                    sid: systemSid,
+                    version: version,
                     user: request["user"]
                 }, [])
             } catch(e) {

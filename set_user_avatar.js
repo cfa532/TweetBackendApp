@@ -73,6 +73,7 @@
             try {
                 ret = lapi.RunMApp("set_user_avatar", {aid: APP_ID, ver: "last",
                     nid: userInDB.hostIds[0], sid: systemSid,
+                    version: version,
                     userid: userId, avatar: request["avatar"]}, []
                 )
             } catch(e) {

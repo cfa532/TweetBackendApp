@@ -73,6 +73,7 @@
         try {
             ret = lapi.RunMApp("retweet_added", {aid: APP_ID, ver: "last",
               nid: author.hostIds[0], sid: systemSid,
+              version: version,
               authorid: authorId, tweetid: tweetId, appuserid: appUserId, retweetid: retweetId},
               [])
         } catch(e) {

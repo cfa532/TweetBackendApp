@@ -124,6 +124,7 @@
             try {
                 ret = lapi.RunMApp("register", {aid: APP_ID, ver: "last",
                     nid: targetNodeId, sid: systemSid,
+                    version: version,
                     user: request["user"]}, []
                 )
             } catch(e) {

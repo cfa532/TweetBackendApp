@@ -75,6 +75,7 @@
             // Delegate comment deletion to the node hosting the tweet
             let ret = lapi.RunMApp("delete_comment", {aid: APP_ID, ver: "last",
                 nid: hostId, sid: systemSid,
+                version: version,
                 appuserid: appUserId, tweetid: tweetId, commentid: commentId},
                 [])
             

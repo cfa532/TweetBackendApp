@@ -71,6 +71,7 @@
             try {
                 ret = lapi.RunMApp("toggle_pinned_tweet", {aid: APP_ID, ver: "last",
                     nid: user.hostIds[0], sid: systemSid,
+                    version: version,
                     tweetid: tweetId, appuserid: appUserId}, []
                 )
             } catch(e) {
