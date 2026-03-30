@@ -75,11 +75,12 @@
             let ret
             try {
                 ret = lapi.RunMApp("update_tweet_privacy", {
-                    aid: APP_ID, 
+                    aid: APP_ID,
                     ver: "last",
-                    nid: user.hostIds[0], 
+                    nid: user.hostIds[0],
                     sid: systemSid,
-                    appuserid: appUserId, 
+                    version: version,
+                    appuserid: appUserId,
                     tweetid: tweetId
                 }, [])
             } catch(e) {

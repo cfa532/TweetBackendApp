@@ -81,6 +81,7 @@
             try {
                 ret = lapi.RunMApp("block_user", {aid: APP_ID, ver: "last",
                     nid: user.hostIds[0], sid: systemSid,
+                    version: version,
                     blocked: blockedUserId, userid: userId}, []
                 )
             } catch(e) {

@@ -93,6 +93,7 @@
             try {
                 ret = lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
                     nid: userHostId, sid: systemSid,
+                    version: version,
                     userid: userId, followingid: followedId}, []
                 )
             } catch(e) {
@@ -183,6 +184,7 @@
                 try {
                     lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
                         nid: hostOfOther, sid: systemSid,
+                        version: version,
                         userid: followedId, otherid: userId, isfollower: false
                     }, [])
                     
@@ -207,7 +209,8 @@
 
                 // Get all existing tweets from the user being followed
                 const scorepairs = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
-                    nid: hostOfOther, sid: systemSid, userid: followedId
+                    nid: hostOfOther, sid: systemSid,
+                    version: version, userid: followedId
                 }, [])
                 const normalizedScorepairs = Array.isArray(scorepairs) ? scorepairs : []
                 
@@ -232,6 +235,7 @@
                 try {
                     lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
                         nid: hostOfOther, sid: systemSid,
+                        version: version,
                         userid: followedId, otherid: userId, isfollower: true
                     }, [])
                 } catch(e) {

@@ -102,6 +102,7 @@
                 try {
                     ret = lapi.RunMApp("login", {aid: APP_ID, ver: "last",
                         nid: userInDB.hostIds[0], sid: systemSid,
+                        version: version,
                         username: username, password: password,
                     }, [])
                 } catch(e) {

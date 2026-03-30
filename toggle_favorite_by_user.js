@@ -31,7 +31,7 @@
     const APP_ID = request["aid"]  // Application identifier
     const userId = request["userid"]  // ID of user whose favorites to update
     const tweetId = request["tweetid"]  // ID of tweet to add/remove from favorites
-    const isFavorite = request["isfavorite"] === "true" ? true : false  // Convert string to boolean
+    const isFavorite = request["isfavorite"] === true || request["isfavorite"] === "true"  // Accept both boolean and string
     
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
@@ -79,6 +79,7 @@
                 userData = lapi.RunMApp("toggle_favorite_by_user",
                     { aid: APP_ID, ver: "last",
                         nid: user.hostIds[0], sid: systemSid,
+                        version: version,
                         userid: userId, tweetid: tweetId, isfavorite: isFavorite }, []
                 )
             } catch(e) {

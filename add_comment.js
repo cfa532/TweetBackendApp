@@ -80,6 +80,7 @@
             try {
                 ret = lapi.RunMApp("add_comment", {aid: APP_ID, ver: "last",
                     nid: hostId, sid: systemSid,
+                    version: version,
                     hostid: hostId, appuserid: appUserId, tweetid: tweetId, comment: request["comment"]}, []
                 )
             } catch(e) {

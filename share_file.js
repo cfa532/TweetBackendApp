@@ -75,6 +75,7 @@
             try {
                 ret = lapi.RunMApp("share_file", {aid: APP_ID, ver: "last",
                     nid: user.hostIds[0], sid: systemSid,
+                    version: version,
                     userid: userId, file: request["file"]}, []
                 )
             } catch(e) {

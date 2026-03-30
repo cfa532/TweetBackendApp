@@ -83,6 +83,7 @@
             try {
                 ret = lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
                     nid: user.hostIds[0], sid: systemSid,
+                    version: version,
                     userid: userId, otherid: otherId, isfollower: isFollower}, [])
             } catch(e) {
                 lapi.Error("Tweed toggle_follower: Failed to call toggle_follower on remote node %s: %s, userId=%s, otherId=%s", user.hostIds[0], e, userId, otherId)

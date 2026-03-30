@@ -86,6 +86,7 @@
             try {
                 ret = lapi.RunMApp("delete_tweet", {aid: APP_ID, ver: "last",
                     nid: user.hostIds[0], sid: systemSid,
+                    version: version,
                     tweetid: tweetId, userid: userId}, []
                 )
             } catch(e) {

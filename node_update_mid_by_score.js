@@ -86,12 +86,13 @@
         // ========================================================================
         
         // Get the current score from the remote host
-        const remoteScore = lapi.RunMApp("node_get_score", { 
-            aid: APP_ID, 
+        const remoteScore = lapi.RunMApp("node_get_score", {
+            aid: APP_ID,
             ver: request.ver,
             nid: hostId,        // Remote host ID
             sid: systemSid,     // Necessary to prove the user's authenticity
-            userid: userId, 
+            version: version,
+            userid: userId,
             mid: mid,
         }, [])
 

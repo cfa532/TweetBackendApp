@@ -59,11 +59,12 @@
             
             // Send the request to the remote host
             const ret = lapi.RunMApp("update_following_tweets", {
-                aid: APP_ID, 
+                aid: APP_ID,
                 ver: "last",
-                nid: hostId, 
+                nid: hostId,
                 sid: systemSid,
-                hostid: hostId, 
+                version: version,
+                hostid: hostId,
                 appuserid: userId
             }, [])
             lapi.Debug("Tweed update_following_tweets: ret from remote host %s", JSON.stringify(ret))
@@ -71,12 +72,13 @@
             // Get the updated score from the remote host
             let remoteScore
             try {
-                remoteScore = lapi.RunMApp("node_get_score", { 
-                    aid: APP_ID, 
+                remoteScore = lapi.RunMApp("node_get_score", {
+                    aid: APP_ID,
                     ver: request.ver,
                     nid: hostId,        // remote host id
                     sid: systemSid,     // necessary to prove the user's authenticity
-                    userid: userId, 
+                    version: version,
+                    userid: userId,
                     mid: userId
                 }, [])
             } catch(e) {

@@ -70,6 +70,7 @@
             try {
                 ret = lapi.RunMApp("message_check", {aid: APP_ID, ver: "last",
                     nid: user.hostIds[0], sid: systemSid,
+                    version: version,
                     userid: userId}, []
                 )
             } catch(e) {
