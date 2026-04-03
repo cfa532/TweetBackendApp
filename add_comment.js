@@ -93,10 +93,11 @@
                 lapi.MiMeiSync(systemSid, "", tweetId, {})
                 lapi.MiMeiProvide(systemSid, "", tweetId)
 
-                // Sync the newly created comment to local node
-                if (ret.success) {
-                    lapi.MiMeiSync(systemSid, "", ret.commentId, {})
-                    lapi.MiMeiProvide(systemSid, "", ret.commentId)
+                // Sync the newly created comment to local node (host returns `mid`, not `commentId`)
+                const newCommentMid = ret.mid || ret.commentId
+                if (ret.success && newCommentMid) {
+                    lapi.MiMeiSync(systemSid, "", newCommentMid, {})
+                    lapi.MiMeiProvide(systemSid, "", newCommentMid)
                 }
             } catch(e) {
                 lapi.Error("Tweed add_comment: Error sync tweet to local node: %s", e)
@@ -167,7 +168,7 @@
             let lastSid = lapi.MMOpen("", tweetId, "last")
             const commentCount = lapi.Zcard(lastSid, COMMENT_LIST)  // Get current comment count
             lapi.Debug("Tweed add_comment: local commentCount=%s, commentId=%s, retweetId=%s", String(commentCount), commentId, retweetId)
-            return wrapResponse({success: true, mid: commentId, count: commentCount, retweetid: retweetId})
+            return wrapResponse({success: true, mid: commentId, commentId: commentId, count: commentCount, retweetid: retweetId})
         }
     } catch(e) {
         // ========================================================================
