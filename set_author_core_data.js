@@ -187,18 +187,20 @@
                 }
             }
 
-            // Update cloudDrivePort - trim whitespace, remove if empty or not provided
+            // Update cloudDrivePort - only modify if explicitly provided in request
+            // Use Number() instead of || '' to correctly handle 0 (a valid "unset" value)
             if ('cloudDrivePort' in user) {
-                const trimmedPort = String(user.cloudDrivePort || '').trim()
+                const portNum = Number(user.cloudDrivePort)
+                const trimmedPort = isNaN(portNum) ? String(user.cloudDrivePort || '').trim() : (portNum === 0 ? '' : String(portNum))
                 if (trimmedPort === '') {
                     delete userInDB.cloudDrivePort
                 } else {
                     userInDB.cloudDrivePort = trimmedPort
                 }
-            } else {
-                delete userInDB.cloudDrivePort
             }
-            // Update domainToShare - trim whitespace, remove if null or empty or not provided, otherwise save its value
+            // else: cloudDrivePort not in request — preserve existing value in DB
+
+            // Update domainToShare - only modify if explicitly provided in request
             if ('domainToShare' in user) {
                 const trimmedDomain = user.domainToShare == null ? '' : String(user.domainToShare).trim()
                 if (trimmedDomain === '') {
@@ -206,9 +208,8 @@
                 } else {
                     userInDB.domainToShare = trimmedDomain
                 }
-            } else {
-                delete userInDB.domainToShare
             }
+            // else: domainToShare not in request — preserve existing value in DB
 
             // ================================================================
             // DATA PERSISTENCE AND PUBLICATION

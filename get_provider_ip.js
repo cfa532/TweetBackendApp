@@ -7,7 +7,6 @@
  * 
  * Key Features:
  * - Filters out private IP addresses (IPv4 and IPv6)
- * - Validates port ranges (8000-9000)
  * - Optional IPv4-only filtering
  * - Finds provider with lowest response score
  * - Handles complex nested provider data structures
@@ -71,9 +70,6 @@
             element.forEach(element2 => {
                 // element2 format: [ip:port, score]
                 const { ipAddress, port } = extractIPAndPort(element2[0]);
-                
-                // Validate port range (8000-9000)
-                if (port < 8000 || port > 9000) return;
                 
                 // Skip private IP addresses
                 if (isPrivateIP(ipAddress)) return;
