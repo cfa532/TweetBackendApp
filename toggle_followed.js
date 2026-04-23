@@ -93,13 +93,25 @@
         // ========================================================================
         
         if (userHostId !== nodeId) {
-            // User is hosted on a different node - delegate the request
+            // User is hosted on a different node - delegate the request.
+            // Look up the followed user's host here (current node may have their data)
+            // so the remote node can do a targeted sync if needed.
+            let followedHostId = ""
+            try {
+                const followedUser = getUser(followedId)
+                if (Array.isArray(followedUser?.hostIds) && followedUser.hostIds.length > 0) {
+                    followedHostId = followedUser.hostIds[0]
+                }
+            } catch(e) {
+                // Non-fatal: remote node will fall back to a blind sync
+            }
             let ret
             try {
                 ret = lapi.RunMApp("toggle_followed", {aid: APP_ID, ver: "last",
                     nid: userHostId, sid: systemSid,
                     version: version,
-                    userid: userId, followingid: followedId}, []
+                    userid: userId, followingid: followedId,
+                    followedHostId: followedHostId}, []
                 )
             } catch(e) {
                 lapi.Error("Tweed toggle_followed: Failed to call toggle_followed on remote node %s: %s, userId=%s, followedId=%s", userHostId, e, userId, followedId)
@@ -128,19 +140,21 @@
             let followedUser = getUser(followedId)
             lapi.Debug("Tweed toggle_followed: user=%s %s", followedId, JSON.stringify(followedUser))
             if (!followedUser) {
-                // Target user not available locally - attempt to sync and provide
+                // Target user not available locally - attempt to sync and provide.
+                // Use the followed user's host node ID if the caller passed it (avoids blind sync).
+                const followedHostHint = request["followedHostId"] || ""
                 try {
-                    lapi.MiMeiSync(authSid, "", followedId, {}) // Failure of sync will not throw an error
+                    lapi.MiMeiSync(authSid, followedHostHint, followedId, {})
                     lapi.MiMeiProvide(authSid, "", followedId)
                 } catch(e) {
                     lapi.Error("Tweed toggle_followed: Failed to sync followed user %s: %s", followedId, e)
                 }
-                
+
                 followedUser = getUser(followedId)
 
                 if (!followedUser) {
                     lapi.Error("Tweed Error toggle_followed: cannot get followed user %s after sync", followedId)
-                    return wrapError(new Error("Cannot get followed user"))  // Cannot proceed if target user is unavailable
+                    return wrapError(new Error("Cannot get followed user"))
                 }
             }
             const hostOfOther = Array.isArray(followedUser?.hostIds) && followedUser.hostIds.length > 0
