@@ -91,7 +91,7 @@
 
         if (!userHostId) {
             lapi.Error("Tweed toggle_following: missing host for user %s", JSON.stringify({userId, nodeId}))
-            return wrapError(new Error("User host not found"))
+            return wrapError(new Error("User host not found for user %s", JSON.stringify({userId, nodeId})))
         }
 
         // ========================================================================
