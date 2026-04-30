@@ -50,8 +50,10 @@
     try {
         const mmsid = lapi.MMOpen("", userId, "last")  // Open user's memory space
         
-        // Get up to 10 most recent tweets (limited for performance)
+        //////////////////////////////////////////////////////////////////////////////
         // Note: Using -1 might fail, so limiting to 10 for now
+        // Get up to 10 most recent tweets (limited for performance when sync user with many tweets)
+        //////////////////////////////////////////////////////////////////////////////
         const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, 0, 10)
         
         // Filter to include only public tweets

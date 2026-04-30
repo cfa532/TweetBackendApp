@@ -51,8 +51,9 @@
         const TWT_LIST_KEY = "list_of_tweets_mid"  // Redis key for user's tweet list
         const pageNum = parseInt(request["pn"], 10)  // Page number (0-based)
         const pageSize = parseInt(request["ps"], 10)  // Number of tweets per page
-        const startRank = pageNum * pageSize  // Starting index for pagination
-        const endRank = startRank + pageSize  // Ending index for pagination
+        const startRank = pageNum * pageSize  // Starting index for pagination (inclusive)
+        // Zrevrange start/stop are both inclusive — use startRank + pageSize - 1 so each page has exactly `pageSize` members (not pageSize+1, and no duplicate boundary with the next page).
+        const endRank = startRank + pageSize - 1
         const userId = request["userid"]  // ID of user whose tweets to retrieve
         const appUserId = request["appuserid"]  // ID of user requesting the tweets
         const mmsid = lapi.MMOpen("", userId, "last")  // Open user's memory space

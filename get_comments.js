@@ -49,8 +49,8 @@
         const appUserId = request["appuserid"]  // ID of user requesting comments
         const pageNumber = parseInt(request['pn'], 10);;  // Page number (0-based)
         const pageSize = parseInt(request['ps'], 10);;  // Number of comments per page
-        const startRank = pageNumber * pageSize;  // Starting index for pagination
-        const endRank = startRank + pageSize;  // Ending index for pagination
+        const startRank = pageNumber * pageSize;  // Starting index for pagination (inclusive)
+        const endRank = startRank + pageSize - 1;  // Zrevrange stop is inclusive
         const tweetId = request["tweetid"]  // ID of tweet to get comments for
         const mmsid = lapi.MMOpen("", tweetId, "last")  // Open tweet's memory space
     

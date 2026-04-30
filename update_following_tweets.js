@@ -88,7 +88,7 @@
             
             // Compare with local score and sync if different
             const localScore = lapi.Zscore(systemSid, userId, userId)
-            lapi.Debug("Tweed update_following_tweets: remoteScore=%s, localScore=%s", String(remoteScore), String(localScore))
+            lapi.Debug("Tweed update_following_tweets: remoteScore=%s, localScore=%s", JSON.stringify(remoteScore), String(localScore))
             
             if (remoteScore !== localScore) {
                 lapi.MiMeiSync(systemSid, "", userId, {})

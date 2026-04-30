@@ -24,7 +24,7 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
-    const version = request.version || ""  // Version identifier for API compatibility
+    const version = request.version || "v2"  // Default to v2 for forward compatibility
     const APP_ID = request["aid"]  // Application ID assigned by Leither upon publication
     const APP_EXT = "com.example.twitterclone"  // Application extension identifier
     const OWNER_DATA_KEY = "data_of_author"  // Key for user data in storage
@@ -188,9 +188,9 @@
             user["name"] = (user["name"] || "").toString().trim()
             user["profile"] = (user["profile"] || "").toString().trim()
 
-            // Validate cloudDrivePort
+            // Normalize cloudDrivePort to integer (0 means not configured)
             const cloudDrivePort = parseInt(user["cloudDrivePort"]) || 0
-            user["cloudDrivePort"] = Math.max(0, Math.min(65535, cloudDrivePort)) // Clamp to valid port range
+            user["cloudDrivePort"] = cloudDrivePort
 
             // Set host IDs if not provided or invalid
             if (!user["hostIds"] || !Array.isArray(user["hostIds"]) || user["hostIds"].length < 1) {

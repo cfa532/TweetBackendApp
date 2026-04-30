@@ -27,12 +27,13 @@
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
     
-    const version = request.version || ""  // Version identifier for API compatibility
+    const version = request.version || "v2"  // Default to v2 for forward compatibility
     const FOLLOWINGS_TWEETS = "followings_tweets"  // Redis key for user's following tweets feed
     const FOLLOWINGS_LIST = "list_of_followings_mid"  // Redis key for list of followed user IDs
     const APP_ID = request["aid"]  // Application identifier
-    const userId = request["userid"]  // ID of user initiating the follow/unfollow action
-    const followedId = request["followingid"]  // ID of user to follow or unfollow
+    const userId = request["userid"]          // actor: the user who is following/unfollowing the followingId
+    const followingId = request["followingid"]        // target: the user to follow or unfollow
+    const followingHostId = request["followingid_hostid"] || null  // host node of followingId (optional hint)
     
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
@@ -42,6 +43,11 @@
             }
             if (typeof result === 'boolean') {
                 return {success: true, data: {isFollowing: result}}
+            }
+            // Delegated RunMApp("toggle_following") already returns v2 { success, data?, message? }.
+            // Do not nest again or clients see ret.data.isFollowing undefined.
+            if (result && typeof result === 'object' && ('success' in result)) {
+                return result
             }
             return {success: true, data: result}
         }
@@ -60,7 +66,7 @@
     // VALIDATION
     // ============================================================================
     
-    if (userId === followedId) {
+    if (userId === followingId) {
         return wrapError(new Error("Cannot follow yourself"))  // Prevent users from following themselves
     }
 
@@ -72,15 +78,20 @@
         // Initialize system session and get current node information
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
         const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
-        const user = getUser(userId)  // Get user data to determine hosting node
-        lapi.Debug("Tweed toggle_following: user=%s", JSON.stringify(user))
-        const userHostId = Array.isArray(user?.hostIds) && user.hostIds.length > 0
+        let user
+        try {
+            user = getUser(userId)  // Get user data to determine hosting node
+        } catch(e) {
+            lapi.Error("Tweed toggle_following: getUser failed for userId %s, will try hostId hint: %s", userId, e)
+        }
+        lapi.Debug("Tweed toggle_following: user=%s toggle %s on host=%s", JSON.stringify(user), followingId, followingHostId)
+        const userHostId = (Array.isArray(user?.hostIds) && user.hostIds.length > 0)
             ? user.hostIds[0]
-            : null
+            : (request.userid_hostid || null)  // fallback: caller-supplied hint (e.g. post-register auto-follow)
 
         if (!userHostId) {
             lapi.Error("Tweed toggle_following: missing host for user %s", JSON.stringify({userId, nodeId}))
-            return wrapError(new Error("User host not found"))
+            return wrapError(new Error("User host not found for user " + userId + " "+ nodeId))
         }
 
         // ========================================================================
@@ -94,10 +105,10 @@
                 ret = lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
                     nid: userHostId, sid: systemSid,
                     version: version,
-                    userid: userId, followingid: followedId}, []
+                    userid: userId, followingid: followingId}, []
                 )
             } catch(e) {
-                lapi.Error("Tweed toggle_following: Failed to call toggle_following on remote node %s: %s, userId=%s, followedId=%s", userHostId, e, userId, followedId)
+                lapi.Error("Tweed toggle_following: Failed to call toggle_following on remote node %s: %s, userId=%s, followingId=%s", userHostId, e, userId, followingId)
                 throw e
             }
             
@@ -110,7 +121,7 @@
                 // Don't throw - this is a non-critical operation
             }
                 
-            lapi.Debug("Tweed Toggle following remote: ret=%s, user: %s, followed: %s, node: %s", ret, userId, followedId, nodeId)
+            lapi.Debug("Tweed Toggle following remote: ret=%s, user: %s, followed: %s, node: %s", ret, userId, followingId, nodeId)
             return wrapResponse(ret)
         } else {
             // ====================================================================
@@ -120,22 +131,22 @@
             const authSid = lapi.BELoginAsAuthor()
 
             // Get the user to be followed/unfollowed
-            let followedUser = getUser(followedId)
-            lapi.Debug("Tweed toggle_following: user=%s %s", followedId, JSON.stringify(followedUser))
+            let followedUser = getUser(followingId)
+            lapi.Debug("Tweed toggle_following: followed user=%s with id=%s", JSON.stringify(followedUser), followingId)
             if (!followedUser) {
-                // Target user not available locally - attempt to sync and provide
+                // Target user not available locally - attempt to sync; use known host nid if available
                 try {
-                    lapi.MiMeiSync(authSid, "", followedId, {}) // Failure of sync will not throw an error
-                    lapi.MiMeiProvide(authSid, "", followedId)
+                    lapi.MiMeiSync(authSid, "", followingId, {SourcePeer: followingHostId})
+                    lapi.MiMeiProvide(authSid, "", followingId)
                 } catch(e) {
-                    lapi.Error("Tweed toggle_following: Failed to sync followed user %s: %s", followedId, e)
+                    lapi.Error("Tweed toggle_following: Failed to sync followed user %s from nid=%s: %s", followingId, followingHostId, e)
                 }
-                
-                followedUser = getUser(followedId)
+
+                followedUser = getUser(followingId)
 
                 if (!followedUser) {
-                    lapi.Error("Tweed Error toggle_followings: cannot get followed user %s after sync", followedId)
-                    return wrapError(new Error("Cannot get followed user"))  // Cannot proceed if target user is unavailable
+                    lapi.Error("Tweed Error toggle_following: cannot get followed user %s after sync (nid=%s)", followingId, followingHostId)
+                    return wrapError(new Error("Cannot get followed user"))
                 }
             }
             const hostOfOther = Array.isArray(followedUser?.hostIds) && followedUser.hostIds.length > 0
@@ -143,7 +154,7 @@
                 : null  // Node hosting the target user
 
             if (!hostOfOther) {
-                lapi.Error("Tweed Error toggle_following: missing host for followed user %s", JSON.stringify({userId, followedId}))
+                lapi.Error("Tweed Error toggle_following: missing host for followed user %s", JSON.stringify({userId, followingId}))
                 return wrapError(new Error("Missing host for followed user"))
             }
 
@@ -153,17 +164,17 @@
             
             // Check if the target user is already in the following list
             let userSid = lapi.MMOpen(authSid, userId, "last")
-            const isFollowing = lapi.Hget(userSid, FOLLOWINGS_LIST, followedId) ? true : false
+            const isFollowing = lapi.Hget(userSid, FOLLOWINGS_LIST, followingId) ? true : false
             if (isFollowing) {
                 // ================================================================
                 // UNFOLLOW OPERATION
                 // ================================================================
                 
-                lapi.Debug("Tweed toggle_following: %s unfollowing %s. Host: %s, Node: %s", userId, followedId, hostOfOther, nodeId)
+                lapi.Debug("Tweed toggle_following: %s unfollowing %s. Host: %s, Node: %s", userId, followingId, hostOfOther, nodeId)
                 
                 // Get all tweet IDs from the user being unfollowed
                 const tweetsResult = lapi.RunMApp("get_tweet_id_list",
-                    {aid: APP_ID, ver: "last", userid: followedId}, [])
+                    {aid: APP_ID, ver: "last", userid: followingId}, [])
                 const midList = Array.isArray(tweetsResult)
                     ? tweetsResult.map(e => e.Member).filter(Boolean)
                     : []
@@ -175,7 +186,7 @@
                 }
                 
                 // Remove user from following list
-                lapi.Hdel(userSid, FOLLOWINGS_LIST, followedId)
+                lapi.Hdel(userSid, FOLLOWINGS_LIST, followingId)
                 
                 // Backup user data and publish changes
                 lapi.MMBackup(userSid, userId, "", "delref=true")
@@ -185,7 +196,7 @@
                     lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
                         nid: hostOfOther, sid: systemSid,
                         version: version,
-                        userid: followedId, otherid: userId, isfollower: false
+                        userid: followingId, otherid: userId, isfollower: false
                     }, [])
                     
                     // Note: Do not unprovide the target user yet. Wait until Leither is ready.
@@ -201,16 +212,16 @@
                 // FOLLOW OPERATION
                 // ================================================================
                 
-                lapi.Debug("Tweed toggle_following: %s following %s, host: %s, node: %s", userId, followedId, hostOfOther, nodeId)
+                lapi.Debug("Tweed toggle_following: %s following %s, host: %s, node: %s", userId, followingId, hostOfOther, nodeId)
                 
                 // Add user to following list with timestamp
                 userSid = lapi.MMOpen(authSid, userId, "cur")
-                lapi.Hset(userSid, FOLLOWINGS_LIST, followedId, Date.now())
+                lapi.Hset(userSid, FOLLOWINGS_LIST, followingId, Date.now())
 
                 // Get all existing tweets from the user being followed
                 const scorepairs = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
                     nid: hostOfOther, sid: systemSid,
-                    version: version, userid: followedId
+                    version: version, userid: followingId
                 }, [])
                 const normalizedScorepairs = Array.isArray(scorepairs) ? scorepairs : []
                 
@@ -225,10 +236,10 @@
 
                 // Sync and provide the target user's content locally
                 try {
-                    lapi.MiMeiSync(authSid, "", followedId, {})
-                    lapi.MiMeiProvide(authSid, "", followedId)
+                    lapi.MiMeiSync(authSid, "", followingId, {SourcePeer: followingHostId})
+                    lapi.MiMeiProvide(authSid, "", followingId)
                 } catch(e) {
-                    lapi.Error("Tweed toggle_following: Failed to sync followed user content %s: %s", followedId, e)
+                    lapi.Error("Tweed toggle_following: Failed to sync followed user content %s: %s", followingId, e)
                 }
 
                 // Update follower count on the target user's node
@@ -236,7 +247,7 @@
                     lapi.RunMApp("toggle_follower", {aid: APP_ID, ver: "last",
                         nid: hostOfOther, sid: systemSid,
                         version: version,
-                        userid: followedId, otherid: userId, isfollower: true
+                        userid: followingId, otherid: userId, isfollower: true
                     }, [])
                 } catch(e) {
                     lapi.Error("Tweed Error toggle_following: toggle_follower failed: %s, %s", e, JSON.stringify(request))
@@ -253,9 +264,9 @@
                     const t = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
                         tweetid: tweetId, appuserid: userId}, [])
                     if (!t) {
-                        lapi.Debug("Tweed toggle_following: Syncing tweet: %s, user: %s", tweetId, followedId)
+                        lapi.Debug("Tweed toggle_following: Syncing tweet: %s, user: %s", tweetId, followingId)
                         try {
-                            lapi.MiMeiSync(authSid, "", tweetId, {})
+                            lapi.MiMeiSync(authSid, "", tweetId, {SourcePeer: followingHostId})
                             lapi.MiMeiProvide(authSid, "", tweetId)
                         } catch(e) {
                             lapi.Error("Tweed toggle_following: Failed to sync tweetId %s: %s", tweetId, e)
@@ -272,7 +283,7 @@
             return wrapResponse(!isFollowing)
         }
     } catch(e) {
-        lapi.Error("Tweed Error toggle_followings: %s, request=%s", e, JSON.stringify(request))
+        lapi.Error("Tweed Error toggle_following: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }
 
