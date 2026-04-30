@@ -1,11 +1,11 @@
 #!/bin/bash
 if [ -z "$1" ]; then
-  echo "Usage: ./publish_upgrade.sh app_release.apk"
+  echo "Usage: ./release1_upgrade.sh app_release.apk"
   exit 1
 fi
 
 AppId="d4lRyhABgqOnqY4bURSm_T-4FZ4"     # Tweet App
-FileId="hdF-zawE_0MH0TSVuBvAU_yA0HA"    # upgrade APK
+FileId="p5-_uQPHjQpWI7gD4Zw65LrdRPm"    # upgrade APK
 KeyFile=~/tweet/gen8.key
 LeitherPath=~/tweet/Leither
 

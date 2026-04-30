@@ -62,11 +62,11 @@
          * - Upload URL: http://t1.fireshare.us/uploadApk
          * - Login with account: developer
          * - Package ID: 9OCLYP-SXzen3e171-Ei_6N3Gwl        # p5-_uQPHjQpWI7gD4Zw65LrdRPm
-         * - Command line tool: ./publish_upgrade.sh app-release.apk
+         * - Command line tool: ./release1_upgrade.sh app-release.apk
          */
         let ret = {
             // Dynamic version from package: appVersion.Versions[appVersion.Versions.length-1].Version
-            version: 56,  // Set larger than defaultConfig.versionName in build.gradle to force upgrade
+            version: 57,  // Set larger than defaultConfig.versionName in build.gradle to force upgrade
             packageId: mid,  // Must match the mid of installation package created by upload_package.js
             mission: "minor",  // App stops working without upgrade (minor, major, critical)
             domain: "t1.www333.store",  // Base URL for deeplinks and sharing

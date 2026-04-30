@@ -31,7 +31,7 @@
     const FOLLOWINGS_TWEETS = "followings_tweets"  // Redis key for user's following tweets feed
     const FOLLOWINGS_LIST = "list_of_followings_mid"  // Redis key for list of followed user IDs
     const APP_ID = request["aid"]  // Application identifier
-    const userId = request["userid"]          // actor: the user who is following/unfollowing
+    const userId = request["userid"]          // actor: the user who is following/unfollowing the followingId
     const followingId = request["followingid"]        // target: the user to follow or unfollow
     const followingHostId = request["followingid_hostid"] || null  // host node of followingId (optional hint)
     
@@ -84,14 +84,14 @@
         } catch(e) {
             lapi.Error("Tweed toggle_following: getUser failed for userId %s, will try hostId hint: %s", userId, e)
         }
-        lapi.Debug("Tweed toggle_following: user=%s followed host=%s", JSON.stringify(user), followingHostId)
+        lapi.Debug("Tweed toggle_following: user=%s toggle %s on host=%s", JSON.stringify(user), followingId, followingHostId)
         const userHostId = (Array.isArray(user?.hostIds) && user.hostIds.length > 0)
             ? user.hostIds[0]
             : (request.userid_hostid || null)  // fallback: caller-supplied hint (e.g. post-register auto-follow)
 
         if (!userHostId) {
             lapi.Error("Tweed toggle_following: missing host for user %s", JSON.stringify({userId, nodeId}))
-            return wrapError(new Error("User host not found for user %s", JSON.stringify({userId, nodeId})))
+            return wrapError(new Error("User host not found for user " + userId + " "+ nodeId))
         }
 
         // ========================================================================
