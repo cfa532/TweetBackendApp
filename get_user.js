@@ -52,7 +52,7 @@
             // User found locally, return user data
             return wrapResponse(user)
         } else {
-            // User not found locally, but the node could be a provider by error, remove it.
+            // User not found locally, the node could be a provider by error, remove it.
             try {
                 let authSid = lapi.BELoginAsAuthor()
                 lapi.MiMeiUnprovide(authSid, "", userId)

@@ -240,7 +240,7 @@
                     lapi.MiMeiSync(authSid, "", followingId, {SourcePeer: followingHostId})
                     lapi.MiMeiProvide(authSid, "", followingId)
                 } catch(e) {
-                    lapi.Error("Tweed toggle_following: Failed to sync followed user content %s: %s", followingId, e)
+                    lapi.Error("Tweed toggle_following: Failed to sync followed user %s: %s", followingId, e)
                 }
 
                 // Update follower count on the target user's node
