@@ -91,7 +91,7 @@
 
         if (!userHostId) {
             lapi.Error("Tweed toggle_following: missing host for user %s", JSON.stringify({userId, nodeId}))
-            return wrapError(new Error("User host not found for user " + userId + " "+ nodeId))
+            return wrapError(new Error("User host not found for user " + userId + " on "+ nodeId))
         }
 
         // ========================================================================
@@ -105,7 +105,8 @@
                 ret = lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
                     nid: userHostId, sid: systemSid,
                     version: version,
-                    userid: userId, followingid: followingId}, []
+                    userid: userId, followingid: followingId,
+                    followingid_hostid: followingHostId}, []
                 )
             } catch(e) {
                 lapi.Error("Tweed toggle_following: Failed to call toggle_following on remote node %s: %s, userId=%s, followingId=%s", userHostId, e, userId, followingId)
@@ -121,7 +122,7 @@
                 // Don't throw - this is a non-critical operation
             }
                 
-            lapi.Debug("Tweed Toggle following remote: ret=%s, user: %s, followed: %s, node: %s", ret, userId, followingId, nodeId)
+            lapi.Debug("Tweed Toggle following remote: ret=%s, user: %s, followed: %s, node: %s", JSON.stringify(ret), userId, followingId, nodeId)
             return wrapResponse(ret)
         } else {
             // ====================================================================
