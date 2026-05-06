@@ -4,8 +4,8 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
-AppId="d4lRyhABgqOnqY4bURSm_T-4FZ4"     # Tweet App
-FileId="p5-_uQPHjQpWI7gD4Zw65LrdRPm"    # upgrade APK
+# FileId="9OCLYP-SXzen3e171-Ei_6N3Gwl"    # upgrade full APK
+FileId="p5-_uQPHjQpWI7gD4Zw65LrdRPm"    # upgrade mini APK
 KeyFile=~/tweet/gen8.key
 LeitherPath=~/tweet/Leither
 
@@ -14,6 +14,4 @@ LeitherPath=~/tweet/Leither
 # It is not working. Reference has to be added on "cur" before backup and publish.
 # The following script is not adding it to cur.
 "$LeitherPath" mimei setdata "$FileId" "$1" -k "$KeyFile"
-"$LeitherPath" mimei ref add "$AppId" "$FileId" -k "$KeyFile"
 "$LeitherPath" mimei publish "$FileId" -k "$KeyFile"
-"$LeitherPath" mimei publish "$AppId" -k "$KeyFile"
