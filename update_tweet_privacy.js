@@ -89,16 +89,28 @@
             }
             
             lapi.Debug("Tweed update_tweet_privacy: remote ret=%s", JSON.stringify(ret))
-            
+
+            // Sync the updated tweet locally regardless of return shape.
             try {
-                if (typeof ret === 'boolean') {
-                    // Remote call returned boolean directly - sync the updated tweet
-                    lapi.MiMeiSync(systemSid, "", tweetId, {})
-                    return ret
-                }
+                lapi.MiMeiSync(systemSid, "", tweetId, {})
             } catch(e) {
                 lapi.Error("Tweed update_tweet_privacy: remote sync failed: %s, ret=%s, request=%s", e, JSON.stringify(ret), JSON.stringify(request))
             }
+
+            // Legacy: remote node returned a raw boolean — wrap it ourselves.
+            if (typeof ret === 'boolean') {
+                return wrapResponse(ret)
+            }
+
+            // v2 path: the remote node already wrapped the response in
+            // {success, data: {isPrivate}}. Returning wrapResponse(ret) here would
+            // double-wrap it into {success, data: {success, data: {isPrivate}}}.
+            // Pass it through unchanged.
+            if (ret && typeof ret === 'object' && 'success' in ret) {
+                return ret
+            }
+
+            // Unknown shape — fall back to wrapping (legacy behavior).
             return wrapResponse(ret)
         } else {
             // ====================================================================

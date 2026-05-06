@@ -34,6 +34,11 @@
           if (result === null || result === undefined) {
               return {success: false, message: "Retweet operation failed"}
           }
+          // If result already has success field (e.g. delegated RunMApp call),
+          // return as-is to avoid double-wrapping.
+          if (typeof result === 'object' && 'success' in result) {
+              return result
+          }
           return {success: true, data: result}
       }
       return result
