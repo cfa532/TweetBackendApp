@@ -59,7 +59,7 @@
         // Get user data to determine primary host
         const user = getUser(appUserId)
         if (!user || !user.hostIds || user.hostIds.length === 0) {
-            lapi.Error("Tweed update_tweet_privacy: missing host for user %s", JSON.stringify({appUserId, nodeId, user}))
+            lapi.Error("Tweed toggle_tweet_privacy: missing host for user %s", JSON.stringify({appUserId, nodeId, user}))
             throw new Error("User not found or missing host")
         }
 
@@ -74,7 +74,7 @@
 
             let ret
             try {
-                ret = lapi.RunMApp("update_tweet_privacy", {
+                ret = lapi.RunMApp("toggle_tweet_privacy", {
                     aid: APP_ID,
                     ver: "last",
                     nid: user.hostIds[0],
@@ -84,17 +84,17 @@
                     tweetid: tweetId
                 }, [])
             } catch(e) {
-                lapi.Error("Tweed update_tweet_privacy: Failed to call update_tweet_privacy on remote node %s: %s, appUserId=%s, tweetId=%s", user.hostIds[0], e, appUserId, tweetId)
+                lapi.Error("Tweed toggle_tweet_privacy: Failed to call toggle_tweet_privacy on remote node %s: %s, appUserId=%s, tweetId=%s", user.hostIds[0], e, appUserId, tweetId)
                 throw e
             }
             
-            lapi.Debug("Tweed update_tweet_privacy: remote ret=%s", JSON.stringify(ret))
+            lapi.Debug("Tweed toggle_tweet_privacy: remote ret=%s", JSON.stringify(ret))
 
             // Sync the updated tweet locally regardless of return shape.
             try {
                 lapi.MiMeiSync(systemSid, "", tweetId, {})
             } catch(e) {
-                lapi.Error("Tweed update_tweet_privacy: remote sync failed: %s, ret=%s, request=%s", e, JSON.stringify(ret), JSON.stringify(request))
+                lapi.Error("Tweed toggle_tweet_privacy: remote sync failed: %s, ret=%s, request=%s", e, JSON.stringify(ret), JSON.stringify(request))
             }
 
             // Legacy: remote node returned a raw boolean — wrap it ourselves.
@@ -149,7 +149,7 @@
             lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", tweetId)
             
-            lapi.Debug("Tweed update_tweet_privacy: local tweet=%s", JSON.stringify(tweet))
+            lapi.Debug("Tweed toggle_tweet_privacy: local tweet=%s", JSON.stringify(tweet))
             return wrapResponse(tweet.isPrivate ? true : false)
         }
     } catch(e) {
@@ -157,7 +157,7 @@
         // ERROR HANDLING
         // ========================================================================
         
-        lapi.Error("Tweed Error update_tweet_privacy: %s, request=%s", e, JSON.stringify(request))
+        lapi.Error("Tweed Error toggle_tweet_privacy: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }
 
@@ -176,7 +176,7 @@
             const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
             return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
         } catch(e) {
-            lapi.Error("Tweed update_tweet_privacy: getUser failed for mid=%s: %s", mid, e)
+            lapi.Error("Tweed toggle_tweet_privacy: getUser failed for mid=%s: %s", mid, e)
             throw e
         }
     }
