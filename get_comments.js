@@ -61,13 +61,14 @@
         // Get comment IDs in reverse chronological order (newest first)
         const arr = lapi.Zrevrange(mmsid, COMMENT_LIST, startRank, endRank)
         
-        // Convert comment IDs to full comment objects (tweets)
+        // Convert comment IDs to full comment objects (tweets).
+        // If get_tweet returns null (comment not yet synced to this node), return a
+        // minimal stub {mid} so the client knows the ID and can trigger a sync.
         const comments = arr.map(sp => {
-            return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
+            const comment = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
                 appuserid: appUserId, tweetid: sp.Member}, [])
+            return comment || {mid: sp.Member}
         })
-        // Note: Filter could be added here to remove null/undefined results
-        // .filter(e=> e)
         return wrapResponse(comments)
     } catch(e) {
         // ========================================================================

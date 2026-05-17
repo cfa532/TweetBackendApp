@@ -19,7 +19,7 @@
  * 
  * @param {Object} request - The request object containing comment data
  * @param {string} request.aid - Application ID
- * @param {string} request.appuserid - ID of user posting the comment
+ * @param {string} request.tweetauthorid - ID of user posting the comment
  * @param {string} request.tweetid - ID of tweet being commented on
  * @param {string} request.hostid - Node ID where the original tweet is hosted
  * @param {string} request.comment - JSON string of comment object (tweet format)
@@ -36,7 +36,7 @@
     const TWT_CONTENT_KEY = "core_data_of_tweet"  // Key for tweet content storage
     const APP_EXT = "com.example.twitterclone"  // Application extension identifier
     const APP_ID = request["aid"]  // Application identifier
-    const appUserId = request["appuserid"]  // ID of user posting the comment
+    const tweetAuthorId = request["tweetauthorid"]  // ID of user posting the comment
     const tweetId = request["tweetid"]  // ID of tweet being commented on
     const hostId = request["hostid"]  // Node ID where the original tweet is hosted
     const comment = JSON.parse(request['comment'])  // Parsed comment object (tweet format)
@@ -81,10 +81,10 @@
                 ret = lapi.RunMApp("add_comment", {aid: APP_ID, ver: "last",
                     nid: hostId, sid: systemSid,
                     version: version,
-                    hostid: hostId, appuserid: appUserId, tweetid: tweetId, comment: request["comment"]}, []
+                    hostid: hostId, tweetauthorid: tweetAuthorId, tweetid: tweetId, comment: request["comment"]}, []
                 )
             } catch(e) {
-                lapi.Error("Tweed add_comment: Failed to call add_comment on remote node %s: %s, appUserId=%s, tweetId=%s", hostId, e, appUserId, tweetId)
+                lapi.Error("Tweed add_comment: Failed to call add_comment on remote node %s: %s, tweetAuthorId=%s, tweetId=%s", hostId, e, tweetAuthorId, tweetId)
                 throw e
             }
             
@@ -157,7 +157,7 @@
             // Update the parent tweet's score in application data
             // This ensures changes to the tweet are reflected in the app's data layer
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
-                userid: appUserId, mid: tweetId}, [])
+                userid: tweetAuthorId, mid: tweetId}, [])
     
             // Future enhancement: Track user's comments in their profile
             // This would allow users to see all their comments in one place
