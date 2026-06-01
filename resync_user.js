@@ -105,6 +105,7 @@
                     try {
                         const authSid = lapi.BELoginAsAuthor()
                         lapi.MiMeiSync(authSid, "", tweetId, {SourcePeer: user.hostIds[0]})
+                        lapi.MiMeiProvide(authSid, "", tweetId)
                     } catch(syncErr) {
                         lapi.Error("Tweed resync_user v3: MiMeiSync failed tweetId=%s userId=%s hostId=%s err=%s", tweetId, userId, user.hostIds[0], syncErr)
                         syncFailed = true
