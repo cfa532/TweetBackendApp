@@ -95,11 +95,6 @@
                         version: 'v3'
                     }, [])
 
-                    if (tweet) {
-                        lapi.Debug("Tweed resync_user v3: tweet found locally tweetId=%s userId=%s", tweetId, userId)
-                        continue
-                    }
-
                     lapi.Debug("Tweed resync_user v3: tweet not local, syncing tweetId=%s userId=%s hostId=%s", tweetId, userId, user.hostIds[0])
                     let syncFailed = false
                     try {
