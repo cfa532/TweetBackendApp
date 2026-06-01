@@ -54,28 +54,37 @@
     try {
         const user = getUser(userId)  // Get user data to determine hosting node
         const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
-        
+
         if (!user || !user.hostIds || user.hostIds.length === 0) {
             lapi.Error("Tweed resync_user: missing host for user %s", JSON.stringify({userId, nodeId, user}))
             throw new Error("User not found or missing host")
         }
-        
+
+        lapi.Debug("Tweed resync_user: start userId=%s nodeId=%s hostIds=%s version=%s", userId, nodeId, JSON.stringify(user.hostIds), version)
+
         // ========================================================================
         // USER SYNCHRONIZATION
         // ========================================================================
-        
+
         const TWT_LIST_KEY = "list_of_tweets_mid"
         const tweets = []
 
         if (user.hostIds[0] !== nodeId) {
             if (version === 'v3') {
-                // Sync newest missing tweets from primary host. The first valid
-                // local tweet means this copy has already caught up to that point.
+                // Temporary conservative scan: browse the full recent tweet list
+                // and sync every tweet missing locally. To restore the faster
+                // boundary behavior later, change the `if (tweet) continue`
+                // below to `if (tweet) break`, so the first valid local tweet
+                // means this copy has already caught up to that point.
                 const userSid = lapi.MMOpen("", userId, "last")
                 const tweetIdList = lapi.Zrevrange(userSid, TWT_LIST_KEY, 0, 19) || []
+                lapi.Debug("Tweed resync_user v3: userId=%s tweetIdList.length=%d", userId, tweetIdList.length)
 
                 for (const element of tweetIdList) {
-                    if (!element || !element.Member) continue
+                    if (!element || !element.Member) {
+                        lapi.Debug("Tweed resync_user v3: skipping null/empty element userId=%s", userId)
+                        continue
+                    }
                     const tweetId = element.Member
 
                     let tweet = lapi.RunMApp("get_tweet", {
@@ -86,19 +95,24 @@
                         version: 'v3'
                     }, [])
 
-                    if (tweet) break
+                    if (tweet) {
+                        lapi.Debug("Tweed resync_user v3: tweet found locally tweetId=%s userId=%s", tweetId, userId)
+                        continue
+                    }
 
+                    lapi.Debug("Tweed resync_user v3: tweet not local, syncing tweetId=%s userId=%s hostId=%s", tweetId, userId, user.hostIds[0])
                     let syncFailed = false
                     try {
                         const authSid = lapi.BELoginAsAuthor()
                         lapi.MiMeiSync(authSid, "", tweetId, {SourcePeer: user.hostIds[0]})
                     } catch(syncErr) {
+                        lapi.Error("Tweed resync_user v3: MiMeiSync failed tweetId=%s userId=%s hostId=%s err=%s", tweetId, userId, user.hostIds[0], syncErr)
                         syncFailed = true
                     }
 
                     if (syncFailed) {
-                        const userData = lapi.RunMApp("get_user_core_data", {aid: request["aid"], ver:"last", userid: userId}, [])
-                        return wrapResponse({user: userData, tweets})
+                        lapi.Error("Tweed resync_user v3: sync failed, skipping tweetId=%s userId=%s tweets.length=%d", tweetId, userId, tweets.length)
+                        continue
                     }
 
                     tweet = lapi.RunMApp("get_tweet", {
@@ -109,10 +123,17 @@
                         version: 'v3'
                     }, [])
 
-                    if (tweet) tweets.push(tweet)
+                    if (tweet) {
+                        lapi.Debug("Tweed resync_user v3: tweet synced and fetched tweetId=%s userId=%s", tweetId, userId)
+                        tweets.push(tweet)
+                    } else {
+                        lapi.Error("Tweed resync_user v3: tweet still missing after sync tweetId=%s userId=%s", tweetId, userId)
+                    }
                 }
+                lapi.Debug("Tweed resync_user v3: tweet sync done userId=%s synced=%d", userId, tweets.length)
             } else {
                 // Make sure the current user is up to date by syncing from primary host
+                lapi.Debug("Tweed resync_user: syncing user mid userId=%s hostId=%s", userId, user.hostIds[0])
                 lapi.RunMApp("node_update_mid_by_score", {aid: request["aid"], ver:"last",
                     hostid: user.hostIds[0], userid: userId, mid: userId}, [])
             }
@@ -127,9 +148,11 @@
             userid: userId}, [])
 
         if (!userData) {
+            lapi.Error("Tweed resync_user: get_user_core_data returned null userId=%s", userId)
             throw new Error("Failed to retrieve user data after synchronization")
         }
 
+        lapi.Debug("Tweed resync_user: done userId=%s version=%s tweets=%d", userId, version, tweets.length)
         if (version === 'v3') {
             return wrapResponse({user: userData, tweets})
         }
@@ -138,7 +161,7 @@
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
-        
+
         lapi.Error("Tweed Error resync_user: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }

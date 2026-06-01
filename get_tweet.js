@@ -115,10 +115,12 @@
             const resultArray = [ret]
             if (tweet.originalTweetId) {
                 const originalTweet = lapi.RunMApp("get_tweet", {
+                    aid: request["aid"],
+                    ver: "last",
                     tweetid: tweet.originalTweetId,
                     appuserid: appUserId,
                     version: version
-                })
+                }, [])
                 if (originalTweet) {
                     resultArray.push(originalTweet)
                 }
