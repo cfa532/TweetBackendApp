@@ -3,9 +3,15 @@
  * appUser's followings_tweets. If there are new tweets, sync them and
  * return them to the appUser.
  * 
- * This function handles both local and remote execution:
- * - When called locally: delegates to remote host and processes results
- * - When called remotely: processes followings and returns new tweets
+ * `request.hostid` must be appUser.hostIds[0], the appUser's writable/home
+ * host. That host is the single source of truth for list_of_followings_mid and
+ * followings_tweets. Preferred callers should run this entry on hostIds[0].
+ * If that home-host call returns new tweets, callers should run this entry a
+ * second time on their current/access host with homeupdated=true so the current
+ * host pulls the updated appUser mid from hostIds[0].
+ *
+ * The non-home-host branch below is retained as a compatibility fallback for
+ * older callers, but it should not be the normal path.
  */
 
 ((request, args) => {
@@ -21,7 +27,8 @@
     // Extract request parameters
     const APP_ID = request["aid"]
     const userId = request["appuserid"]    // appUser
-    const hostId = request["hostid"]
+    const hostId = request["hostid"]   // appUser.hostIds[0], the writable/home host
+    const homeUpdated = request["homeupdated"] === true || request["homeupdated"] === "true"
     
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
@@ -48,28 +55,34 @@
     const nodeId = lapi.GetVar("", "hostid")    // current node id
 
     try {
-        // Get user session and find the last tweet score
-        const userSid = lapi.MMOpen(authSid, userId, "last")
+        // Get user session and find the last tweet score before any sync. On
+        // current/access hosts this is the local high-water mark; after pulling
+        // from hostIds[0], entries above this score are the new tweets to return.
+        let userSid = lapi.MMOpen(authSid, userId, "last")
         const lastElements = lapi.Zrevrange(userSid, FOLLOWINGS_TWEETS, 0, 0)
         const lastScore = lastElements.length > 0 ? lastElements[0].Score + 1 : 0
 
         if (nodeId !== hostId) {
-            // We are on a local node, delegate to the remote host
+            // Compatibility fallback: this entry is running on a host other than
+            // appUser.hostIds[0]. Ask hostIds[0], the source of truth, to update
+            // followings_tweets unless the caller already did that first pass.
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
+
+            if (!homeUpdated) {
+                // Send the request to appUser.hostIds[0].
+                const ret = lapi.RunMApp("update_following_tweets", {
+                    aid: APP_ID,
+                    ver: "last",
+                    nid: hostId,
+                    sid: systemSid,
+                    version: version,
+                    hostid: hostId,
+                    appuserid: userId
+                }, [])
+                lapi.Debug("Tweed update_following_tweets: ret from home host %s", JSON.stringify(ret))
+            }
             
-            // Send the request to the remote host
-            const ret = lapi.RunMApp("update_following_tweets", {
-                aid: APP_ID,
-                ver: "last",
-                nid: hostId,
-                sid: systemSid,
-                version: version,
-                hostid: hostId,
-                appuserid: userId
-            }, [])
-            lapi.Debug("Tweed update_following_tweets: ret from remote host %s", JSON.stringify(ret))
-            
-            // Get the updated score from the remote host
+            // Get the updated appUser score from appUser.hostIds[0].
             let remoteScore
             try {
                 remoteScore = lapi.RunMApp("node_get_score", {
@@ -77,7 +90,6 @@
                     ver: request.ver,
                     nid: hostId,        // remote host id
                     sid: systemSid,     // necessary to prove the user's authenticity
-                    version: version,
                     userid: userId,
                     mid: userId
                 }, [])
@@ -86,18 +98,26 @@
                 throw e
             }
             
-            // Compare with local score and sync if different
+            // Legacy local pull. This is best-effort only; preferred callers
+            // perform the pull explicitly after the hostIds[0] update completes.
             const localScore = lapi.Zscore(systemSid, userId, userId)
             lapi.Debug("Tweed update_following_tweets: remoteScore=%s, localScore=%s", JSON.stringify(remoteScore), String(localScore))
             
             if (remoteScore !== localScore) {
-                lapi.MiMeiSync(systemSid, "", userId, {})
+                if (remoteScore === null || remoteScore === undefined || typeof remoteScore === "object") {
+                    throw new Error(`Invalid remote score from host ${hostId}: ${JSON.stringify(remoteScore)}`)
+                }
+                lapi.MiMeiSync(systemSid, "", userId, {SourcePeer: hostId})
                 // update the score of the user in local AppData
                 const sp = getScorePair(remoteScore, userId)
                 lapi.Zadd(systemSid, userId, sp)
             }
 
             // Get new tweets since the last processed score
+
+            // Reopen after pulling appUser from hostIds[0]; otherwise a stale
+            // session can miss the freshly synced followings_tweets entries.
+            userSid = lapi.MMOpen(authSid, userId, "last")
             const arr = lapi.Zrangebyscore(userSid, FOLLOWINGS_TWEETS, lastScore, Date.now(), 0, 1000)
             lapi.Debug("Tweed update_following_tweets: new tweets, lastScore=%s, arr=%s", String(lastScore), JSON.stringify(arr))
             
@@ -115,8 +135,9 @@
                 if (tweet) {
                     tweets.push(tweet)
                 } else {
-                    // Tweet not found locally, try to sync and fetch again
-                    lapi.MiMeiSync(userSid, "", tweetId, {})
+                    // Tweet not found locally. Pull it from appUser.hostIds[0],
+                    // which just built followings_tweets and can provide it.
+                    lapi.MiMeiSync(userSid, "", tweetId, {SourcePeer: hostId})
                     tweet = lapi.RunMApp("get_tweet", {
                         aid: APP_ID, 
                         ver: "last",
@@ -179,29 +200,38 @@
     function updateUser(uid, lastScore, userSid) {
         try {
             const OWNER_DATA_KEY = "data_of_author"
-            const mmsid = lapi.MMOpen("", uid, "last")
+            let mmsid = lapi.MMOpen("", uid, "last")
             const user = lapi.Get(mmsid, OWNER_DATA_KEY)
             
             if (!user) {
                 lapi.Error("Tweed update_following_tweets: updateUser: user not found, uid=%s, nodeId=%s", uid, nodeId)
                 return []
             }
-            
-            // Update the user's score if they have host IDs
-            if (user.hostIds && user.hostIds.length > 0) {
+
+            const sourceHostId = user.hostIds && user.hostIds.length > 0 ? user.hostIds[0] : null
+
+            // Pull the followed user's latest published state from their home
+            // host before reading list_of_tweets_mid. This syncs the user's mid,
+            // which carries the tweet-id sorted set; individual tweet mids are
+            // still synced lazily below if get_tweet cannot read them locally.
+            if (sourceHostId) {
                 try {
                     lapi.RunMApp("node_update_mid_by_score", {
                         aid: APP_ID, 
                         ver: "last",
-                        hostid: user.hostIds[0], 
+                        hostid: sourceHostId, 
                         userid: uid, 
                         mid: uid
                     }, [])
                 } catch(e) {
-                    lapi.Error("Tweed update_following_tweets: Failed to update user score: %s, uid=%s, hostId=%s", e, uid, user.hostIds[0])
+                    lapi.Error("Tweed update_following_tweets: Failed to update user score: %s, uid=%s, hostId=%s", e, uid, sourceHostId)
                     // Don't throw - continue processing
                 }
             }
+
+            // Reopen after node_update_mid_by_score so list_of_tweets_mid is read
+            // from the freshly synced local copy.
+            mmsid = lapi.MMOpen("", uid, "last")
             
             // Get new tweets since lastScore by the uid
             const arr = lapi.Zrangebyscore(mmsid, TWT_LIST_KEY, lastScore, Date.now(), 0, 1000)
@@ -216,12 +246,30 @@
             const tweets = []
             for (const e of arr) {
                 const tweetId = e.Member
-                const tweet = lapi.RunMApp("get_tweet", {
+                let tweet = lapi.RunMApp("get_tweet", {
                     aid: APP_ID, 
                     ver: "last",
                     appuserid: userId, 
                     tweetid: tweetId
                 }, [])
+
+                if (!tweet && sourceHostId) {
+                    // The user's tweet-id list may be synced while the tweet mid
+                    // itself is not available locally yet. Pull the tweet mid from
+                    // the followed user's home host, then read it again.
+                    try {
+                        lapi.MiMeiSync(authSid, "", tweetId, {SourcePeer: sourceHostId})
+                        lapi.MiMeiProvide(authSid, "", tweetId)
+                        tweet = lapi.RunMApp("get_tweet", {
+                            aid: APP_ID,
+                            ver: "last",
+                            appuserid: userId,
+                            tweetid: tweetId
+                        }, [])
+                    } catch(e) {
+                        lapi.Error("Tweed update_following_tweets: Failed to sync tweetId %s from hostId %s: %s", tweetId, sourceHostId, e)
+                    }
+                }
                 
                 if (tweet) {
                     tweets.push(tweet)
