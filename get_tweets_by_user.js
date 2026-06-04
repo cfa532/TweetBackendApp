@@ -1,16 +1,17 @@
 /**
  * Get Tweets By User Function
- * 
+ *
  * This function retrieves a paginated list of tweets from a specific user.
  * It includes privacy filtering and handles retweets with original tweet collection.
- * 
+ *
  * Key Features:
  * - Paginated tweet retrieval for a specific user
  * - Privacy filtering (hides private tweets from non-authors)
  * - Handles retweets with original tweet collection
  * - Reverse chronological ordering (newest first)
  * - Returns both tweets and original tweets for retweets
- * 
+ * - Cleans up stale tweet IDs from all user lists when appuserid === userid
+ *
  * @param {Object} request - The request object containing query parameters
  * @param {string} request.aid - Application ID
  * @param {string} request.userid - ID of user whose tweets to retrieve
@@ -24,9 +25,9 @@
     // ============================================================================
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
-    
+
     const version = request.version || ""  // Version identifier for API compatibility
-    
+
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
         if (version === 'v2') {
@@ -38,7 +39,7 @@
         }
         return result
     }
-    
+
     // Helper function to wrap error response in v2 format if needed
     function wrapError(error) {
         if (version === 'v2') {
@@ -46,65 +47,117 @@
         }
         return {success: false, error: error.message}
     }
-    
+
     try {
         const TWT_LIST_KEY = "list_of_tweets_mid"  // Redis key for user's tweet list
+        const FOLLOWINGS_TWEETS = "followings_tweets"  // Redis key for following tweets feed
+        const PINNED_TWEETS = "pinned_tweet_list"      // Redis key for pinned tweets list
+        const BOOKMARK_LIST = "bookmark_list"          // Redis key for user's bookmark list
+        const FAVORITE_LIST = "tweet_like_list"        // Redis key for user's favorite list
+
         const pageNum = parseInt(request["pn"], 10)  // Page number (0-based)
         const pageSize = parseInt(request["ps"], 10)  // Number of tweets per page
-        const startRank = pageNum * pageSize  // Starting index for pagination (inclusive)
-        // Zrevrange start/stop are both inclusive — use startRank + pageSize - 1 so each page has exactly `pageSize` members (not pageSize+1, and no duplicate boundary with the next page).
-        const endRank = startRank + pageSize - 1
-        const userId = request["userid"]  // ID of user whose tweets to retrieve
-        const appUserId = request["appuserid"]  // ID of user requesting the tweets
-        const mmsid = lapi.MMOpen("", userId, "last")  // Open user's memory space
+        const userId = request["userid"]              // ID of user whose tweets to retrieve
+        const appUserId = request["appuserid"]        // ID of user requesting the tweets
+        const isOwner = appUserId === userId
+
+        const mmsid = lapi.MMOpen("", userId, "last")  // Read-only: latest version
 
         // ========================================================================
-        // MAIN EXECUTION
+        // WRITE SESSION (owner only — needed to clean up stale entries)
         // ========================================================================
-        
-        // Get tweets in reverse chronological order (newest first)
-        const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, startRank, endRank)
-        
-        // Convert tweet IDs to full tweet objects with privacy filtering
-        let tweets = arr.map(sp => {
-            const tweetId = sp.Member
-            const tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
-                appuserid: appUserId, tweetid: tweetId}, [])
-            
-            // Hide private tweets from non-authors
-            if (tweet && tweet.isPrivate === true && appUserId !== tweet.authorId) {
-                return null
-            }
-            return tweet
-        })
-        
-        // Collect original tweets for retweets (tweets with originalTweetId)
+
+        let authSid = null
+        let userSid = null
+        if (isOwner) {
+            authSid = lapi.BELoginAsAuthor()
+            userSid = lapi.MMOpen(authSid, userId, "cur")
+        }
+
+        // ========================================================================
+        // MAIN EXECUTION — fetch until full page or list exhausted
+        // ========================================================================
+
+        let validTweets = []
+        let validTweetIds = []
         let originalTweets = []
-        tweets.forEach(tweet => {
-            if (tweet && tweet.originalTweetId) {
-                const originalTweet = lapi.RunMApp("get_tweet", {
-                    aid: request["aid"], 
-                    ver: "last",
-                    appuserid: appUserId, 
-                    tweetid: tweet.originalTweetId
-                }, [])
-                if (originalTweet) {
-                    originalTweets.push(originalTweet)
+        let offset = pageNum * pageSize  // Start rank within the sorted set
+        let didModify = false
+
+        while (validTweets.length < pageSize) {
+            const batch = lapi.Zrevrange(mmsid, TWT_LIST_KEY, offset, offset + pageSize - 1)
+            if (!batch || batch.length === 0) break
+
+            const batchStale = []
+
+            for (const sp of batch) {
+                const tweetId = sp.Member
+                if (!tweetId) continue
+
+                const tweetResp = lapi.RunMApp("get_tweet", {aid: request["aid"], ver: "last",
+                    version: 'v2', appuserid: appUserId, tweetid: tweetId}, [])
+                const tweet = tweetResp?.success ? tweetResp.data : null
+
+                if (!tweet) {
+                    // Tweet no longer exists — queue for removal if we own the lists
+                    if (isOwner) batchStale.push(tweetId)
+                    continue
                 }
+
+                // Hide private tweets from non-authors (not stale — skip without removing)
+                if (tweet.isPrivate === true && appUserId !== tweet.authorId) continue
+
+                validTweets.push(tweet)
+                validTweetIds.push(tweetId)
+
+                // Collect original tweet for retweets
+                if (tweet.originalTweetId) {
+                    const origResp = lapi.RunMApp("get_tweet", {aid: request["aid"], ver: "last",
+                        version: 'v2', appuserid: appUserId, tweetid: tweet.originalTweetId}, [])
+                    const origTweet = origResp?.success ? origResp.data : null
+                    if (origTweet) originalTweets.push(origTweet)
+                }
+
+                if (validTweets.length >= pageSize) break
             }
-        })
-        
+
+            // Remove stale tweet IDs from all user lists
+            if (isOwner && batchStale.length > 0) {
+                batchStale.forEach(tweetId => {
+                    lapi.Debug("Tweed get_tweets_by_user: removing stale tweetId=%s from user lists, userId=%s", tweetId, userId)
+                    lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
+                    lapi.Zrem(userSid, FOLLOWINGS_TWEETS, tweetId)
+                    lapi.Hdel(userSid, PINNED_TWEETS, tweetId)
+                    lapi.Zrem(userSid, BOOKMARK_LIST, tweetId)
+                    lapi.Zrem(userSid, FAVORITE_LIST, tweetId)
+                })
+                didModify = true
+            }
+
+            // Removed items no longer occupy ranks, so adjust offset accordingly
+            offset += batch.length - batchStale.length
+
+            // Fewer items than requested means we've reached the end of the list
+            if (batch.length < pageSize) break
+        }
+
+        // Persist and publish user data if any stale entries were removed
+        if (isOwner && didModify) {
+            lapi.MMBackup(userSid, userId, "", "delref=true")
+            lapi.MiMeiPublish(authSid, "", userId)
+        }
+
         return wrapResponse({
             success: true,
-            tweets: tweets,
+            tweets: validTweets,
             originalTweets: originalTweets,
-            tidList: arr.map(sp => sp.Member)
+            tidList: validTweetIds
         })
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
-        
+
         lapi.Error("Tweed Error get_tweets_by_user: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }

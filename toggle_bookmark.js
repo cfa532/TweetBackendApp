@@ -177,9 +177,10 @@
             )
             
             // Return updated tweet
-            return lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
-                tweetid: tweetId, appuserid: appUserId}, []
+            const tweetResp = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
+                version: 'v2', tweetid: tweetId, appuserid: appUserId}, []
             )
+            return tweetResp?.success ? tweetResp.data : null
         } catch(e) {
             lapi.Error("Tweed toggle_bookmark: Error toggleBookmarkOfTweet: %s, request=%s", e, JSON.stringify(request))
             return null

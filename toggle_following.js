@@ -262,8 +262,9 @@
                     if (!tweetId) {
                         return
                     }
-                    const t = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
-                        tweetid: tweetId, appuserid: userId}, [])
+                    const tResp = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
+                        version: 'v2', tweetid: tweetId, appuserid: userId}, [])
+                    const t = tResp?.success ? tResp.data : null
                     if (!t) {
                         lapi.Debug("Tweed toggle_following: Syncing tweet: %s, user: %s", tweetId, followingId)
                         try {

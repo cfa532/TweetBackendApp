@@ -55,8 +55,9 @@
         // Get pinned tweet IDs and convert to full tweet objects with timestamps
         const result = lapi.Hkeys(mmsid, PINNED_TWEETS).map(tweetId => {
             let ts = lapi.Hget(mmsid, PINNED_TWEETS, tweetId).toString()  // Pinning timestamp
-            let tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
-                appuserid: appUserId, tweetid: tweetId}, [])
+            const tweetResp = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
+                version: 'v2', appuserid: appUserId, tweetid: tweetId}, [])
+            let tweet = tweetResp?.success ? tweetResp.data : null
             if (tweet) {
                 // Note: timestamp is when the tweet was pinned, not its creation time
                 return {tweet: tweet, timestamp: ts}

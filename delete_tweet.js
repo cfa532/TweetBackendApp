@@ -33,6 +33,10 @@
     // ============================================================================
     
     const version = request.version || ""  // Version identifier for API compatibility
+
+    const BOOKMARK_LIST = "bookmark_list"  // Redis key for user's bookmark list
+    const FAVORITE_LIST = "tweet_like_list"  // Redis key for tweet's favorite list
+
     const TWT_LIST_KEY = "list_of_tweets_mid"  // Redis key for user's tweet list
     const TWT_CONTENT_KEY = "core_data_of_tweet"  // Key for tweet content storage
     const FOLLOWINGS_TWEETS = "followings_tweets"  // Redis key for following tweets feed
@@ -142,6 +146,8 @@
             lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)  // Remove from tweet list
             lapi.Zrem(userSid, FOLLOWINGS_TWEETS, tweetId)  // Remove from following feed
             lapi.Hdel(userSid, PINNED_TWEETS, tweetId)  // Remove from pinned list
+            lapi.Zrem(userSid, BOOKMARK_LIST, tweetId)  // Remove from bookmarks
+            lapi.Zrem(userSid, FAVORITE_LIST, tweetId)  // Remove from favorites
             
             // Update user data and publish changes
             lapi.MMBackup(userSid, userId, "", "delref=true")

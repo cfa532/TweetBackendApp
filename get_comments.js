@@ -65,8 +65,9 @@
         // If get_tweet returns null (comment not yet synced to this node), return a
         // minimal stub {mid} so the client knows the ID and can trigger a sync.
         const comments = arr.map(sp => {
-            const comment = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
-                appuserid: appUserId, tweetid: sp.Member}, [])
+            const commentResp = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
+                version: 'v2', appuserid: appUserId, tweetid: sp.Member}, [])
+            const comment = commentResp?.success ? commentResp.data : null
             return comment || {mid: sp.Member}
         })
         return wrapResponse(comments)

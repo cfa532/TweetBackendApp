@@ -140,9 +140,10 @@
             // ================================================================
             
             // Return updated tweet
-            const updatedTweet = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
-                tweetid: tweetId, appuserid: appUserId}, []
+            const updatedTweetResp = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
+                version: 'v2', tweetid: tweetId, appuserid: appUserId}, []
             )
+            const updatedTweet = updatedTweetResp?.success ? updatedTweetResp.data : null
     
             // Toggle the favorite status of the tweet in appUser's node
             let updatedUser

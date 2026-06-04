@@ -113,8 +113,9 @@
         userid: authorId, mid: tweetId}, [])
   
       // Retrieve the original tweet after updating it
-      const tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
-        appuserid: appUserId, tweetid: tweetId}, [])
+      const tweetResp = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
+        version: 'v2', appuserid: appUserId, tweetid: tweetId}, [])
+      const tweet = tweetResp?.success ? tweetResp.data : null
       return wrapResponse(tweet)
     }
   } catch (e) {

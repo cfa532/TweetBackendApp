@@ -125,25 +125,29 @@
             const tweets = []
             for (const e of arr) {
                 const tweetId = e.Member
-                let tweet = lapi.RunMApp("get_tweet", {
-                    aid: APP_ID, 
+                let tweetResp = lapi.RunMApp("get_tweet", {
+                    aid: APP_ID,
                     ver: "last",
-                    appuserid: userId, 
+                    version: 'v2',
+                    appuserid: userId,
                     tweetid: tweetId
                 }, [])
-                
+                let tweet = tweetResp?.success ? tweetResp.data : null
+
                 if (tweet) {
                     tweets.push(tweet)
                 } else {
                     // Tweet not found locally. Pull it from appUser.hostIds[0],
                     // which just built followings_tweets and can provide it.
                     lapi.MiMeiSync(userSid, "", tweetId, {SourcePeer: hostId})
-                    tweet = lapi.RunMApp("get_tweet", {
-                        aid: APP_ID, 
+                    tweetResp = lapi.RunMApp("get_tweet", {
+                        aid: APP_ID,
                         ver: "last",
-                        appuserid: userId, 
+                        version: 'v2',
+                        appuserid: userId,
                         tweetid: tweetId
                     }, [])
+                    tweet = tweetResp?.success ? tweetResp.data : null
                     
                     if (tweet) {
                         tweets.push(tweet)
@@ -160,7 +164,7 @@
             // This host is the single source of truth, process followings directly.
             const mmsid = lapi.MMOpen(authSid, userId, "cur")
             const followings = lapi.Hkeys(mmsid, FOLLOWINGS_LIST) // mid list of its followings
-            lapi.Debug("Tweed update_following_tweets: remote, followings=%s", JSON.stringify(followings))
+            lapi.Debug("Tweed update_following_tweets: root, followings=%s", JSON.stringify(followings))
 
             // Process each following to get their new tweets
             const tweets = []
@@ -169,7 +173,7 @@
                 tweets.push(...updateUser(uid, lastScore, mmsid))
             }
         
-            lapi.Debug("Tweed update_following_tweets: remote new tweets %s", JSON.stringify(tweets))
+            lapi.Debug("Tweed update_following_tweets: root new tweets %s", JSON.stringify(tweets))
             
             // If we found new tweets, backup and publish the changes
             if (tweets.length > 0) {
@@ -246,12 +250,14 @@
             const tweets = []
             for (const e of arr) {
                 const tweetId = e.Member
-                let tweet = lapi.RunMApp("get_tweet", {
-                    aid: APP_ID, 
+                let tweetResp = lapi.RunMApp("get_tweet", {
+                    aid: APP_ID,
                     ver: "last",
-                    appuserid: userId, 
+                    version: 'v2',
+                    appuserid: userId,
                     tweetid: tweetId
                 }, [])
+                let tweet = tweetResp?.success ? tweetResp.data : null
 
                 if (!tweet && sourceHostId) {
                     // The user's tweet-id list may be synced while the tweet mid
@@ -260,12 +266,14 @@
                     try {
                         lapi.MiMeiSync(authSid, "", tweetId, {SourcePeer: sourceHostId})
                         lapi.MiMeiProvide(authSid, "", tweetId)
-                        tweet = lapi.RunMApp("get_tweet", {
+                        tweetResp = lapi.RunMApp("get_tweet", {
                             aid: APP_ID,
                             ver: "last",
+                            version: 'v2',
                             appuserid: userId,
                             tweetid: tweetId
                         }, [])
+                        tweet = tweetResp?.success ? tweetResp.data : null
                     } catch(e) {
                         lapi.Error("Tweed update_following_tweets: Failed to sync tweetId %s from hostId %s: %s", tweetId, sourceHostId, e)
                     }
