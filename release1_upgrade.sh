@@ -1,13 +1,17 @@
 #!/bin/bash
 if [ -z "$1" ]; then
-  echo "Usage: ./release1_upgrade.sh app_release.apk"
+  echo "Usage: ./release1_upgrade.sh app_release.apk mini|full"
   exit 1
 fi
 
-# FileId="9OCLYP-SXzen3e171-Ei_6N3Gwl"    # upgrade full APK
-FileId="p5-_uQPHjQpWI7gD4Zw65LrdRPm"    # upgrade mini APK
-KeyFile=~/tweet/gen8.key
-LeitherPath=~/tweet/Leither
+FileId="9OCLYP-SXzen3e171-Ei_6N3Gwl"    # upgrade full APK
+if [ "$2" = "mini" ]; then
+  FileId="p5-_uQPHjQpWI7gD4Zw65LrdRPm"  # upgrade mini APK
+fi
+
+PARENT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+KeyFile="$PARENT_DIR/gen8.key"
+LeitherPath="$PARENT_DIR/Leither"
 
 # publish the upgrade APK and add reference to AppID, so when App is synced
 # to a new node. The upgrade APK will be synced too, and provided.
