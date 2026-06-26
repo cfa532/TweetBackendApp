@@ -42,7 +42,8 @@
     const FOLLOWINGS_TWEETS = "followings_tweets"  // Redis key for following tweets feed
     const PINNED_TWEETS = "pinned_tweet_list"  // Redis key for pinned tweets list
     const tweetId = request["tweetid"]  // ID of tweet to be removed
-    const userId = request["userid"]  // ID of user requesting deletion
+    const userId = request["appuserid"] || request["userid"]  // ID of user requesting deletion
+    const tweetAuthorId = request["authorid"] || request["userid"]  // ID of tweet owner, when provided
     const APP_ID = request["aid"]  // Application identifier
     
     // Helper function to wrap response in v2 format if needed
@@ -91,7 +92,7 @@
                 ret = lapi.RunMApp("delete_tweet", {aid: APP_ID, ver: "last",
                     nid: user.hostIds[0], sid: systemSid,
                     version: version,
-                    tweetid: tweetId, userid: userId}, []
+                    tweetid: tweetId, userid: tweetAuthorId, appuserid: userId, authorid: tweetAuthorId}, []
                 )
             } catch(e) {
                 lapi.Error("Tweed delete_tweet: Failed to call delete_tweet on remote node %s: %s, userId=%s, tweetId=%s", user.hostIds[0], e, userId, tweetId)
@@ -104,16 +105,25 @@
             // LOCAL USER HANDLING
             // ====================================================================
             
-            // Get tweet content to determine ownership and handle attachments
             const authSid = lapi.BELoginAsAuthor()
-            const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
-            const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
-            lapi.Debug("Tweed delete_tweet: tweet=%s", JSON.stringify(tweet))
-
-            // Only tweet authors can permanently delete tweets
-            // Other users can only remove tweets from their personal lists
             const userSid = lapi.MMOpen(authSid, userId, "cur")
-            if (tweet && tweet.authorId == userId) {
+            let deletedTweet = null
+
+            // Only tweet authors can permanently delete tweets.
+            // Other users only remove the tweet from their personal lists.
+            if (tweetAuthorId == userId) {
+                const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
+                const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
+                deletedTweet = tweet
+                lapi.Debug("Tweed delete_tweet: tweet=%s", JSON.stringify(tweet))
+
+                if (!tweet) {
+                    throw new Error("Tweet not found")
+                }
+                if (tweet.authorId != userId) {
+                    throw new Error("User is not the tweet author")
+                }
+
                 // ============================================================
                 // TWEET AUTHOR DELETION (PERMANENT)
                 // ============================================================
@@ -153,7 +163,7 @@
             lapi.MMBackup(userSid, userId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", userId)
 
-            lapi.Debug("Tweed delete_tweet: Delete tweet %s %s", tweetId, JSON.stringify(tweet))
+            lapi.Debug("Tweed delete_tweet: Delete tweet %s %s", tweetId, JSON.stringify(deletedTweet))
     
             // Update the user's score in application data
             try {
