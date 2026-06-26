@@ -42,13 +42,14 @@
     const FOLLOWINGS_TWEETS = "followings_tweets"  // Redis key for following tweets feed
     const PINNED_TWEETS = "pinned_tweet_list"  // Redis key for pinned tweets list
     const tweetId = request["tweetid"]  // ID of tweet to be removed
-    const userId = request["appuserid"] || request["userid"]  // ID of user requesting deletion
-    const tweetAuthorId = request["authorid"] || request["userid"]  // ID of tweet owner, when provided
+    const isV3 = version === "v3"
+    const userId = isV3 ? request["userid"] : (request["appuserid"] || request["userid"])  // ID of user requesting deletion
+    const tweetAuthorId = isV3 ? request["authorid"] : (request["authorid"] || request["userid"])  // ID of tweet owner
     const APP_ID = request["aid"]  // Application identifier
     
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
-        if (version === 'v2') {
+        if (version === 'v2' || isV3) {
             // If result already has success field, return as-is
             if (result && typeof result === 'object' && 'success' in result) {
                 return result
@@ -61,7 +62,7 @@
     
     // Helper function to wrap error response in v2 format if needed
     function wrapError(error) {
-        if (version === 'v2') {
+        if (version === 'v2' || isV3) {
             return {success: false, message: error.message || String(error), error: error}
         }
         return {message: error, success: false}
@@ -72,6 +73,10 @@
     // ============================================================================
     
     try {
+        if (!tweetId || !userId || !tweetAuthorId) {
+            throw new Error("Missing delete_tweet requester, author, or tweet ID")
+        }
+
         const user = getUser(userId)  // Get user data to determine hosting node
         const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
         
@@ -89,11 +94,15 @@
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             let ret
             try {
-                ret = lapi.RunMApp("delete_tweet", {aid: APP_ID, ver: "last",
+                const delegatedRequest = {aid: APP_ID, ver: "last",
                     nid: user.hostIds[0], sid: systemSid,
                     version: version,
-                    tweetid: tweetId, userid: tweetAuthorId, appuserid: userId, authorid: tweetAuthorId}, []
-                )
+                    tweetid: tweetId, userid: userId, authorid: tweetAuthorId}
+                if (!isV3) {
+                    delegatedRequest["appuserid"] = userId
+                    delegatedRequest["userid"] = tweetAuthorId
+                }
+                ret = lapi.RunMApp("delete_tweet", delegatedRequest, [])
             } catch(e) {
                 lapi.Error("Tweed delete_tweet: Failed to call delete_tweet on remote node %s: %s, userId=%s, tweetId=%s", user.hostIds[0], e, userId, tweetId)
                 throw e

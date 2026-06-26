@@ -300,8 +300,13 @@ This document describes all endpoints available in the TweetBackendApp server, i
 
 **Input Parameters:**
 - `aid` (string): App ID
+- `version` (string): Use `v3` for requester/owner-aware deletion
+- `userid` (string): Requesting user ID for `v3`
+- `authorid` (string): Author ID of the tweet for `v3`
 - `tweetid` (string): Tweet ID to delete
-- `authorid` (string): Author ID of the tweet
+
+For legacy `v2` callers, `appuserid` may identify the requester while `userid`
+identifies the tweet author.
 
 **Output Schema:**
 ```json
@@ -908,4 +913,4 @@ All endpoints may return an error response in the following format:
 3. Many endpoints support cross-node operations and will automatically route requests to the appropriate host
 4. File uploads use IPFS for decentralized storage
 5. The system uses Mimei IDs for unique identification of users, tweets, and other entities
-6. Pagination is supported for list endpoints using `pn` (page number) and `ps` (page size) parameters 
+6. Pagination is supported for list endpoints using `pn` (page number) and `ps` (page size) parameters
