@@ -53,19 +53,19 @@
             return wrapResponse(user)
         } else {
             // User not found locally, the node could be a provider by error, remove it.
-            try {
-                let authSid = lapi.BELoginAsAuthor()
-                lapi.MiMeiUnprovide(authSid, "", userId)
-            } catch(e) {
-                // Version-specific behavior when unprovide fails
-                if (version === 'v3') {
-                    // v3: Log error but continue (will return null below)
-                    lapi.Error("Tweed get_user: Failed to unprovide user %s: %s", userId, e)
-                } else {
-                    // v2 or no version: Log but continue to get provider IP
-                    lapi.Error("Tweed get_user: Failed to unprovide user %s: %s", userId, e)
-                }
-            }
+            // try {
+            //     let authSid = lapi.BELoginAsAuthor()
+            //     lapi.MiMeiUnprovide(authSid, "", userId)
+            // } catch(e) {
+            //     // Version-specific behavior when unprovide fails
+            //     if (version === 'v3') {
+            //         // v3: Log error but continue (will return null below)
+            //         lapi.Error("Tweed get_user: Failed to unprovide user %s: %s", userId, e)
+            //     } else {
+            //         // v2 or no version: Log but continue to get provider IP
+            //         lapi.Error("Tweed get_user: Failed to unprovide user %s: %s", userId, e)
+            //     }
+            // }
             
             // Version-specific behavior for provider IP lookup
             if (version === 'v3') {
