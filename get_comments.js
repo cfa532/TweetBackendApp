@@ -88,7 +88,19 @@
         // If get_tweet returns null and we're not on the home node, the comment
         // may simply not be synced here yet — return a minimal stub {mid} so the
         // client knows the ID. On the home node, a null result means the comment
-        // is genuinely gone, so drop it from the list instead.
+        // is genuinely gone.
+        //
+        // PAGINATION CONTRACT: the client infers "more comments exist" purely
+        // from response array LENGTH vs pageSize (see the comment above
+        // HproseInstance.fetchComments' response-processing loop). That only
+        // holds if this array always has exactly arr.length slots — one per raw
+        // Zrevrange entry — never fewer. A genuinely-stale comment on the home
+        // node must still occupy its slot as null rather than being dropped, or
+        // a page containing any stale comment would undercount and the client
+        // would conclude "no more comments" while more still exist (see
+        // get_tweet_feed.js / get_tweets_by_user.js, which had the identical
+        // bug via a different mechanism — an offset-expanding loop instead of a
+        // post-hoc filter).
         const staleCommentIds = []
         const comments = arr.map(sp => {
             const commentId = sp.Member
@@ -102,7 +114,7 @@
             }
             lapi.Debug("Tweed get_comments: commentId=%s unresolved on tweetId=%s but this is not the home node; keeping stub", commentId, tweetId)
             return {mid: commentId}
-        }).filter(c => c !== null)
+        })
 
         // Best-effort: a failure anywhere in this cleanup must not break the
         // comments response, since the comment list was already built above.
@@ -111,9 +123,11 @@
                 const authSid = lapi.BELoginAsAuthor()
                 const writeSid = lapi.MMOpen(authSid, tweetId, "cur")
                 staleCommentIds.forEach(commentId => {
-                    lapi.Debug("Tweed get_comments: removing stale commentId=%s from tweetId=%s", commentId, tweetId)
+                    lapi.Warn("Tweed get_comments: removing stale commentId=%s from tweetId=%s", commentId, tweetId)
                     lapi.Zrem(writeSid, COMMENT_LIST, commentId)
                 })
+                lapi.Warn("Tweed get_comments: removed %d stale commentId(s) from tweetId=%s, page=%d",
+                    staleCommentIds.length, tweetId, pageNumber)
                 lapi.MMBackup(writeSid, tweetId, "", "delref=true")
                 lapi.MiMeiPublish(authSid, "", tweetId)
             } catch (e) {

@@ -99,74 +99,92 @@
         }
 
         // ========================================================================
-        // MAIN EXECUTION — fetch until full page or feed exhausted
+        // MAIN EXECUTION — one bounded Zrevrange, one output slot per raw entry
         // ========================================================================
+        //
+        // PAGINATION CONTRACT: the client (see TweetListView.swift) infers "more
+        // pages exist" purely from response array LENGTH vs pageSize — it does not
+        // look at how many entries were actually valid. That only holds if this
+        // array always reflects exactly what Zrevrange found in [offset, offset+
+        // pageSize-1] at query time: one slot per raw entry, null for anything
+        // that doesn't resolve to a visible tweet (stale/private), never fewer
+        // slots than were actually scanned.
+        //
+        // A prior version of this function instead looped, expanding the scan
+        // window to keep pulling more batches until it had a full page of VALID
+        // tweets, silently dropping stale/private ones instead of emitting a null
+        // for them. Combined with the stale-tweet Zrem cleanup below — which
+        // permanently shifts down the rank of every later item in the sorted set
+        // — that meant each request's offset (pageNum * pageSize, computed fresh
+        // client-side with no knowledge of prior requests' Zrem calls) drifted out
+        // of sync with the true remaining content. The set's rank space shrinks a
+        // little every time a stale tweet is cleaned up, but the client keeps
+        // asking for rank pageNum*pageSize as if it hadn't. Once that drift pushed
+        // an offset far enough forward, a page could come back with fewer than
+        // pageSize items — a false "end of feed" — while entries skipped over by
+        // the drift were still sitting there, reachable on a later page/refresh.
+        // Single bounded batch + null placeholders side-steps this: since we only
+        // report on the exact range requested and never depend on rank stability
+        // across requests, the array length only ever reflects that single
+        // request's Zrevrange result, regardless of what any request before it
+        // may have cleaned up.
+        const offset = pageNum * pageSize  // Start rank within the sorted set
+        const batch = lapi.Zrevrange(mmsid, FOLLOWINGS_TWEETS, offset, offset + pageSize - 1) || []
 
-        let validTweets = []
-        let originalTweets = []
-        let offset = pageNum * pageSize  // Start rank within the sorted set
+        const originalTweets = []
+        const staleTweetIds = []
+
+        const tweets = batch.map(sp => {
+            const tweetId = sp.Member
+            if (!tweetId) return null
+
+            const tweetResp = lapi.RunMApp("get_tweet", {aid: request["aid"], ver: "last",
+                version: 'v2', appuserid: appUserId, tweetid: tweetId}, [])
+            const tweet = tweetResp?.success ? tweetResp.data : null
+
+            if (!tweet) {
+                // Tweet no longer exists — queue for removal from userId's lists,
+                // but still occupy this slot with null so the response length
+                // matches what was actually scanned.
+                if (isHomeNode) staleTweetIds.push(tweetId)
+                return null
+            }
+
+            // Filter out private tweets, but still occupy the slot.
+            if (tweet.isPrivate === true) return null
+
+            // Collect original tweet for retweets
+            if (tweet.originalTweetId) {
+                const origResp = lapi.RunMApp("get_tweet", {aid: request["aid"], ver: "last",
+                    version: 'v2', appuserid: appUserId, tweetid: tweet.originalTweetId}, [])
+                const origTweet = origResp?.success ? origResp.data : null
+                if (origTweet) originalTweets.push(origTweet)
+            }
+
+            return tweet
+        })
+
+        // Remove stale tweet IDs from all user lists. Best-effort: a failure
+        // here must not break the feed response, since tweets were already
+        // fetched successfully above. Safe to do after building `tweets` since
+        // the response no longer depends on rank stability post-cleanup.
         let didModify = false
-
-        while (validTweets.length < pageSize) {
-            const batch = lapi.Zrevrange(mmsid, FOLLOWINGS_TWEETS, offset, offset + pageSize - 1)
-            if (!batch || batch.length === 0) break
-
-            const batchStale = []
-
-            for (const sp of batch) {
-                const tweetId = sp.Member
-                if (!tweetId) continue
-
-                const tweetResp = lapi.RunMApp("get_tweet", {aid: request["aid"], ver: "last",
-                    version: 'v2', appuserid: appUserId, tweetid: tweetId}, [])
-                const tweet = tweetResp?.success ? tweetResp.data : null
-
-                if (!tweet) {
-                    // Tweet no longer exists — queue for removal from userId's lists
-                    if (isHomeNode) batchStale.push(tweetId)
-                    continue
-                }
-
-                // Filter out private tweets
-                if (tweet.isPrivate === true) continue
-
-                validTweets.push(tweet)
-
-                // Collect original tweet for retweets
-                if (tweet.originalTweetId) {
-                    const origResp = lapi.RunMApp("get_tweet", {aid: request["aid"], ver: "last",
-                        version: 'v2', appuserid: appUserId, tweetid: tweet.originalTweetId}, [])
-                    const origTweet = origResp?.success ? origResp.data : null
-                    if (origTweet) originalTweets.push(origTweet)
-                }
-
-                if (validTweets.length >= pageSize) break
+        if (isHomeNode && userSid && staleTweetIds.length > 0) {
+            try {
+                staleTweetIds.forEach(tweetId => {
+                    lapi.Warn("Tweed get_tweet_feed: removing stale tweetId=%s from user lists, userId=%s", tweetId, userId)
+                    lapi.Zrem(userSid, FOLLOWINGS_TWEETS, tweetId)
+                    lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
+                    lapi.Hdel(userSid, PINNED_TWEETS, tweetId)
+                    lapi.Zrem(userSid, BOOKMARK_LIST, tweetId)
+                    lapi.Zrem(userSid, FAVORITE_LIST, tweetId)
+                })
+                didModify = true
+                lapi.Warn("Tweed get_tweet_feed: removed %d stale tweetId(s) from user lists, userId=%s, page=%d",
+                    staleTweetIds.length, userId, pageNum)
+            } catch (e) {
+                lapi.Error("Tweed get_tweet_feed: failed to remove stale tweetIds for userId=%s: %s", userId, e)
             }
-
-            // Remove stale tweet IDs from all user lists. Best-effort: a failure
-            // here must not break the feed response, since tweets were already
-            // fetched successfully above.
-            if (isHomeNode && userSid && batchStale.length > 0) {
-                try {
-                    batchStale.forEach(tweetId => {
-                        lapi.Debug("Tweed get_tweet_feed: removing stale tweetId=%s from user lists, userId=%s", tweetId, userId)
-                        lapi.Zrem(userSid, FOLLOWINGS_TWEETS, tweetId)
-                        lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
-                        lapi.Hdel(userSid, PINNED_TWEETS, tweetId)
-                        lapi.Zrem(userSid, BOOKMARK_LIST, tweetId)
-                        lapi.Zrem(userSid, FAVORITE_LIST, tweetId)
-                    })
-                    didModify = true
-                } catch (e) {
-                    lapi.Error("Tweed get_tweet_feed: failed to remove stale tweetIds for userId=%s: %s", userId, e)
-                }
-            }
-
-            // Removed items no longer occupy ranks, so adjust offset accordingly
-            offset += batch.length - batchStale.length
-
-            // Fewer items than requested means we've reached the end of the feed
-            if (batch.length < pageSize) break
         }
 
         // Persist and publish user data if any stale entries were removed.
@@ -182,7 +200,7 @@
 
         return wrapResponse({
             success: true,
-            tweets: validTweets,
+            tweets: tweets,
             originalTweets: originalTweets
         })
     } catch(e) {
