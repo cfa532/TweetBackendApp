@@ -88,17 +88,10 @@
                 throw e
             }
             
-            // Sync the original tweet and new comment to local node for caching
+            // Sync the parent tweet to local node for caching; child comment mids are synced by the system.
             try {
                 lapi.MiMeiSync(systemSid, "", tweetId, {})
                 lapi.MiMeiProvide(systemSid, "", tweetId)
-
-                // Sync the newly created comment to local node (host returns `mid`, not `commentId`)
-                const newCommentMid = ret.mid || ret.commentId
-                if (ret.success && newCommentMid) {
-                    lapi.MiMeiSync(systemSid, "", newCommentMid, {})
-                    lapi.MiMeiProvide(systemSid, "", newCommentMid)
-                }
             } catch(e) {
                 lapi.Error("Tweed add_comment: Error sync tweet to local node: %s", e)
             }

@@ -15,6 +15,8 @@
  * @param {Object} request - The request object containing tweet data
  * @param {string} request.tweetid - ID of tweet to retrieve
  * @param {string} request.appuserid - ID of user requesting the tweet (for interaction checks)
+ * @param {boolean} [request.fromdetailview] - When true, sync from the author's write
+ *   node (hostIds[0]) if it differs from this node (hostIds[1]) before responding
  * @param {Array} args - Additional arguments (unused)
  * @returns {Object|null} Complete tweet object with interaction data, or null if not found
  */
@@ -61,11 +63,40 @@
 
         const appUserId = request["appuserid"]  // ID of user requesting the tweet
         const tweetId = request["tweetid"]  // ID of tweet to retrieve
-        const mmsid = lapi.MMOpen("", tweetId, "last")  // Open tweet's memory space
-        const tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)  // Get tweet content
-        
+        let mmsid = lapi.MMOpen("", tweetId, "last")  // Open tweet's memory space
+        let tweet = lapi.Get(mmsid, TWT_CONTENT_KEY)  // Get tweet content
+
         if (!tweet)
             return wrapResponse(null)
+
+        // When called from the tweet detail view, this node may not be the
+        // author's write node (hostIds[0]) — unlike refresh_tweet, get_tweet
+        // does not otherwise sync before reading. Pull the latest data across
+        // now so the detail view doesn't show stale content/counts.
+        if (request.fromdetailview && tweet.authorId) {
+            try {
+                const author = lapi.RunMApp("get_user_core_data", {
+                    aid: request["aid"],
+                    ver: "last",
+                    userid: tweet.authorId,
+                }, [])
+                const writeHostId = author?.hostIds?.[0]
+                const readHostId = author?.hostIds?.[1]
+                if (writeHostId && readHostId && writeHostId !== readHostId) {
+                    lapi.RunMApp("node_update_mid_by_score", {
+                        aid: request["aid"],
+                        ver: "last",
+                        hostid: writeHostId,
+                        userid: tweet.authorId,
+                        mid: tweetId,
+                    }, [])
+                    mmsid = lapi.MMOpen("", tweetId, "last")
+                    tweet = lapi.Get(mmsid, TWT_CONTENT_KEY) ?? tweet
+                }
+            } catch (e) {
+                lapi.Error("Tweed get_tweet: fromdetailview sync failed for %s: %s", tweetId, e)
+            }
+        }
 
         // ========================================================================
         // MAIN EXECUTION
@@ -119,7 +150,8 @@
                     ver: "last",
                     tweetid: tweet.originalTweetId,
                     appuserid: appUserId,
-                    version: version
+                    version: version,
+                    fromdetailview: request.fromdetailview
                 }, [])
                 if (originalTweet) {
                     resultArray.push(originalTweet)

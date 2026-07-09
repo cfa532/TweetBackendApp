@@ -59,17 +59,24 @@
         const pageSize = parseInt(request["ps"], 10)  // Number of tweets per page
         const userId = request["userid"]              // ID of user whose tweets to retrieve
         const appUserId = request["appuserid"]        // ID of user requesting the tweets
-        const isOwner = appUserId === userId
 
         const mmsid = lapi.MMOpen("", userId, "last")  // Read-only: latest version
 
         // ========================================================================
-        // WRITE SESSION (owner only — needed to clean up stale entries)
+        // WRITE SESSION (home node only — needed to clean up stale entries)
         // ========================================================================
+
+        // Only safe to delete stale tweetIds from userId's lists when this node
+        // is confirmed to be userId's write/home node (hostIds[0]) — deleting
+        // from a stale replica would not be authoritative. Not gated on the
+        // requester being the owner: any caller can trigger this cleanup.
+        const owner = lapi.RunMApp("get_user_core_data", {aid: request["aid"], ver: "last",
+            userid: userId}, [])
+        const isHomeNode = !!(owner?.hostIds?.[0] && owner.hostIds[0] === owner.hostIds[1])
 
         let authSid = null
         let userSid = null
-        if (isOwner) {
+        if (isHomeNode) {
             authSid = lapi.BELoginAsAuthor()
             userSid = lapi.MMOpen(authSid, userId, "cur")
         }
@@ -99,8 +106,8 @@
                 const tweet = tweetResp?.success ? tweetResp.data : null
 
                 if (!tweet) {
-                    // Tweet no longer exists — queue for removal if we own the lists
-                    if (isOwner) batchStale.push(tweetId)
+                    // Tweet no longer exists — queue for removal from userId's lists
+                    if (isHomeNode) batchStale.push(tweetId)
                     continue
                 }
 
@@ -122,7 +129,7 @@
             }
 
             // Remove stale tweet IDs from all user lists
-            if (isOwner && batchStale.length > 0) {
+            if (isHomeNode && batchStale.length > 0) {
                 batchStale.forEach(tweetId => {
                     lapi.Debug("Tweed get_tweets_by_user: removing stale tweetId=%s from user lists, userId=%s", tweetId, userId)
                     lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
@@ -142,7 +149,7 @@
         }
 
         // Persist and publish user data if any stale entries were removed
-        if (isOwner && didModify) {
+        if (didModify) {
             lapi.MMBackup(userSid, userId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", userId)
         }

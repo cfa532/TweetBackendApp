@@ -254,27 +254,6 @@
                     lapi.Error("Tweed Error toggle_following: toggle_follower failed: %s, %s", e, JSON.stringify(request))
                 }
 
-                // Note: Individual tweet syncing is unnecessary if Mimei DB sync works properly.
-                // but it is not, so we still need to sync individual tweets.
-                normalizedScorepairs.forEach(sp => {
-                    const tweetId = sp?.Member
-                    // Skip invalid tweet IDs (defensive check, get_tweet_id_list should already filter these)
-                    if (!tweetId) {
-                        return
-                    }
-                    const tResp = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
-                        version: 'v2', tweetid: tweetId, appuserid: userId}, [])
-                    const t = tResp?.success ? tResp.data : null
-                    if (!t) {
-                        lapi.Debug("Tweed toggle_following: Syncing tweet: %s, user: %s", tweetId, followingId)
-                        try {
-                            lapi.MiMeiSync(authSid, "", tweetId, {SourcePeer: followingHostId})
-                            lapi.MiMeiProvide(authSid, "", tweetId)
-                        } catch(e) {
-                            lapi.Error("Tweed toggle_following: Failed to sync tweetId %s: %s", tweetId, e)
-                        }
-                    }
-                })
             }
     
             // Update the user's score in the application data

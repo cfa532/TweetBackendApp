@@ -72,10 +72,7 @@
         if (user.hostIds[0] !== nodeId) {
             if (version === 'v3') {
                 // Temporary conservative scan: browse the full recent tweet list
-                // and sync every tweet missing locally. To restore the faster
-                // boundary behavior later, change the `if (tweet) continue`
-                // below to `if (tweet) break`, so the first valid local tweet
-                // means this copy has already caught up to that point.
+                // and return tweets already available locally. Child tweet mids are synced by the system.
                 const userSid = lapi.MMOpen("", userId, "last")
                 const tweetIdList = lapi.Zrevrange(userSid, TWT_LIST_KEY, 0, 19) || []
                 lapi.Debug("Tweed resync_user v3: userId=%s tweetIdList.length=%d", userId, tweetIdList.length)
@@ -87,31 +84,7 @@
                     }
                     const tweetId = element.Member
 
-                    let tweet = lapi.RunMApp("get_tweet", {
-                        aid: request["aid"],
-                        ver: "last",
-                        tweetid: tweetId,
-                        appuserid: appUserId,
-                        version: 'v3'
-                    }, [])
-
-                    lapi.Debug("Tweed resync_user v3: tweet not local, syncing tweetId=%s userId=%s hostId=%s", tweetId, userId, user.hostIds[0])
-                    let syncFailed = false
-                    try {
-                        const authSid = lapi.BELoginAsAuthor()
-                        lapi.MiMeiSync(authSid, "", tweetId, {SourcePeer: user.hostIds[0]})
-                        lapi.MiMeiProvide(authSid, "", tweetId)
-                    } catch(syncErr) {
-                        lapi.Error("Tweed resync_user v3: MiMeiSync failed tweetId=%s userId=%s hostId=%s err=%s", tweetId, userId, user.hostIds[0], syncErr)
-                        syncFailed = true
-                    }
-
-                    if (syncFailed) {
-                        lapi.Error("Tweed resync_user v3: sync failed, skipping tweetId=%s userId=%s tweets.length=%d", tweetId, userId, tweets.length)
-                        continue
-                    }
-
-                    tweet = lapi.RunMApp("get_tweet", {
+                    const tweet = lapi.RunMApp("get_tweet", {
                         aid: request["aid"],
                         ver: "last",
                         tweetid: tweetId,
@@ -120,10 +93,10 @@
                     }, [])
 
                     if (tweet) {
-                        lapi.Debug("Tweed resync_user v3: tweet synced and fetched tweetId=%s userId=%s", tweetId, userId)
+                        lapi.Debug("Tweed resync_user v3: tweet fetched locally tweetId=%s userId=%s", tweetId, userId)
                         tweets.push(tweet)
                     } else {
-                        lapi.Error("Tweed resync_user v3: tweet still missing after sync tweetId=%s userId=%s", tweetId, userId)
+                        lapi.Debug("Tweed resync_user v3: tweet not local, skipping tweetId=%s userId=%s", tweetId, userId)
                     }
                 }
                 lapi.Debug("Tweed resync_user v3: tweet sync done userId=%s synced=%d", userId, tweets.length)

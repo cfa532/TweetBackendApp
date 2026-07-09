@@ -136,22 +136,6 @@
 
                 if (tweet) {
                     tweets.push(tweet)
-                } else {
-                    // Tweet not found locally. Pull it from appUser.hostIds[0],
-                    // which just built followings_tweets and can provide it.
-                    lapi.MiMeiSync(userSid, "", tweetId, {SourcePeer: hostId})
-                    tweetResp = lapi.RunMApp("get_tweet", {
-                        aid: APP_ID,
-                        ver: "last",
-                        version: 'v2',
-                        appuserid: userId,
-                        tweetid: tweetId
-                    }, [])
-                    tweet = tweetResp?.success ? tweetResp.data : null
-                    
-                    if (tweet) {
-                        tweets.push(tweet)
-                    }
                 }
             }
 
@@ -215,9 +199,7 @@
             const sourceHostId = user.hostIds && user.hostIds.length > 0 ? user.hostIds[0] : null
 
             // Pull the followed user's latest published state from their home
-            // host before reading list_of_tweets_mid. This syncs the user's mid,
-            // which carries the tweet-id sorted set; individual tweet mids are
-            // still synced lazily below if get_tweet cannot read them locally.
+            // host before reading list_of_tweets_mid. Child tweet mids are synced by the system.
             if (sourceHostId) {
                 try {
                     lapi.RunMApp("node_update_mid_by_score", {
@@ -259,26 +241,6 @@
                 }, [])
                 let tweet = tweetResp?.success ? tweetResp.data : null
 
-                if (!tweet && sourceHostId) {
-                    // The user's tweet-id list may be synced while the tweet mid
-                    // itself is not available locally yet. Pull the tweet mid from
-                    // the followed user's home host, then read it again.
-                    try {
-                        lapi.MiMeiSync(authSid, "", tweetId, {SourcePeer: sourceHostId})
-                        lapi.MiMeiProvide(authSid, "", tweetId)
-                        tweetResp = lapi.RunMApp("get_tweet", {
-                            aid: APP_ID,
-                            ver: "last",
-                            version: 'v2',
-                            appuserid: userId,
-                            tweetid: tweetId
-                        }, [])
-                        tweet = tweetResp?.success ? tweetResp.data : null
-                    } catch(e) {
-                        lapi.Error("Tweed update_following_tweets: Failed to sync tweetId %s from hostId %s: %s", tweetId, sourceHostId, e)
-                    }
-                }
-                
                 if (tweet) {
                     tweets.push(tweet)
                 }

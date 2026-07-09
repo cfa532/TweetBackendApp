@@ -53,23 +53,56 @@
         const endRank = startRank + pageSize - 1;  // Zrevrange stop is inclusive
         const tweetId = request["tweetid"]  // ID of tweet to get comments for
         const mmsid = lapi.MMOpen("", tweetId, "last")  // Open tweet's memory space
-    
+        const TWT_CONTENT_KEY = "core_data_of_tweet"  // Key for tweet content storage
+        const parentTweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
+
+        // Comments live in the same mimei as their parent tweet, so only trust a
+        // missing comment as "truly gone" (rather than just unsynced to this
+        // replica) when this node is confirmed to be the tweet author's home node.
+        let isHomeNode = false
+        if (parentTweet?.authorId) {
+            const author = lapi.RunMApp("get_user_core_data", {aid: request["aid"], ver: "last",
+                userid: parentTweet.authorId}, [])
+            isHomeNode = !!(author?.hostIds?.[0] && author.hostIds[0] === author.hostIds[1])
+        }
+
         // ========================================================================
         // MAIN EXECUTION
         // ========================================================================
-        
+
         // Get comment IDs in reverse chronological order (newest first)
         const arr = lapi.Zrevrange(mmsid, COMMENT_LIST, startRank, endRank)
-        
+
         // Convert comment IDs to full comment objects (tweets).
-        // If get_tweet returns null (comment not yet synced to this node), return a
-        // minimal stub {mid} so the client knows the ID and can trigger a sync.
+        // If get_tweet returns null and we're not on the home node, the comment
+        // may simply not be synced here yet — return a minimal stub {mid} so the
+        // client knows the ID. On the home node, a null result means the comment
+        // is genuinely gone, so drop it from the list instead.
+        const staleCommentIds = []
         const comments = arr.map(sp => {
+            const commentId = sp.Member
             const commentResp = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
-                version: 'v2', appuserid: appUserId, tweetid: sp.Member}, [])
+                version: 'v2', appuserid: appUserId, tweetid: commentId}, [])
             const comment = commentResp?.success ? commentResp.data : null
-            return comment || {mid: sp.Member}
-        })
+            if (comment) return comment
+            if (isHomeNode) {
+                staleCommentIds.push(commentId)
+                return null
+            }
+            return {mid: commentId}
+        }).filter(c => c !== null)
+
+        if (isHomeNode && staleCommentIds.length > 0) {
+            const authSid = lapi.BELoginAsAuthor()
+            const writeSid = lapi.MMOpen(authSid, tweetId, "cur")
+            staleCommentIds.forEach(commentId => {
+                lapi.Debug("Tweed get_comments: removing stale commentId=%s from tweetId=%s", commentId, tweetId)
+                lapi.Zrem(writeSid, COMMENT_LIST, commentId)
+            })
+            lapi.MMBackup(writeSid, tweetId, "", "delref=true")
+            lapi.MiMeiPublish(authSid, "", tweetId)
+        }
+
         return wrapResponse(comments)
     } catch(e) {
         // ========================================================================
