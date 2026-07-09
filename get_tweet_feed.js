@@ -72,15 +72,30 @@
         // is confirmed to be userId's write/home node (hostIds[0]) — deleting
         // from a stale replica would not be authoritative. Not gated on the
         // requester being the owner: any caller can trigger this cleanup.
-        const owner = lapi.RunMApp("get_user_core_data", {aid: request["aid"], ver: "last",
-            userid: userId}, [])
-        const isHomeNode = !!(owner?.hostIds?.[0] && owner.hostIds[0] === owner.hostIds[1])
+        // Failure here must not break the feed response itself (backward compat
+        // with callers that predate this cleanup), so it's isolated in its own
+        // try/catch and simply falls back to skipping cleanup.
+        let isHomeNode = false
+        try {
+            const owner = lapi.RunMApp("get_user_core_data", {aid: request["aid"], ver: "last",
+                userid: userId}, [])
+            isHomeNode = !!(owner?.hostIds?.[0] && owner.hostIds[0] === owner.hostIds[1])
+        } catch (e) {
+            lapi.Error("Tweed get_tweet_feed: get_user_core_data failed for userId=%s: %s", userId, e)
+        }
 
         let authSid = null
         let userSid = null
         if (isHomeNode) {
-            authSid = lapi.BELoginAsAuthor()
-            userSid = lapi.MMOpen(authSid, userId, "cur")
+            try {
+                authSid = lapi.BELoginAsAuthor()
+                userSid = lapi.MMOpen(authSid, userId, "cur")
+            } catch (e) {
+                lapi.Error("Tweed get_tweet_feed: failed to open write session for userId=%s: %s", userId, e)
+                authSid = null
+                userSid = null
+                isHomeNode = false
+            }
         }
 
         // ========================================================================
@@ -128,17 +143,23 @@
                 if (validTweets.length >= pageSize) break
             }
 
-            // Remove stale tweet IDs from all user lists
-            if (isHomeNode && batchStale.length > 0) {
-                batchStale.forEach(tweetId => {
-                    lapi.Debug("Tweed get_tweet_feed: removing stale tweetId=%s from user lists, userId=%s", tweetId, userId)
-                    lapi.Zrem(userSid, FOLLOWINGS_TWEETS, tweetId)
-                    lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
-                    lapi.Hdel(userSid, PINNED_TWEETS, tweetId)
-                    lapi.Zrem(userSid, BOOKMARK_LIST, tweetId)
-                    lapi.Zrem(userSid, FAVORITE_LIST, tweetId)
-                })
-                didModify = true
+            // Remove stale tweet IDs from all user lists. Best-effort: a failure
+            // here must not break the feed response, since tweets were already
+            // fetched successfully above.
+            if (isHomeNode && userSid && batchStale.length > 0) {
+                try {
+                    batchStale.forEach(tweetId => {
+                        lapi.Debug("Tweed get_tweet_feed: removing stale tweetId=%s from user lists, userId=%s", tweetId, userId)
+                        lapi.Zrem(userSid, FOLLOWINGS_TWEETS, tweetId)
+                        lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
+                        lapi.Hdel(userSid, PINNED_TWEETS, tweetId)
+                        lapi.Zrem(userSid, BOOKMARK_LIST, tweetId)
+                        lapi.Zrem(userSid, FAVORITE_LIST, tweetId)
+                    })
+                    didModify = true
+                } catch (e) {
+                    lapi.Error("Tweed get_tweet_feed: failed to remove stale tweetIds for userId=%s: %s", userId, e)
+                }
             }
 
             // Removed items no longer occupy ranks, so adjust offset accordingly
@@ -148,10 +169,15 @@
             if (batch.length < pageSize) break
         }
 
-        // Persist and publish user data if any stale entries were removed
+        // Persist and publish user data if any stale entries were removed.
+        // Best-effort: a failure here must not break the feed response.
         if (didModify) {
-            lapi.MMBackup(userSid, userId, "", "delref=true")
-            lapi.MiMeiPublish(authSid, "", userId)
+            try {
+                lapi.MMBackup(userSid, userId, "", "delref=true")
+                lapi.MiMeiPublish(authSid, "", userId)
+            } catch (e) {
+                lapi.Error("Tweed get_tweet_feed: failed to persist/publish cleanup for userId=%s: %s", userId, e)
+            }
         }
 
         return wrapResponse({

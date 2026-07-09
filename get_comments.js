@@ -59,11 +59,22 @@
         // Comments live in the same mimei as their parent tweet, so only trust a
         // missing comment as "truly gone" (rather than just unsynced to this
         // replica) when this node is confirmed to be the tweet author's home node.
+        // Failure here must not break the comments response itself (backward
+        // compat with callers that predate this cleanup), so it's isolated in
+        // its own try/catch and simply falls back to skipping cleanup.
         let isHomeNode = false
-        if (parentTweet?.authorId) {
-            const author = lapi.RunMApp("get_user_core_data", {aid: request["aid"], ver: "last",
-                userid: parentTweet.authorId}, [])
-            isHomeNode = !!(author?.hostIds?.[0] && author.hostIds[0] === author.hostIds[1])
+        if (!parentTweet?.authorId) {
+            lapi.Debug("Tweed get_comments: no parentTweet/authorId for tweetId=%s, skipping stale-comment cleanup", tweetId)
+        } else {
+            try {
+                const author = lapi.RunMApp("get_user_core_data", {aid: request["aid"], ver: "last",
+                    userid: parentTweet.authorId}, [])
+                isHomeNode = !!(author?.hostIds?.[0] && author.hostIds[0] === author.hostIds[1])
+                lapi.Debug("Tweed get_comments: tweetId=%s authorId=%s hostIds=%s isHomeNode=%s",
+                    tweetId, parentTweet.authorId, JSON.stringify(author?.hostIds), String(isHomeNode))
+            } catch (e) {
+                lapi.Error("Tweed get_comments: get_user_core_data failed for authorId=%s: %s", parentTweet.authorId, e)
+            }
         }
 
         // ========================================================================
@@ -89,18 +100,25 @@
                 staleCommentIds.push(commentId)
                 return null
             }
+            lapi.Debug("Tweed get_comments: commentId=%s unresolved on tweetId=%s but this is not the home node; keeping stub", commentId, tweetId)
             return {mid: commentId}
         }).filter(c => c !== null)
 
+        // Best-effort: a failure anywhere in this cleanup must not break the
+        // comments response, since the comment list was already built above.
         if (isHomeNode && staleCommentIds.length > 0) {
-            const authSid = lapi.BELoginAsAuthor()
-            const writeSid = lapi.MMOpen(authSid, tweetId, "cur")
-            staleCommentIds.forEach(commentId => {
-                lapi.Debug("Tweed get_comments: removing stale commentId=%s from tweetId=%s", commentId, tweetId)
-                lapi.Zrem(writeSid, COMMENT_LIST, commentId)
-            })
-            lapi.MMBackup(writeSid, tweetId, "", "delref=true")
-            lapi.MiMeiPublish(authSid, "", tweetId)
+            try {
+                const authSid = lapi.BELoginAsAuthor()
+                const writeSid = lapi.MMOpen(authSid, tweetId, "cur")
+                staleCommentIds.forEach(commentId => {
+                    lapi.Debug("Tweed get_comments: removing stale commentId=%s from tweetId=%s", commentId, tweetId)
+                    lapi.Zrem(writeSid, COMMENT_LIST, commentId)
+                })
+                lapi.MMBackup(writeSid, tweetId, "", "delref=true")
+                lapi.MiMeiPublish(authSid, "", tweetId)
+            } catch (e) {
+                lapi.Error("Tweed get_comments: failed to remove stale commentIds for tweetId=%s: %s", tweetId, e)
+            }
         }
 
         return wrapResponse(comments)
