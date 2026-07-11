@@ -19,7 +19,7 @@
  * 
  * @param {Object} request - The request object containing comment data
  * @param {string} request.aid - Application ID
- * @param {string} request.tweetauthorid - ID of user posting the comment
+ * @param {string} request.tweetauthorid - Author ID of the parent tweet/comment
  * @param {string} request.tweetid - ID of tweet being commented on
  * @param {string} request.hostid - Node ID where the original tweet is hosted
  * @param {string} request.comment - JSON string of comment object (tweet format)
@@ -36,7 +36,9 @@
     const TWT_CONTENT_KEY = "core_data_of_tweet"  // Key for tweet content storage
     const APP_EXT = "com.example.twitterclone"  // Application extension identifier
     const APP_ID = request["aid"]  // Application identifier
-    const tweetAuthorId = request["tweetauthorid"]  // ID of user posting the comment
+    // Parent objects own their comments regardless of who wrote the comment.
+    // `userid` is retained temporarily for older TweetWeb clients.
+    const tweetAuthorId = request["tweetauthorid"] || request["userid"]
     const tweetId = request["tweetid"]  // ID of tweet being commented on
     const hostId = request["hostid"]  // Node ID where the original tweet is hosted
     const comment = JSON.parse(request['comment'])  // Parsed comment object (tweet format)

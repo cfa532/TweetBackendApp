@@ -1,5 +1,7 @@
 # Repository Instructions
 
+- **Canonical sync contract:** Before changing object creation, references, node routing, synchronization, profiles, tweets, comments, replies, or related APIs, read `docs/LEITHER_DATA_AND_SYNC_CONTRACT.md` and preserve its cross-client invariants.
+
 - Before changing code, consider multiple plausible fixes and choose the one with the smallest coherent scope.
 - Prefer removing or simplifying conflicting logic before adding new state, variables, flags, or branches. Minus first, addition second.
 - When a fix needs new code, keep it directly tied to the observed bug and avoid broad refactors unless they are required for correctness.
