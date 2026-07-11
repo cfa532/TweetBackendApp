@@ -69,6 +69,10 @@
     // ============================================================================
     
     try {
+        if (!tweetAuthorId) {
+            throw new Error("Missing parent author ID: expected tweetauthorid")
+        }
+
         const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
         
         // ========================================================================
