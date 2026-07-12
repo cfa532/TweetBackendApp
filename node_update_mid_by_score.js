@@ -17,7 +17,7 @@
  * @param {string} request.hostid - Remote host ID to compare scores with
  * @param {string} request.userid - User ID associated with the mimei
  * @param {string} request.mid - Mimei ID to compare and update
- * @param {string} request.ver - Version identifier
+ * @param {string} request.ver - Version identifier by Leither
  * @param {Array} args - Additional arguments (unused)
  */
 ((request, args) => {

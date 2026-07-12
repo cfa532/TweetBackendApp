@@ -12,6 +12,8 @@
  *
  * The non-home-host branch below is retained as a compatibility fallback for
  * older callers, but it should not be the normal path.
+ *
+ * @param {string} request.ver - Version identifier by Leither
  */
 
 ((request, args) => {
