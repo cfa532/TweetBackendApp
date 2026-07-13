@@ -135,6 +135,7 @@
             "downloadable": tweet.downloadable,  // If the attachment is downloadable
             "originalTweetId": tweet.originalTweetId,
             "originalAuthorId": tweet.originalAuthorId,
+            "parentTweetId": tweet.parentTweetId,
             "timestamp": tweet.timestamp,
             "contentType": tweet.contentType,
             

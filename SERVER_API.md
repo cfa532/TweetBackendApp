@@ -204,6 +204,7 @@ This document describes all endpoints available in the TweetBackendApp server, i
   "downloadable": "boolean",
   "originalTweetId": "string",
   "originalAuthorId": "string",
+  "parentTweetId": "string",
   "timestamp": "number",
   "bookmarkCount": "number",
   "favoriteCount": "number",
