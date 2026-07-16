@@ -151,7 +151,7 @@
             const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
             return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
         } catch(e) {
-            lapi.Error("Tweed toggle_pinned_tweet: getUser failed for mid=%s: %s", mid, e)
+            lapi.Error("Tweed toggle_pinned_tweet: Failed to get user%s: %s", mid, e)
             throw e
         }
     }
