@@ -17,6 +17,7 @@
  * @param {string} request.userid - ID of user whose favorites to update
  * @param {string} request.tweetid - ID of tweet to add/remove from favorites
  * @param {string} request.isfavorite - String "true" to add to favorites, "false" to remove
+ * @param {boolean|string} [request.skipcontentsync] - Skip sync/provide when content is already on this node
  * @param {Array} args - Additional arguments (unused)
  * @returns {Object} Updated user data with favorite status
  */
@@ -32,6 +33,7 @@
     const userId = request["userid"]  // ID of user whose favorites to update
     const tweetId = request["tweetid"]  // ID of tweet to add/remove from favorites
     const isFavorite = request["isfavorite"] === true || request["isfavorite"] === "true"  // Accept both boolean and string
+    const skipContentSync = request["skipcontentsync"] === true || request["skipcontentsync"] === "true"
     
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
@@ -80,7 +82,8 @@
                     { aid: APP_ID, ver: "last",
                         nid: user.hostIds[0], sid: systemSid,
                         version: version,
-                        userid: userId, tweetid: tweetId, isfavorite: isFavorite }, []
+                        userid: userId, tweetid: tweetId, isfavorite: isFavorite,
+                        skipcontentsync: skipContentSync }, []
                 )
             } catch(e) {
                 lapi.Error("Tweed toggle_favorite_by_user: Failed to call toggle_favorite_by_user on remote node %s: %s, userId=%s, tweetId=%s", user.hostIds[0], e, userId, tweetId)
@@ -98,42 +101,44 @@
             // FAVORITE LIST MANAGEMENT
             // ================================================================
             
-            try {
-                if (isFavorite) {
-                    // Add tweet to user's favorite list with timestamp
-                    lapi.Hset(userSid, FAVORITE_LIST, tweetId, Date.now())
-                } else {
-                    // Remove tweet from user's favorite list if it exists
-                    if (lapi.Hget(userSid, FAVORITE_LIST, tweetId)) {
+            const wasFavorite = lapi.Hget(userSid, FAVORITE_LIST, tweetId) ? true : false
+            const favoriteChanged = isFavorite !== wasFavorite
+
+            if (favoriteChanged) {
+                try {
+                    if (isFavorite) {
+                        // Add tweet to user's favorite list with timestamp
+                        lapi.Hset(userSid, FAVORITE_LIST, tweetId, Date.now())
+                    } else {
                         lapi.Hdel(userSid, FAVORITE_LIST, tweetId)
                     }
+
+                    // Update user data and publish changes
+                    lapi.MMBackup(userSid, userId, "", "delref=true")
+                } catch(e) {
+                    lapi.Error("Tweed toggle_favorite_by_user: Failed to update favorite list: %s, userId=%s, tweetId=%s", e, userId, tweetId)
+                    throw e
                 }
-                
-                // Update user data and publish changes
-                lapi.MMBackup(userSid, userId, "", "delref=true")
-            } catch(e) {
-                lapi.Error("Tweed toggle_favorite_by_user: Failed to update favorite list: %s, userId=%s, tweetId=%s", e, userId, tweetId)
-                throw e
-            }
-            
-            // Publish user changes and update scores
-            try {
-                lapi.MiMeiPublish(userSid, "", userId)
-            } catch(e) {
-                lapi.Error("Tweed toggle_favorite_by_user: Failed to publish user %s: %s", userId, e)
-            }
-            try {
-                lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
-                    userid: userId, mid: userId}, [])
-            } catch(e) {
-                lapi.Error("Tweed toggle_favorite_by_user: Failed to update user score %s: %s", userId, e)
+
+                // Publish user changes and update scores
+                try {
+                    lapi.MiMeiPublish(userSid, "", userId)
+                } catch(e) {
+                    lapi.Error("Tweed toggle_favorite_by_user: Failed to publish user %s: %s", userId, e)
+                }
+                try {
+                    lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
+                        userid: userId, mid: userId}, [])
+                } catch(e) {
+                    lapi.Error("Tweed toggle_favorite_by_user: Failed to update user score %s: %s", userId, e)
+                }
             }
             
             // ================================================================
             // CONTENT SYNCHRONIZATION
             // ================================================================
             
-            if (isFavorite) {
+            if (favoriteChanged && isFavorite && !skipContentSync) {
                 // Sync and provide favorited content to ensure availability
                 try {
                     lapi.MiMeiSync(authSid, "", tweetId, {})
@@ -145,7 +150,7 @@
                 } catch(e) {
                     lapi.Error("Tweed toggle_favorite_by_user: Failed to provide tweet %s: %s", tweetId, e)
                 }
-            } else {
+            } else if (favoriteChanged && !isFavorite) {
                 // TODO: Prevent the tweet from being deleted if it is on the same node
                 // Note: Unproviding content is commented out to prevent premature deletion
                 // lapi.MiMeiUnprovide(authSid, "", tweetId)

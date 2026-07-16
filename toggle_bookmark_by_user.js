@@ -17,6 +17,7 @@
  * @param {string} request.userid - ID of user whose bookmarks to update
  * @param {string} request.tweetid - ID of tweet to add/remove from bookmarks
  * @param {string} request.isbookmarked - String "true" to add to bookmarks, "false" to remove
+ * @param {boolean|string} [request.skipcontentsync] - Skip sync/provide when content is already on this node
  * @param {Array} args - Additional arguments (unused)
  * @returns {Object} Updated user data with bookmark status
  */
@@ -31,6 +32,7 @@
     const userId = request["userid"]  // ID of user whose bookmarks to update
     const tweetId = request["tweetid"]  // ID of tweet to add/remove from bookmarks
     const isBookmarked = request["isbookmarked"] === true || request["isbookmarked"] === "true"  // Accept both boolean and string
+    const skipContentSync = request["skipcontentsync"] === true || request["skipcontentsync"] === "true"
     
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
@@ -79,7 +81,8 @@
                     { aid: APP_ID, ver: "last",
                         nid: user.hostIds[0], sid: systemSid,
                         version: version,
-                        userid: userId, tweetid: tweetId, isbookmarked: isBookmarked}, []
+                        userid: userId, tweetid: tweetId, isbookmarked: isBookmarked,
+                        skipcontentsync: skipContentSync}, []
                 )
             } catch(e) {
                 lapi.Error("Tweed toggle_bookmark_by_user: Failed to call toggle_bookmark_by_user on remote node %s: %s, userId=%s, tweetId=%s", user.hostIds[0], e, userId, tweetId)
@@ -97,42 +100,44 @@
             // BOOKMARK LIST MANAGEMENT
             // ================================================================
             
-            try {
-                if (isBookmarked) {
-                    // Add tweet to user's bookmark list with timestamp
-                    lapi.Hset(userSid, BOOKMARK_LIST, tweetId, Date.now())
-                } else {
-                    // Remove tweet from user's bookmark list if it exists
-                    if (lapi.Hget(userSid, BOOKMARK_LIST, tweetId)) {
+            const wasBookmarked = lapi.Hget(userSid, BOOKMARK_LIST, tweetId) ? true : false
+            const bookmarkChanged = isBookmarked !== wasBookmarked
+
+            if (bookmarkChanged) {
+                try {
+                    if (isBookmarked) {
+                        // Add tweet to user's bookmark list with timestamp
+                        lapi.Hset(userSid, BOOKMARK_LIST, tweetId, Date.now())
+                    } else {
                         lapi.Hdel(userSid, BOOKMARK_LIST, tweetId)
                     }
+
+                    // Update user data and publish changes
+                    lapi.MMBackup(userSid, userId, "", "delref=true")
+                } catch(e) {
+                    lapi.Error("Tweed toggle_bookmark_by_user: Failed to update bookmark list: %s, userId=%s, tweetId=%s", e, userId, tweetId)
+                    throw e
                 }
-                
-                // Update user data and publish changes
-                lapi.MMBackup(userSid, userId, "", "delref=true")
-            } catch(e) {
-                lapi.Error("Tweed toggle_bookmark_by_user: Failed to update bookmark list: %s, userId=%s, tweetId=%s", e, userId, tweetId)
-                throw e
-            }
-            
-            // Publish user changes and update scores
-            try {
-                lapi.MiMeiPublish(userSid, "", userId)
-            } catch(e) {
-                lapi.Error("Tweed toggle_bookmark_by_user: Failed to publish user %s: %s", userId, e)
-            }
-            try {
-                lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
-                    userid: userId, mid: userId}, [])
-            } catch(e) {
-                lapi.Error("Tweed toggle_bookmark_by_user: Failed to update user score %s: %s", userId, e)
+
+                // Publish user changes and update scores
+                try {
+                    lapi.MiMeiPublish(userSid, "", userId)
+                } catch(e) {
+                    lapi.Error("Tweed toggle_bookmark_by_user: Failed to publish user %s: %s", userId, e)
+                }
+                try {
+                    lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
+                        userid: userId, mid: userId}, [])
+                } catch(e) {
+                    lapi.Error("Tweed toggle_bookmark_by_user: Failed to update user score %s: %s", userId, e)
+                }
             }
             
             // ================================================================
             // CONTENT SYNCHRONIZATION
             // ================================================================
             
-            if (isBookmarked) {
+            if (bookmarkChanged && isBookmarked && !skipContentSync) {
                 // Sync and provide bookmarked content to ensure availability
                 try {
                     lapi.MiMeiSync(authSid, "", tweetId, {})
@@ -144,7 +149,7 @@
                 } catch(e) {
                     lapi.Error("Tweed toggle_bookmark_by_user: Failed to provide tweet %s: %s", tweetId, e)
                 }
-            } else {
+            } else if (bookmarkChanged && !isBookmarked) {
                 // TODO: Prevent the tweet from being deleted if it is on the same node
                 // Note: Unproviding content is commented out to prevent premature deletion
                 // lapi.MiMeiUnprovide(authSid, "", tweetId)
