@@ -109,7 +109,7 @@
                 if (remoteScore === null || remoteScore === undefined || typeof remoteScore === "object") {
                     throw new Error(`Invalid remote score from host ${hostId}: ${JSON.stringify(remoteScore)}`)
                 }
-                lapi.MiMeiSync(systemSid, "", userId, {SourcePeer: hostId})
+                lapi.MiMeiSync(systemSid, "", userId, {})
                 // update the score of the user in local AppData
                 const sp = getScorePair(remoteScore, userId)
                 lapi.Zadd(systemSid, userId, sp)

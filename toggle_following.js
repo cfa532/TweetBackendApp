@@ -137,7 +137,7 @@
             if (!followedUser) {
                 // Target user not available locally - attempt to sync; use known host nid if available
                 try {
-                    lapi.MiMeiSync(authSid, "", followingId, {SourcePeer: followingHostId})
+                    lapi.MiMeiSync(authSid, "", followingId, {})
                     lapi.MiMeiProvide(authSid, "", followingId)
                 } catch(e) {
                     lapi.Error("Tweed toggle_following: Failed to sync followed user %s from nid=%s: %s", followingId, followingHostId, e)
@@ -237,7 +237,7 @@
 
                 // Sync and provide the target user's content locally
                 try {
-                    lapi.MiMeiSync(authSid, "", followingId, {SourcePeer: followingHostId})
+                    lapi.MiMeiSync(authSid, "", followingId, {})
                     lapi.MiMeiProvide(authSid, "", followingId)
                 } catch(e) {
                     lapi.Error("Tweed toggle_following: Failed to sync followed user %s: %s", followingId, e)
