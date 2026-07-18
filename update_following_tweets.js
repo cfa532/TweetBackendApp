@@ -24,13 +24,19 @@
     const version = request.version || ""  // Version identifier for API compatibility
     const FOLLOWINGS_TWEETS = "followings_tweets"   // sorted set of followings' tweets
     const FOLLOWINGS_LIST = "list_of_followings_mid"
+    const FAILED_FOLLOWING_ACCESSES = "failed_following_accesses"
     const TWT_LIST_KEY = "list_of_tweets_mid"   // sorted set of user's own tweets
+    const OWNER_DATA_KEY = "data_of_author"
+    const FAILED_ACCESS_REMOVAL_ATTEMPTS = 15
+    const FAILED_ACCESS_REMOVAL_AGE_MS = 14 * 24 * 60 * 60 * 1000
     
     // Extract request parameters
     const APP_ID = request["aid"]
     const userId = request["appuserid"]    // appUser
     const hostId = request["hostid"]   // appUser.hostIds[0], the writable/home host
     const homeUpdated = request["homeupdated"] === true || request["homeupdated"] === "true"
+    let callingUserChanged = false
+    let callingUserSid = null
     
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
@@ -61,6 +67,16 @@
         // current/access hosts this is the local high-water mark; after pulling
         // from hostIds[0], entries above this score are the new tweets to return.
         let userSid = lapi.MMOpen(authSid, userId, "last")
+        const callingUser = lapi.Get(userSid, OWNER_DATA_KEY)
+        const authoritativeHostId = Array.isArray(callingUser?.hostIds) && callingUser.hostIds.length > 0
+            ? callingUser.hostIds[0]
+            : null
+        if (!authoritativeHostId) {
+            throw new Error(`Cannot verify authoritative host for user ${userId}`)
+        }
+        if (hostId !== authoritativeHostId) {
+            throw new Error(`Requested host ${hostId} is not authoritative for user ${userId}`)
+        }
         const lastElements = lapi.Zrevrange(userSid, FOLLOWINGS_TWEETS, 0, 0)
         const lastScore = lastElements.length > 0 ? lastElements[0].Score + 1 : 0
 
@@ -149,6 +165,7 @@
         } else {
             // This host is the single source of truth, process followings directly.
             const mmsid = lapi.MMOpen(authSid, userId, "cur")
+            callingUserSid = mmsid
             const followings = lapi.Hkeys(mmsid, FOLLOWINGS_LIST) // mid list of its followings
             lapi.Debug("Tweed update_following_tweets: root, followings=%s", JSON.stringify(followings))
 
@@ -161,10 +178,12 @@
         
             lapi.Debug("Tweed update_following_tweets: root new tweets %s", JSON.stringify(tweets))
             
-            // If we found new tweets, backup and publish the changes
-            if (tweets.length > 0) {
+            // Persist both feed updates and access-failure bookkeeping on the
+            // calling user's authoritative home object.
+            if (tweets.length > 0 || callingUserChanged) {
                 lapi.MMBackup(mmsid, userId, "", "delref=true")
                 lapi.MiMeiPublish(mmsid, "", userId)
+                callingUserChanged = false
             }
             
             return wrapResponse({
@@ -174,6 +193,17 @@
             })
         }
     } catch(e) {
+        // A bookkeeping operation can partially mutate the calling user's
+        // current session before a later storage operation fails. Preserve any
+        // successful part of that mutation while still returning the error.
+        if (callingUserChanged && callingUserSid) {
+            try {
+                lapi.MMBackup(callingUserSid, userId, "", "delref=true")
+                lapi.MiMeiPublish(callingUserSid, "", userId)
+            } catch(persistError) {
+                lapi.Error("Tweed update_following_tweets: failed to persist partial following access state: %s, userId=%s", persistError, userId)
+            }
+        }
         lapi.Error("Tweed Error update_following_tweets: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }
@@ -188,15 +218,20 @@
      * @returns {Array} Array of new tweets from the user
      */
     function updateUser(uid, lastScore, userSid) {
+        let userAccessSucceeded = false
+
         try {
-            const OWNER_DATA_KEY = "data_of_author"
             let mmsid = lapi.MMOpen("", uid, "last")
             const user = lapi.Get(mmsid, OWNER_DATA_KEY)
             
             if (!user) {
                 lapi.Error("Tweed update_following_tweets: updateUser: user not found, uid=%s, nodeId=%s", uid, nodeId)
+                recordFollowingAccessFailure(uid, userSid)
                 return []
             }
+
+            userAccessSucceeded = true
+            clearFollowingAccessFailure(uid, userSid)
 
             const sourceHostId = user.hostIds && user.hostIds.length > 0 ? user.hostIds[0] : null
 
@@ -250,9 +285,84 @@
             
             return tweets
         } catch(e) {
+            if (e?.isFollowingAccessStateError) {
+                throw e
+            }
+            if (!userAccessSucceeded) {
+                recordFollowingAccessFailure(uid, userSid)
+            }
             lapi.Error("Tweed update_following_tweets: updateUser error: %s, uid=%s", e, uid)
             return []
         }
+    }
+
+    /**
+     * Records an unreadable followed user on the calling user's home object.
+     * The following is removed only after both the age and attempt thresholds.
+     */
+    function recordFollowingAccessFailure(uid, userSid) {
+        try {
+            const now = Date.now()
+            const previous = lapi.Hget(userSid, FAILED_FOLLOWING_ACCESSES, uid)
+            const hasValidPrevious = previous && typeof previous === "object" &&
+                typeof previous.firstFailedAt === "number" &&
+                Number.isFinite(previous.firstFailedAt) &&
+                previous.firstFailedAt > 0 && previous.firstFailedAt <= now &&
+                typeof previous.lastFailedAt === "number" &&
+                Number.isFinite(previous.lastFailedAt) &&
+                previous.lastFailedAt >= previous.firstFailedAt &&
+                previous.lastFailedAt <= now &&
+                Number.isSafeInteger(previous.attempts) &&
+                previous.attempts >= 1 && previous.attempts < Number.MAX_SAFE_INTEGER
+            const firstFailedAt = hasValidPrevious ? previous.firstFailedAt : now
+            const attempts = hasValidPrevious ? previous.attempts + 1 : 1
+
+            if (attempts >= FAILED_ACCESS_REMOVAL_ATTEMPTS &&
+                now - firstFailedAt > FAILED_ACCESS_REMOVAL_AGE_MS) {
+                // Clear the failure record first. If removing the following then
+                // fails, the partial state is conservative: the following stays
+                // and its grace period restarts on the next failed access.
+                lapi.Hdel(userSid, FAILED_FOLLOWING_ACCESSES, uid)
+                callingUserChanged = true
+                lapi.Hdel(userSid, FOLLOWINGS_LIST, uid)
+                lapi.Warn("Tweed update_following_tweets: removed inaccessible following after %d attempts, uid=%s, firstFailedAt=%s, userId=%s",
+                    attempts, uid, String(firstFailedAt), userId)
+                return
+            }
+
+            lapi.Hset(userSid, FAILED_FOLLOWING_ACCESSES, uid, {
+                firstFailedAt: firstFailedAt,
+                lastFailedAt: now,
+                attempts: attempts
+            })
+            callingUserChanged = true
+        } catch(e) {
+            lapi.Error("Tweed update_following_tweets: failed to record following access failure: %s, uid=%s, userId=%s", e, uid, userId)
+            throw followingAccessStateError("record following access failure", e)
+        }
+    }
+
+    /**
+     * A single successful user-object read clears all prior failure history,
+     * even if a later synchronization or tweet read fails temporarily.
+     */
+    function clearFollowingAccessFailure(uid, userSid) {
+        try {
+            const previous = lapi.Hget(userSid, FAILED_FOLLOWING_ACCESSES, uid)
+            if (previous !== null && previous !== undefined) {
+                lapi.Hdel(userSid, FAILED_FOLLOWING_ACCESSES, uid)
+                callingUserChanged = true
+            }
+        } catch(e) {
+            lapi.Error("Tweed update_following_tweets: failed to clear following access failures: %s, uid=%s, userId=%s", e, uid, userId)
+            throw followingAccessStateError("clear following access failures", e)
+        }
+    }
+
+    function followingAccessStateError(action, cause) {
+        const error = new Error(`Failed to ${action}: ${cause?.message || String(cause)}`)
+        error.isFollowingAccessStateError = true
+        return error
     }
 
     /**
