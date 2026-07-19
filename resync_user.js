@@ -70,9 +70,15 @@
         const tweets = []
 
         if (user.hostIds[0] !== nodeId) {
+            // Synchronize the User from its root before reading either its core
+            // data or directly referenced Tweets on this access node.
+            lapi.Debug("Tweed resync_user: syncing user mid userId=%s hostId=%s", userId, user.hostIds[0])
+            lapi.RunMApp("node_update_mid_by_score", {aid: request["aid"], ver:"last",
+                hostid: user.hostIds[0], userid: userId, mid: userId}, [])
+
             if (version === 'v3') {
-                // Temporary conservative scan: browse the full recent tweet list
-                // and return tweets already available locally. Child tweet mids are synced by the system.
+                // The User synchronization above carries its one-level direct Tweet
+                // references. Return the recent Tweets now available on this node.
                 const userSid = lapi.MMOpen("", userId, "last")
                 const tweetIdList = lapi.Zrevrange(userSid, TWT_LIST_KEY, 0, 19) || []
                 lapi.Debug("Tweed resync_user v3: userId=%s tweetIdList.length=%d", userId, tweetIdList.length)
@@ -100,11 +106,6 @@
                     }
                 }
                 lapi.Debug("Tweed resync_user v3: tweet sync done userId=%s synced=%d", userId, tweets.length)
-            } else {
-                // Make sure the current user is up to date by syncing from primary host
-                lapi.Debug("Tweed resync_user: syncing user mid userId=%s hostId=%s", userId, user.hostIds[0])
-                lapi.RunMApp("node_update_mid_by_score", {aid: request["aid"], ver:"last",
-                    hostid: user.hostIds[0], userid: userId, mid: userId}, [])
             }
         }
 
