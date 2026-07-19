@@ -12,8 +12,8 @@
  * @param {string} request.tweetid - ID of tweet to update
  * @param {string} request.content - New content for the tweet
  * @param {string|Array} [request.attachments] - Complete replacement attachment list
- * @param {boolean} [request.downloadable] - Whether tweet attachments can be downloaded
- * @param {boolean} [request.isPrivate] - Whether the tweet is private
+ * @param {boolean|string} [request.downloadable] - Whether tweet attachments can be downloaded
+ * @param {boolean|string} [request.isPrivate] - Whether the tweet is private
  * @param {Array} args - Additional arguments (unused)
  * @returns {Object} Success status with updated tweet mid
  */
@@ -29,10 +29,10 @@
     const hasIsPrivate = Object.prototype.hasOwnProperty.call(request, "isPrivate")
 
     function parseBooleanOption(name, value) {
-        if (typeof value !== "boolean") {
-            throw new Error(name + " must be a boolean")
-        }
-        return value
+        if (typeof value === "boolean") return value
+        if (value === "true") return true
+        if (value === "false") return false
+        throw new Error(name + " must be true or false")
     }
 
     function parseAttachments(value) {
