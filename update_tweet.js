@@ -1,7 +1,8 @@
 /**
  * Update Tweet Content Function
  *
- * This function updates the content field of an existing tweet.
+ * This function updates the content field of an existing tweet and can replace
+ * its complete attachment list.
  * It handles both local and remote tweet updates, ensuring only tweet authors
  * can modify their content.
  *
@@ -10,6 +11,9 @@
  * @param {string} request.appuserid - ID of user requesting the update
  * @param {string} request.tweetid - ID of tweet to update
  * @param {string} request.content - New content for the tweet
+ * @param {string|Array} [request.attachments] - Complete replacement attachment list
+ * @param {boolean} [request.downloadable] - Whether tweet attachments can be downloaded
+ * @param {boolean} [request.isPrivate] - Whether the tweet is private
  * @param {Array} args - Additional arguments (unused)
  * @returns {Object} Success status with updated tweet mid
  */
@@ -20,6 +24,30 @@
     const appUserId = request["appuserid"]
     const tweetId = request["tweetid"]
     const content = request["content"]
+    const hasAttachments = Object.prototype.hasOwnProperty.call(request, "attachments")
+    const hasDownloadable = Object.prototype.hasOwnProperty.call(request, "downloadable")
+    const hasIsPrivate = Object.prototype.hasOwnProperty.call(request, "isPrivate")
+
+    function parseBooleanOption(name, value) {
+        if (typeof value !== "boolean") {
+            throw new Error(name + " must be a boolean")
+        }
+        return value
+    }
+
+    function parseAttachments(value) {
+        const attachments = typeof value === "string" ? JSON.parse(value) : value
+        if (!Array.isArray(attachments)) {
+            throw new Error("Attachments must be an array")
+        }
+        attachments.forEach(attachment => {
+            if (!attachment || typeof attachment.mid !== "string" || attachment.mid.length === 0) {
+                throw new Error("Each attachment must have a valid mid")
+            }
+            attachment.timestamp = Number(attachment.timestamp)
+        })
+        return attachments
+    }
 
     function wrapResponse(result) {
         if (version === 'v2') {
@@ -50,19 +78,29 @@
         // Remote user: delegate to the hosting node
         if (user.hostIds[0] !== nodeId) {
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
+            const remoteRequest = {
+                aid: APP_ID,
+                ver: "last",
+                nid: user.hostIds[0],
+                sid: systemSid,
+                version: version,
+                appuserid: appUserId,
+                tweetid: tweetId,
+                content: content
+            }
+            if (hasAttachments) {
+                remoteRequest.attachments = request.attachments
+            }
+            if (hasDownloadable) {
+                remoteRequest.downloadable = request.downloadable
+            }
+            if (hasIsPrivate) {
+                remoteRequest.isPrivate = request.isPrivate
+            }
 
             let ret
             try {
-                ret = lapi.RunMApp("update_tweet", {
-                    aid: APP_ID,
-                    ver: "last",
-                    nid: user.hostIds[0],
-                    sid: systemSid,
-                    version: version,
-                    appuserid: appUserId,
-                    tweetid: tweetId,
-                    content: content
-                }, [])
+                ret = lapi.RunMApp("update_tweet", remoteRequest, [])
             } catch(e) {
                 lapi.Error("Tweed update_tweet: Failed to call update_tweet on remote node %s: %s, appUserId=%s, tweetId=%s", user.hostIds[0], e, appUserId, tweetId)
                 throw e
@@ -92,7 +130,33 @@
                 throw new Error("Only the tweet author can update content")
             }
 
-            // Overwrite content field only
+            // Reconcile references only when attachments were supplied so older
+            // content-only clients keep the tweet's current attachment list.
+            if (hasAttachments) {
+                const nextAttachments = parseAttachments(request.attachments)
+                const previousAttachments = Array.isArray(tweet.attachments) ? tweet.attachments : []
+                const previousIds = new Set(previousAttachments.map(attachment => attachment.mid))
+                const nextIds = new Set(nextAttachments.map(attachment => attachment.mid))
+
+                previousIds.forEach(mid => {
+                    if (!nextIds.has(mid)) {
+                        lapi.MMDelRef(tweetSid, tweetId, mid)
+                    }
+                })
+                nextIds.forEach(mid => {
+                    if (!previousIds.has(mid)) {
+                        lapi.MMAddRef(tweetSid, tweetId, mid)
+                    }
+                })
+                tweet.attachments = nextAttachments
+            }
+            if (hasDownloadable) {
+                tweet.downloadable = parseBooleanOption("downloadable", request.downloadable)
+            }
+            if (hasIsPrivate) {
+                tweet.isPrivate = parseBooleanOption("isPrivate", request.isPrivate)
+            }
+
             tweet.content = content
             lapi.Set(tweetSid, TWT_CONTENT_KEY, tweet)
             lapi.MMBackup(authSid, tweetId, "", "delref=true")
