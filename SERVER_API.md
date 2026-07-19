@@ -521,8 +521,9 @@ identifies the tweet author.
 **Input Parameters:**
 - `aid` (string): App ID
 - `userid` (string): User ID
+- `pn` (number, optional): Zero-based page number; defaults to `0`
 
-**Output Schema:** Array of follower user IDs
+**Output Schema:** Object containing `users` (up to 10 complete user objects, newest-follower first) and `success`
 
 ### Get Followers Sorted
 **Endpoint:** `get_followers_sorted`
@@ -541,8 +542,9 @@ identifies the tweet author.
 **Input Parameters:**
 - `aid` (string): App ID
 - `userid` (string): User ID
+- `pn` (number, optional): Zero-based page number; defaults to `0`
 
-**Output Schema:** Array of following user IDs
+**Output Schema:** Object containing `users` (up to 10 complete user objects, newest-followed first) and `success`
 
 ### Get Followings Sorted
 **Endpoint:** `get_followings_sorted`

@@ -1,15 +1,15 @@
 /**
- * Get Followings Function
+ * Get Followers Function
  *
- * Returns one page of complete user objects for the users followed by the
- * requested user. Relationship timestamps determine the order, newest first.
+ * Returns one page of complete user objects for the requested user's followers.
+ * Relationship timestamps determine the order, newest first.
  *
  * User objects are read from the local node first. A missing user is synced and
  * provided locally, then read one more time before being omitted from the page.
  *
  * @param {Object} request - The request object
  * @param {string} request.aid - Application ID
- * @param {string} request.userid - ID of the user whose followings are requested
+ * @param {string} request.userid - ID of the user whose followers are requested
  * @param {number|string} [request.pn=0] - Zero-based page number
  * @param {Array} args - Additional arguments (unused)
  * @returns {Object} Object containing up to 10 user objects and success status
@@ -17,7 +17,7 @@
 
 ((request, args)=>{
     const PAGE_SIZE = 10
-    const FOLLOWINGS_LIST = "list_of_followings_mid"
+    const FOLLOWERS_LIST = "list_of_followers_mid"
     const version = request.version || ""
 
     function wrapResponse(result) {
@@ -59,12 +59,12 @@
             lapi.MiMeiSync(authSid, "", userId, {})
             lapi.MiMeiProvide(authSid, "", userId)
         } catch (e) {
-            lapi.Error("Tweed get_followings: failed to sync/provide userId=%s: %s", userId, e)
+            lapi.Error("Tweed get_followers: failed to sync/provide userId=%s: %s", userId, e)
         }
 
         user = loadLocalUser(userId)
         if (!user) {
-            lapi.Error("Tweed get_followings: userId=%s not found after sync/provide", userId)
+            lapi.Error("Tweed get_followers: userId=%s not found after sync/provide", userId)
         }
         return user
     }
@@ -76,7 +76,7 @@
             : 0
         const start = pageNumber * PAGE_SIZE
         const mmsid = lapi.MMOpen("", request.userid, "last")
-        const relationships = lapi.Hgetall(mmsid, FOLLOWINGS_LIST) || []
+        const relationships = lapi.Hgetall(mmsid, FOLLOWERS_LIST) || []
 
         const page = relationships
             .sort((a, b) => Number(b.Value) - Number(a.Value))
@@ -88,7 +88,7 @@
 
         return wrapResponse({users: users, success: true})
     } catch (e) {
-        lapi.Error("Tweed Error get_followings: %s, request=%s", e, JSON.stringify(request))
+        lapi.Error("Tweed Error get_followers: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }
 })(request, args)
