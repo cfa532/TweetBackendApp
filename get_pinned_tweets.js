@@ -9,6 +9,8 @@
  * - Retrieves pinned tweets with pinning timestamps
  * - Returns complete tweet objects with metadata
  * - Filters out invalid or missing tweets
+ * - Cleans up stale (no-longer-existing) tweetIds from PINNED_TWEETS when
+ *   this node is userId's write/home node
  * - Handles error cases gracefully
  * 
  * @param {Object} request - The request object containing user data
@@ -49,9 +51,43 @@
         const mmsid = lapi.MMOpen("", userId, "last")  // Open user's memory space
 
         // ========================================================================
+        // WRITE SESSION (home node only — needed to clean up stale entries)
+        // ========================================================================
+
+        // Only safe to delete stale tweetIds from PINNED_TWEETS when this node
+        // is confirmed to be userId's write/home node (hostIds[0]) — deleting
+        // from a stale replica would not be authoritative. Failure here must
+        // not break the pinned-tweets response itself, so it's isolated in
+        // its own try/catch and simply falls back to skipping cleanup.
+        let isHomeNode = false
+        try {
+            const owner = lapi.RunMApp("get_user_core_data", {aid: request["aid"], ver: "last",
+                userid: userId}, [])
+            isHomeNode = !!(owner?.hostIds?.[0] && owner.hostIds[0] === owner.hostIds[1])
+        } catch (e) {
+            lapi.Error("Tweed get_pinned_tweets: get_user_core_data failed for userId=%s: %s", userId, e)
+        }
+
+        let authSid = null
+        let userSid = null
+        if (isHomeNode) {
+            try {
+                authSid = lapi.BELoginAsAuthor()
+                userSid = lapi.MMOpen(authSid, userId, "cur")
+            } catch (e) {
+                lapi.Error("Tweed get_pinned_tweets: failed to open write session for userId=%s: %s", userId, e)
+                authSid = null
+                userSid = null
+                isHomeNode = false
+            }
+        }
+
+        // ========================================================================
         // MAIN EXECUTION
         // ========================================================================
-        
+
+        const staleTweetIds = []
+
         // Get pinned tweet IDs and convert to full tweet objects with timestamps
         const result = lapi.Hkeys(mmsid, PINNED_TWEETS).map(tweetId => {
             let ts = lapi.Hget(mmsid, PINNED_TWEETS, tweetId).toString()  // Pinning timestamp
@@ -62,7 +98,28 @@
                 // Note: timestamp is when the tweet was pinned, not its creation time
                 return {tweet: tweet, timestamp: ts}
             }
+            // Tweet no longer exists — queue for removal from PINNED_TWEETS.
+            if (isHomeNode) staleTweetIds.push(tweetId)
         }).filter(e=> e);  // Remove null/undefined results
+
+        // Remove stale tweetIds from PINNED_TWEETS. Best-effort: a failure
+        // here must not break the pinned-tweets response, since the result
+        // was already built successfully above.
+        if (isHomeNode && userSid && staleTweetIds.length > 0) {
+            try {
+                staleTweetIds.forEach(tweetId => {
+                    lapi.Warn("Tweed get_pinned_tweets: removing stale tweetId=%s from PINNED_TWEETS, userId=%s", tweetId, userId)
+                    lapi.Hdel(userSid, PINNED_TWEETS, tweetId)
+                })
+                lapi.MMBackup(userSid, userId, "", "delref=true")
+                lapi.MiMeiPublish(authSid, "", userId)
+                lapi.Warn("Tweed get_pinned_tweets: removed %d stale tweetId(s) from PINNED_TWEETS, userId=%s",
+                    staleTweetIds.length, userId)
+            } catch (e) {
+                lapi.Error("Tweed get_pinned_tweets: failed to remove stale tweetIds for userId=%s: %s", userId, e)
+            }
+        }
+
         return wrapResponse(result)
     } catch(e) {
         // ========================================================================

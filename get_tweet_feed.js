@@ -11,7 +11,10 @@
  * - Handles retweets with original tweet collection
  * - Reverse chronological ordering (newest first)
  * - Returns both tweets and original tweets for retweets
- * - Cleans up stale tweet IDs from all user lists when appuserid === userid
+ * - Missing tweets are re-synced from the DHT before being treated as stale;
+ *   only evicted from FOLLOWINGS_TWEETS after FAILED_SYNC_REMOVAL_ATTEMPTS
+ *   failed attempts spanning at least FAILED_SYNC_REMOVAL_AGE_MS (same
+ *   grace-period pattern as update_following_tweets.js)
  *
  * @param {Object} request - The request object containing feed parameters
  * @param {string} request.aid - Application ID
@@ -52,10 +55,10 @@
 
     try {
         const FOLLOWINGS_TWEETS = "followings_tweets"  // Redis key for following tweets feed
-        const TWT_LIST_KEY = "list_of_tweets_mid"      // Redis key for user's tweet list
-        const PINNED_TWEETS = "pinned_tweet_list"      // Redis key for pinned tweets list
-        const BOOKMARK_LIST = "bookmark_list"          // Redis key for user's bookmark list
-        const FAVORITE_LIST = "tweet_like_list"        // Redis key for user's favorite list
+        const FAILED_TWEET_SYNCS = "failed_tweet_syncs"  // per-tweetId sync-retry tracking on userId's home object
+        // See update_following_tweets.js's FAILED_FOLLOWING_ACCESSES for the same grace-period pattern.
+        const FAILED_SYNC_REMOVAL_ATTEMPTS = 7
+        const FAILED_SYNC_REMOVAL_AGE_MS = 24 * 60 * 60 * 1000
 
         const pageNum = parseInt(request["pn"], 10)  // Page number (0-based)
         const pageSize = parseInt(request["ps"], 10)  // Number of tweets per page
@@ -132,23 +135,107 @@
         const batch = lapi.Zrevrange(mmsid, FOLLOWINGS_TWEETS, offset, offset + pageSize - 1) || []
 
         const originalTweets = []
-        const staleTweetIds = []
+        let didModify = false
+
+        // Fetches the tweet; on a miss, tries to sync it from the DHT before
+        // giving up — a miss can mean the tweet was deleted, or just that it
+        // hasn't propagated to this node yet.
+        function fetchTweet(tweetId) {
+            const tweetResp = lapi.RunMApp("get_tweet", {aid: request["aid"], ver: "last",
+                version: 'v2', appuserid: appUserId, tweetid: tweetId}, [])
+            return tweetResp?.success ? tweetResp.data : null
+        }
+
+        function trySyncAndRefetch(tweetId) {
+            try {
+                const systemSid = lapi.BEOpenAppDataNode("cur", request["aid"])
+                lapi.MiMeiSync(systemSid, "", tweetId, {})
+                lapi.MiMeiProvide(systemSid, "", tweetId)
+            } catch (e) {
+                lapi.Error("Tweed get_tweet_feed: sync failed for tweetId=%s: %s", tweetId, e)
+                return null
+            }
+            return fetchTweet(tweetId)
+        }
+
+        // Records an unreachable tweetId on the calling user's home object.
+        // The tweetId is removed from FOLLOWINGS_TWEETS only after both the
+        // age and attempt thresholds — same grace-period shape as
+        // update_following_tweets.js's recordFollowingAccessFailure.
+        function recordTweetSyncFailure(tweetId) {
+            try {
+                const now = Date.now()
+                const previous = lapi.Hget(userSid, FAILED_TWEET_SYNCS, tweetId)
+                const hasValidPrevious = previous && typeof previous === "object" &&
+                    typeof previous.firstFailedAt === "number" &&
+                    Number.isFinite(previous.firstFailedAt) &&
+                    previous.firstFailedAt > 0 && previous.firstFailedAt <= now &&
+                    typeof previous.lastFailedAt === "number" &&
+                    Number.isFinite(previous.lastFailedAt) &&
+                    previous.lastFailedAt >= previous.firstFailedAt &&
+                    previous.lastFailedAt <= now &&
+                    Number.isSafeInteger(previous.attempts) &&
+                    previous.attempts >= 1 && previous.attempts < Number.MAX_SAFE_INTEGER
+                const firstFailedAt = hasValidPrevious ? previous.firstFailedAt : now
+                const attempts = hasValidPrevious ? previous.attempts + 1 : 1
+
+                if (attempts >= FAILED_SYNC_REMOVAL_ATTEMPTS &&
+                    now - firstFailedAt > FAILED_SYNC_REMOVAL_AGE_MS) {
+                    // Clear the failure record first. If removing the tweetId
+                    // then fails, the partial state is conservative: the
+                    // tweetId stays and its grace period restarts on the next
+                    // failed sync.
+                    lapi.Hdel(userSid, FAILED_TWEET_SYNCS, tweetId)
+                    didModify = true
+                    lapi.Zrem(userSid, FOLLOWINGS_TWEETS, tweetId)
+                    lapi.Warn("Tweed get_tweet_feed: removed unrecoverable tweetId=%s from FOLLOWINGS_TWEETS after %d attempts, firstFailedAt=%s, userId=%s",
+                        tweetId, attempts, String(firstFailedAt), userId)
+                    return
+                }
+
+                lapi.Hset(userSid, FAILED_TWEET_SYNCS, tweetId, {
+                    firstFailedAt: firstFailedAt,
+                    lastFailedAt: now,
+                    attempts: attempts
+                })
+                didModify = true
+            } catch (e) {
+                lapi.Error("Tweed get_tweet_feed: failed to record tweet sync failure: %s, tweetId=%s, userId=%s", e, tweetId, userId)
+            }
+        }
+
+        // A single successful sync/fetch clears all prior failure history.
+        function clearTweetSyncFailure(tweetId) {
+            try {
+                const previous = lapi.Hget(userSid, FAILED_TWEET_SYNCS, tweetId)
+                if (previous !== null && previous !== undefined) {
+                    lapi.Hdel(userSid, FAILED_TWEET_SYNCS, tweetId)
+                    didModify = true
+                }
+            } catch (e) {
+                lapi.Error("Tweed get_tweet_feed: failed to clear tweet sync failure: %s, tweetId=%s, userId=%s", e, tweetId, userId)
+            }
+        }
 
         const tweets = batch.map(sp => {
             const tweetId = sp.Member
             if (!tweetId) return null
 
-            const tweetResp = lapi.RunMApp("get_tweet", {aid: request["aid"], ver: "last",
-                version: 'v2', appuserid: appUserId, tweetid: tweetId}, [])
-            const tweet = tweetResp?.success ? tweetResp.data : null
+            let tweet = fetchTweet(tweetId)
+            if (!tweet) tweet = trySyncAndRefetch(tweetId)
 
             if (!tweet) {
-                // Tweet no longer exists — queue for removal from userId's lists,
+                // Still unreachable after a sync attempt — record the failure
+                // (and evict from FOLLOWINGS_TWEETS once thresholds are met),
                 // but still occupy this slot with null so the response length
                 // matches what was actually scanned.
-                if (isHomeNode) staleTweetIds.push(tweetId)
+                if (isHomeNode && userSid) recordTweetSyncFailure(tweetId)
                 return null
             }
+
+            // Recovered (first try or after sync) — clear any failure history
+            // so a future transient miss starts counting from zero.
+            if (isHomeNode && userSid) clearTweetSyncFailure(tweetId)
 
             // Filter out private tweets, but still occupy the slot.
             if (tweet.isPrivate === true) return null
@@ -164,31 +251,11 @@
             return tweet
         })
 
-        // Remove stale tweet IDs from all user lists. Best-effort: a failure
-        // here must not break the feed response, since tweets were already
-        // fetched successfully above. Safe to do after building `tweets` since
-        // the response no longer depends on rank stability post-cleanup.
-        let didModify = false
-        if (isHomeNode && userSid && staleTweetIds.length > 0) {
-            try {
-                staleTweetIds.forEach(tweetId => {
-                    lapi.Warn("Tweed get_tweet_feed: removing stale tweetId=%s from user lists, userId=%s", tweetId, userId)
-                    lapi.Zrem(userSid, FOLLOWINGS_TWEETS, tweetId)
-                    lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
-                    lapi.Hdel(userSid, PINNED_TWEETS, tweetId)
-                    lapi.Zrem(userSid, BOOKMARK_LIST, tweetId)
-                    lapi.Zrem(userSid, FAVORITE_LIST, tweetId)
-                })
-                didModify = true
-                lapi.Warn("Tweed get_tweet_feed: removed %d stale tweetId(s) from user lists, userId=%s, page=%d",
-                    staleTweetIds.length, userId, pageNum)
-            } catch (e) {
-                lapi.Error("Tweed get_tweet_feed: failed to remove stale tweetIds for userId=%s: %s", userId, e)
-            }
-        }
-
-        // Persist and publish user data if any stale entries were removed.
-        // Best-effort: a failure here must not break the feed response.
+        // Persist and publish user data if any failure bookkeeping or
+        // eviction happened above. Best-effort: a failure here must not
+        // break the feed response, since tweets were already fetched
+        // successfully. Safe to do after building `tweets` since the
+        // response no longer depends on rank stability post-cleanup.
         if (didModify) {
             try {
                 lapi.MMBackup(userSid, userId, "", "delref=true")

@@ -50,10 +50,6 @@
 
     try {
         const TWT_LIST_KEY = "list_of_tweets_mid"  // Redis key for user's tweet list
-        const FOLLOWINGS_TWEETS = "followings_tweets"  // Redis key for following tweets feed
-        const PINNED_TWEETS = "pinned_tweet_list"      // Redis key for pinned tweets list
-        const BOOKMARK_LIST = "bookmark_list"          // Redis key for user's bookmark list
-        const FAVORITE_LIST = "tweet_like_list"        // Redis key for user's favorite list
 
         const pageNum = parseInt(request["pn"], 10)  // Page number (0-based)
         const pageSize = parseInt(request["ps"], 10)  // Number of tweets per page
@@ -171,10 +167,6 @@
                 staleTweetIds.forEach(tweetId => {
                     lapi.Warn("Tweed get_tweets_by_user: removing stale tweetId=%s from user lists, userId=%s", tweetId, userId)
                     lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
-                    lapi.Zrem(userSid, FOLLOWINGS_TWEETS, tweetId)
-                    lapi.Hdel(userSid, PINNED_TWEETS, tweetId)
-                    lapi.Zrem(userSid, BOOKMARK_LIST, tweetId)
-                    lapi.Zrem(userSid, FAVORITE_LIST, tweetId)
                 })
                 didModify = true
                 lapi.Warn("Tweed get_tweets_by_user: removed %d stale tweetId(s) from user lists, userId=%s, page=%d",
