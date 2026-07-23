@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Remove persistently inaccessible following IDs after fifteen failures spanning more than fourteen days without treating temporary downstream outages as invalid followings.
+**Goal:** Temporarily test removal of persistently inaccessible following IDs after five failures spanning more than one day without treating shorter outages as invalid followings.
 
 **Architecture:** Keep failure state in a dedicated hash on the calling user's authoritative object. `update_following_tweets` owns recording, resetting, threshold evaluation, and persistence because its home-node branch already owns the following list.
 
@@ -13,7 +13,7 @@
 - Do not change the existing `list_of_followings_mid` value format.
 - Mutate failure state and following membership only on the calling user's `hostIds[0]`.
 - Verify `request.hostid` against the calling user's stored `hostIds[0]` before routing or mutation.
-- Remove on the fifteenth or later failure only when the first failure is strictly more than fourteen days old.
+- For testing, remove on the fifth or later failure only when the first failure is strictly more than one day old; production values remain fifteen failures and fourteen days.
 - Reset failure state as soon as the followed user object is read successfully.
 - Return an error when bookkeeping or persistence fails.
 - Do not run tests unless the user explicitly requests it.
@@ -52,7 +52,7 @@ The repository instruction prohibits test execution without an explicit user req
 
 - [ ] **Step 1: Add constants and mutation state**
 
-Define the failure hash key, fifteen-attempt threshold, fourteen-day duration, and a flag that records whether the calling user object changed.
+Define the failure hash key, temporary five-attempt threshold, temporary one-day duration, and a flag that records whether the calling user object changed.
 
 - [ ] **Step 2: Verify authoritative routing**
 

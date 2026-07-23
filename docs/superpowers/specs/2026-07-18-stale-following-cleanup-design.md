@@ -10,7 +10,7 @@ Store access-failure state in a separate `failed_following_accesses` hash inside
 
 An access fails only when the followed user object cannot be read, including an exception while opening or reading it. Failures after a user object has been read, such as a downstream synchronization or tweet-read error, do not count. A successful user-object read deletes any existing failure state immediately.
 
-On a failed access, increment the counter and retain the original first-failure time. Remove the ID from `list_of_followings_mid` on the fifteenth or later failure only when the first failure is strictly more than fourteen days old. Delete its failure record at the same time.
+On a failed access, increment the counter and retain the original first-failure time. For the temporary testing configuration, remove the ID from `list_of_followings_mid` on the fifth or later failure only when the first failure is strictly more than one day old. Delete its failure record at the same time. The intended production thresholds remain fifteen attempts and fourteen days.
 
 Before routing or writing, `update_following_tweets` verifies `request.hostid` against the calling user's stored `hostIds[0]`; an unverifiable or mismatched request fails without mutating following state. All tracking and removal writes occur only while the function runs on that verified home node. Any mutation causes the calling user object to be backed up and published, even if no new tweets were found. Bookkeeping or persistence failures return an error instead of silently reporting success.
 

@@ -27,8 +27,9 @@
     const FAILED_FOLLOWING_ACCESSES = "failed_following_accesses"
     const TWT_LIST_KEY = "list_of_tweets_mid"   // sorted set of user's own tweets
     const OWNER_DATA_KEY = "data_of_author"
-    const FAILED_ACCESS_REMOVAL_ATTEMPTS = 15
-    const FAILED_ACCESS_REMOVAL_AGE_MS = 14 * 24 * 60 * 60 * 1000
+    // Temporary testing thresholds. Production values are 14 attempts / 7 days.
+    const FAILED_ACCESS_REMOVAL_ATTEMPTS = 14
+    const FAILED_ACCESS_REMOVAL_AGE_MS = 7 * 24 * 60 * 60 * 1000
     
     // Extract request parameters
     const APP_ID = request["aid"]
