@@ -27,7 +27,8 @@
     const FAILED_FOLLOWING_ACCESSES = "failed_following_accesses"
     const TWT_LIST_KEY = "list_of_tweets_mid"   // sorted set of user's own tweets
     const OWNER_DATA_KEY = "data_of_author"
-    // Temporary testing thresholds. Production values are 14 attempts / 7 days.
+    // A successful user-object read clears this streak. Permanently remove an
+    // inaccessible following only after 14 continuous failures spanning 7 days.
     const FAILED_ACCESS_REMOVAL_ATTEMPTS = 14
     const FAILED_ACCESS_REMOVAL_AGE_MS = 7 * 24 * 60 * 60 * 1000
     
@@ -319,7 +320,7 @@
             const attempts = hasValidPrevious ? previous.attempts + 1 : 1
 
             if (attempts >= FAILED_ACCESS_REMOVAL_ATTEMPTS &&
-                now - firstFailedAt > FAILED_ACCESS_REMOVAL_AGE_MS) {
+                now - firstFailedAt >= FAILED_ACCESS_REMOVAL_AGE_MS) {
                 // Clear the failure record first. If removing the following then
                 // fails, the partial state is conservative: the following stays
                 // and its grace period restarts on the next failed access.
