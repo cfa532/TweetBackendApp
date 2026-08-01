@@ -215,20 +215,28 @@
                 
                 lapi.Debug("Tweed toggle_following: %s following %s, host: %s, node: %s", userId, followingId, hostOfOther, nodeId)
                 
-                // Add user to following list with timestamp
-                userSid = lapi.MMOpen(authSid, userId, "cur")
-                lapi.Hset(userSid, FOLLOWINGS_LIST, followingId, Date.now())
-
                 // Get all existing tweets from the user being followed
-                const scorepairs = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
+                const tweetsResult = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
                     nid: hostOfOther, sid: systemSid,
                     version: version, userid: followingId
                 }, [])
-                const normalizedScorepairs = Array.isArray(scorepairs) ? scorepairs : []
+                const scorepairs = Array.isArray(tweetsResult)
+                    ? tweetsResult
+                    : (tweetsResult?.success === true && Array.isArray(tweetsResult.data)
+                        ? tweetsResult.data
+                        : null)
+                if (!scorepairs) {
+                    throw new Error(tweetsResult?.message || "Invalid tweet list response")
+                }
+
+                // Persist the relationship and its initial feed entries together
+                // only after the target user's tweet list was loaded successfully.
+                userSid = lapi.MMOpen(authSid, userId, "cur")
+                lapi.Hset(userSid, FOLLOWINGS_LIST, followingId, Date.now())
                 
                 // Add all their tweets to the following feed
-                if (normalizedScorepairs.length > 0) {
-                    lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...normalizedScorepairs)
+                if (scorepairs.length > 0) {
+                    lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...scorepairs)
                 }
                 
                 // Backup user data and publish changes
