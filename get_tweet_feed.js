@@ -11,10 +11,11 @@
  * - Handles retweets with original tweet collection
  * - Reverse chronological ordering (newest first)
  * - Returns both tweets and original tweets for retweets
- * - Missing tweets are re-synced from the DHT before being treated as stale;
- *   only evicted from FOLLOWINGS_TWEETS after FAILED_SYNC_REMOVAL_ATTEMPTS
- *   failed attempts spanning at least FAILED_SYNC_REMOVAL_AGE_MS (same
- *   grace-period pattern as update_following_tweets.js)
+ * - Missing tweets are returned as null and tracked as inaccessible;
+ *   they are only evicted from FOLLOWINGS_TWEETS after
+ *   FAILED_SYNC_REMOVAL_ATTEMPTS failed reads spanning at least
+ *   FAILED_SYNC_REMOVAL_AGE_MS (same grace-period pattern as
+ *   update_following_tweets.js)
  *
  * @param {Object} request - The request object containing feed parameters
  * @param {string} request.aid - Application ID
@@ -137,25 +138,13 @@
         const originalTweets = []
         let didModify = false
 
-        // Fetches the tweet; on a miss, tries to sync it from the DHT before
-        // giving up — a miss can mean the tweet was deleted, or just that it
-        // hasn't propagated to this node yet.
+        // Fetches the tweet from the current access node. A missing tweet is
+        // represented by null; routine feed reads must not perform synchronous
+        // DHT recovery because that can block the entire feed response.
         function fetchTweet(tweetId) {
             const tweetResp = lapi.RunMApp("get_tweet", {aid: request["aid"], ver: "last",
                 version: 'v2', appuserid: appUserId, tweetid: tweetId}, [])
             return tweetResp?.success ? tweetResp.data : null
-        }
-
-        function trySyncAndRefetch(tweetId) {
-            try {
-                const systemSid = lapi.BEOpenAppDataNode("cur", request["aid"])
-                lapi.MiMeiSync(systemSid, "", tweetId, {})
-                lapi.MiMeiProvide(systemSid, "", tweetId)
-            } catch (e) {
-                lapi.Error("Tweed get_tweet_feed: sync failed for tweetId=%s: %s", tweetId, e)
-                return null
-            }
-            return fetchTweet(tweetId)
         }
 
         // Records an unreachable tweetId on the calling user's home object.
@@ -221,11 +210,10 @@
             const tweetId = sp.Member
             if (!tweetId) return null
 
-            let tweet = fetchTweet(tweetId)
-            if (!tweet) tweet = trySyncAndRefetch(tweetId)
+            const tweet = fetchTweet(tweetId)
 
             if (!tweet) {
-                // Still unreachable after a sync attempt — record the failure
+                // Still unavailable from the access node — record the failure
                 // (and evict from FOLLOWINGS_TWEETS once thresholds are met),
                 // but still occupy this slot with null so the response length
                 // matches what was actually scanned.
