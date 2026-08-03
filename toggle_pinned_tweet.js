@@ -33,6 +33,11 @@
             if (typeof result === 'boolean') {
                 return {success: true, data: {isPinned: result}}
             }
+            // If result already has success field (e.g. delegated RunMApp call),
+            // return as-is to avoid double-wrapping.
+            if (result && typeof result === 'object' && 'success' in result) {
+                return result
+            }
             return {success: true, data: result}
         }
         return result
@@ -146,7 +151,7 @@
             const mmsid = lapi.MMOpen("", mid, "last")  // Open user's memory space
             return lapi.Get(mmsid, OWNER_DATA_KEY)  // Retrieve user data
         } catch(e) {
-            lapi.Error("Tweed toggle_pinned_tweet: getUser failed for mid=%s: %s", mid, e)
+            lapi.Error("Tweed toggle_pinned_tweet: Failed to get user%s: %s", mid, e)
             throw e
         }
     }

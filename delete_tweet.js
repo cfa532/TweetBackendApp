@@ -33,17 +33,23 @@
     // ============================================================================
     
     const version = request.version || ""  // Version identifier for API compatibility
+
+    const BOOKMARK_LIST = "bookmark_list"  // Redis key for user's bookmark list
+    const FAVORITE_LIST = "tweet_like_list"  // Redis key for tweet's favorite list
+
     const TWT_LIST_KEY = "list_of_tweets_mid"  // Redis key for user's tweet list
     const TWT_CONTENT_KEY = "core_data_of_tweet"  // Key for tweet content storage
     const FOLLOWINGS_TWEETS = "followings_tweets"  // Redis key for following tweets feed
     const PINNED_TWEETS = "pinned_tweet_list"  // Redis key for pinned tweets list
     const tweetId = request["tweetid"]  // ID of tweet to be removed
-    const userId = request["userid"]  // ID of user requesting deletion
+    const isV3 = version === "v3"
+    const userId = isV3 ? request["userid"] : (request["appuserid"] || request["userid"])  // ID of user requesting deletion
+    const tweetAuthorId = isV3 ? request["authorid"] : (request["authorid"] || request["userid"])  // ID of tweet owner
     const APP_ID = request["aid"]  // Application identifier
     
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
-        if (version === 'v2') {
+        if (version === 'v2' || isV3) {
             // If result already has success field, return as-is
             if (result && typeof result === 'object' && 'success' in result) {
                 return result
@@ -56,7 +62,7 @@
     
     // Helper function to wrap error response in v2 format if needed
     function wrapError(error) {
-        if (version === 'v2') {
+        if (version === 'v2' || isV3) {
             return {success: false, message: error.message || String(error), error: error}
         }
         return {message: error, success: false}
@@ -67,6 +73,10 @@
     // ============================================================================
     
     try {
+        if (!tweetId || !userId || !tweetAuthorId) {
+            throw new Error("Missing delete_tweet requester, author, or tweet ID")
+        }
+
         const user = getUser(userId)  // Get user data to determine hosting node
         const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
         
@@ -84,11 +94,15 @@
             const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
             let ret
             try {
-                ret = lapi.RunMApp("delete_tweet", {aid: APP_ID, ver: "last",
+                const delegatedRequest = {aid: APP_ID, ver: "last",
                     nid: user.hostIds[0], sid: systemSid,
                     version: version,
-                    tweetid: tweetId, userid: userId}, []
-                )
+                    tweetid: tweetId, userid: userId, authorid: tweetAuthorId}
+                if (!isV3) {
+                    delegatedRequest["appuserid"] = userId
+                    delegatedRequest["userid"] = tweetAuthorId
+                }
+                ret = lapi.RunMApp("delete_tweet", delegatedRequest, [])
             } catch(e) {
                 lapi.Error("Tweed delete_tweet: Failed to call delete_tweet on remote node %s: %s, userId=%s, tweetId=%s", user.hostIds[0], e, userId, tweetId)
                 throw e
@@ -100,16 +114,25 @@
             // LOCAL USER HANDLING
             // ====================================================================
             
-            // Get tweet content to determine ownership and handle attachments
             const authSid = lapi.BELoginAsAuthor()
-            const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
-            const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
-            lapi.Debug("Tweed delete_tweet: tweet=%s", JSON.stringify(tweet))
-
-            // Only tweet authors can permanently delete tweets
-            // Other users can only remove tweets from their personal lists
             const userSid = lapi.MMOpen(authSid, userId, "cur")
-            if (tweet && tweet.authorId == userId) {
+            let deletedTweet = null
+
+            // Only tweet authors can permanently delete tweets.
+            // Other users only remove the tweet from their personal lists.
+            if (tweetAuthorId == userId) {
+                const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")
+                const tweet = lapi.Get(tweetSid, TWT_CONTENT_KEY)
+                deletedTweet = tweet
+                lapi.Debug("Tweed delete_tweet: tweet=%s", JSON.stringify(tweet))
+
+                if (!tweet) {
+                    throw new Error("Tweet not found")
+                }
+                if (tweet.authorId != userId) {
+                    throw new Error("User is not the tweet author")
+                }
+
                 // ============================================================
                 // TWEET AUTHOR DELETION (PERMANENT)
                 // ============================================================
@@ -142,12 +165,14 @@
             lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)  // Remove from tweet list
             lapi.Zrem(userSid, FOLLOWINGS_TWEETS, tweetId)  // Remove from following feed
             lapi.Hdel(userSid, PINNED_TWEETS, tweetId)  // Remove from pinned list
+            lapi.Zrem(userSid, BOOKMARK_LIST, tweetId)  // Remove from bookmarks
+            lapi.Zrem(userSid, FAVORITE_LIST, tweetId)  // Remove from favorites
             
             // Update user data and publish changes
             lapi.MMBackup(userSid, userId, "", "delref=true")
             lapi.MiMeiPublish(authSid, "", userId)
 
-            lapi.Debug("Tweed delete_tweet: Delete tweet %s %s", tweetId, JSON.stringify(tweet))
+            lapi.Debug("Tweed delete_tweet: Delete tweet %s %s", tweetId, JSON.stringify(deletedTweet))
     
             // Update the user's score in application data
             try {

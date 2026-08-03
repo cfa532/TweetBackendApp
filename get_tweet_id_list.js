@@ -8,7 +8,7 @@
  * Key Features:
  * - Returns only public tweets (filters private content)
  * - Retrieves tweet IDs with score pairs for chronological ordering
- * - Limited to 100 tweets for performance
+ * - Retrieves the user's complete public tweet history
  * - Handles error cases gracefully
  * 
  * @param {Object} request - The request object containing user data
@@ -50,11 +50,8 @@
     try {
         const mmsid = lapi.MMOpen("", userId, "last")  // Open user's memory space
         
-        //////////////////////////////////////////////////////////////////////////////
-        // Note: Using -1 might fail, so limiting to 10 for now
-        // Get up to 10 most recent tweets (limited for performance when sync user with many tweets)
-        //////////////////////////////////////////////////////////////////////////////
-        const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, 0, 10)
+        // Get the complete tweet list, newest first.
+        const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, 0, -1)
         
         // Filter to include only public tweets
         const filteredArr = arr.map(element => {

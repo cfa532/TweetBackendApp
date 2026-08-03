@@ -83,18 +83,28 @@
         // HOST ID CHANGE HANDLING
         // ========================================================================
         
-        // Check if the primary host ID has changed
-        // This will throw an error if the new hostId is invalid
-        if (user.hostIds && user.hostIds[0] && userInDB.hostIds && user.hostIds[0] !== userInDB.hostIds[0]) {
-            // Make sure user mimei is available on the new hostId
-            lapi.RunMApp("sync_user", {
-                aid: APP_ID,
-                ver: "last",
-                nid: user.hostIds[0],
-                sid: systemSid,
-                version: version,
-                mid: user.mid
-            }, [])
+        // Check if the primary host ID has changed. When this request arrives on
+        // a surviving access node, the old primary may already be gone. In that
+        // case, this sync is only a best-effort warmup for the new target node;
+        // the local copy below is still authoritative enough to save the update.
+        const primaryHostChanged = user.hostIds && user.hostIds[0] && userInDB.hostIds && user.hostIds[0] !== userInDB.hostIds[0]
+        if (primaryHostChanged) {
+            try {
+                // Make sure user mimei is available on the new hostId
+                const syncRet = lapi.RunMApp("sync_user", {
+                    aid: APP_ID,
+                    ver: "last",
+                    nid: user.hostIds[0],
+                    sid: systemSid,
+                    version: version,
+                    mid: user.mid
+                }, [])
+                if (syncRet && syncRet.success === false) {
+                    lapi.Error("Tweed set_author_core_data: best-effort sync_user failed for new host %s: %s, userId=%s", user.hostIds[0], syncRet.message || JSON.stringify(syncRet), user.mid)
+                }
+            } catch(e) {
+                lapi.Error("Tweed set_author_core_data: best-effort sync_user threw for new host %s: %s, userId=%s", user.hostIds[0], e, user.mid)
+            }
         }
 
         // ========================================================================
@@ -112,7 +122,8 @@
         }
         
         // Check if we need to delegate to the primary host
-        if (user.hostIds[0] !== nodeId) {
+        let shouldUpdateLocally = user.hostIds[0] === nodeId
+        if (!shouldUpdateLocally) {
             lapi.Debug("Tweed set_author_core_data: local user=%s", JSON.stringify(user))
             
             // Delegate the update to the primary host
@@ -128,33 +139,49 @@
                 }, [])
             } catch(e) {
                 lapi.Error("Tweed set_author_core_data: Failed to call set_author_core_data on remote node %s: %s, userId=%s", user.hostIds[0], e, user.mid)
-                throw e
+                if (!primaryHostChanged) {
+                    throw e
+                }
+                shouldUpdateLocally = true
             }
             
             lapi.Debug("Tweed set_author_core_data: local ret=%s", JSON.stringify(ret))
-            
-            // Sync the updated data from the remote host (assume the remote host is up to date)
-            lapi.MiMeiSync(systemSid, "", user.mid, {})
-            lapi.MiMeiProvide(systemSid, "", user.mid)
-            
-            // Get the updated user data from the local host for logging
-            try {
-                const newUser = lapi.RunMApp("get_user_core_data", {
-                    aid: APP_ID, 
-                    ver: "last",
-                    userid: user.mid
-                }, [])
-                lapi.Debug("Tweed set_author_core_data: local newUser=%s", JSON.stringify(newUser))
-            } catch(e) {
-                // This is just for logging, so it's OK if it fails
-                lapi.Error("Tweed set_author_core_data: Failed to get user data after sync: %s", e)
+
+            if (ret && ret.success === false) {
+                lapi.Error("Tweed set_author_core_data: remote update failed on new primary %s: %s, userId=%s", user.hostIds[0], ret.message || JSON.stringify(ret), user.mid)
+                if (!primaryHostChanged) {
+                    return wrapResponse(ret)
+                }
+                shouldUpdateLocally = true
             }
-            return wrapResponse(ret)
-        } else {
+            
+            if (!shouldUpdateLocally) {
+                // Sync the updated data from the remote host (assume the remote host is up to date)
+                lapi.MiMeiSync(systemSid, "", user.mid, {})
+                lapi.MiMeiProvide(systemSid, "", user.mid)
+                
+                // Get the updated user data from the local host for logging
+                try {
+                    const newUser = lapi.RunMApp("get_user_core_data", {
+                        aid: APP_ID, 
+                        ver: "last",
+                        userid: user.mid
+                    }, [])
+                    lapi.Debug("Tweed set_author_core_data: local newUser=%s", JSON.stringify(newUser))
+                } catch(e) {
+                    // This is just for logging, so it's OK if it fails
+                    lapi.Error("Tweed set_author_core_data: Failed to get user data after sync: %s", e)
+                }
+                return wrapResponse(ret)
+            }
+        }
+
+        if (shouldUpdateLocally) {
             // ====================================================================
             // LOCAL USER HANDLING
             // ====================================================================
-            // We are on the primary host, perform the update locally
+            // We are on the primary host, or on a surviving access-node copy after
+            // the old primary disappeared during host migration. Save locally.
             
             // ================================================================
             // USER DATA UPDATE

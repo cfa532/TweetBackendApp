@@ -91,7 +91,7 @@
 
         if (!userHostId) {
             lapi.Error("Tweed toggle_following: missing host for user %s", JSON.stringify({userId, nodeId}))
-            return wrapError(new Error("User host not found for user " + userId + " "+ nodeId))
+            return wrapError(new Error("User host not found for user " + userId + " on "+ nodeId))
         }
 
         // ========================================================================
@@ -105,7 +105,8 @@
                 ret = lapi.RunMApp("toggle_following", {aid: APP_ID, ver: "last",
                     nid: userHostId, sid: systemSid,
                     version: version,
-                    userid: userId, followingid: followingId}, []
+                    userid: userId, followingid: followingId,
+                    followingid_hostid: followingHostId}, []
                 )
             } catch(e) {
                 lapi.Error("Tweed toggle_following: Failed to call toggle_following on remote node %s: %s, userId=%s, followingId=%s", userHostId, e, userId, followingId)
@@ -121,7 +122,7 @@
                 // Don't throw - this is a non-critical operation
             }
                 
-            lapi.Debug("Tweed Toggle following remote: ret=%s, user: %s, followed: %s, node: %s", ret, userId, followingId, nodeId)
+            lapi.Debug("Tweed Toggle following remote: ret=%s, user: %s, followed: %s, node: %s", JSON.stringify(ret), userId, followingId, nodeId)
             return wrapResponse(ret)
         } else {
             // ====================================================================
@@ -136,7 +137,7 @@
             if (!followedUser) {
                 // Target user not available locally - attempt to sync; use known host nid if available
                 try {
-                    lapi.MiMeiSync(authSid, "", followingId, {SourcePeer: followingHostId})
+                    lapi.MiMeiSync(authSid, "", followingId, {})
                     lapi.MiMeiProvide(authSid, "", followingId)
                 } catch(e) {
                     lapi.Error("Tweed toggle_following: Failed to sync followed user %s from nid=%s: %s", followingId, followingHostId, e)
@@ -214,20 +215,28 @@
                 
                 lapi.Debug("Tweed toggle_following: %s following %s, host: %s, node: %s", userId, followingId, hostOfOther, nodeId)
                 
-                // Add user to following list with timestamp
-                userSid = lapi.MMOpen(authSid, userId, "cur")
-                lapi.Hset(userSid, FOLLOWINGS_LIST, followingId, Date.now())
-
                 // Get all existing tweets from the user being followed
-                const scorepairs = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
+                const tweetsResult = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
                     nid: hostOfOther, sid: systemSid,
                     version: version, userid: followingId
                 }, [])
-                const normalizedScorepairs = Array.isArray(scorepairs) ? scorepairs : []
+                const scorepairs = Array.isArray(tweetsResult)
+                    ? tweetsResult
+                    : (tweetsResult?.success === true && Array.isArray(tweetsResult.data)
+                        ? tweetsResult.data
+                        : null)
+                if (!scorepairs) {
+                    throw new Error(tweetsResult?.message || "Invalid tweet list response")
+                }
+
+                // Persist the relationship and its initial feed entries together
+                // only after the target user's tweet list was loaded successfully.
+                userSid = lapi.MMOpen(authSid, userId, "cur")
+                lapi.Hset(userSid, FOLLOWINGS_LIST, followingId, Date.now())
                 
                 // Add all their tweets to the following feed
-                if (normalizedScorepairs.length > 0) {
-                    lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...normalizedScorepairs)
+                if (scorepairs.length > 0) {
+                    lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...scorepairs)
                 }
                 
                 // Backup user data and publish changes
@@ -236,10 +245,10 @@
 
                 // Sync and provide the target user's content locally
                 try {
-                    lapi.MiMeiSync(authSid, "", followingId, {SourcePeer: followingHostId})
+                    lapi.MiMeiSync(authSid, "", followingId, {})
                     lapi.MiMeiProvide(authSid, "", followingId)
                 } catch(e) {
-                    lapi.Error("Tweed toggle_following: Failed to sync followed user content %s: %s", followingId, e)
+                    lapi.Error("Tweed toggle_following: Failed to sync followed user %s: %s", followingId, e)
                 }
 
                 // Update follower count on the target user's node
@@ -253,26 +262,6 @@
                     lapi.Error("Tweed Error toggle_following: toggle_follower failed: %s, %s", e, JSON.stringify(request))
                 }
 
-                // Note: Individual tweet syncing is unnecessary if Mimei DB sync works properly.
-                // but it is not, so we still need to sync individual tweets.
-                normalizedScorepairs.forEach(sp => {
-                    const tweetId = sp?.Member
-                    // Skip invalid tweet IDs (defensive check, get_tweet_id_list should already filter these)
-                    if (!tweetId) {
-                        return
-                    }
-                    const t = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
-                        tweetid: tweetId, appuserid: userId}, [])
-                    if (!t) {
-                        lapi.Debug("Tweed toggle_following: Syncing tweet: %s, user: %s", tweetId, followingId)
-                        try {
-                            lapi.MiMeiSync(authSid, "", tweetId, {SourcePeer: followingHostId})
-                            lapi.MiMeiProvide(authSid, "", tweetId)
-                        } catch(e) {
-                            lapi.Error("Tweed toggle_following: Failed to sync tweetId %s: %s", tweetId, e)
-                        }
-                    }
-                })
             }
     
             // Update the user's score in the application data

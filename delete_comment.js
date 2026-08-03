@@ -54,6 +54,8 @@
     
     try {
         const COMMENT_LIST = "comment_list_key"  // Redis key for tweet's comment list
+        const BOOKMARK_LIST = "bookmark_list"  // Redis key for user's bookmark list
+        const FAVORITE_LIST = "tweet_like_list"  // Redis key for user's favorite list
         const APP_ID = request["aid"]  // Application identifier
         const appUserId = request["appuserid"]  // ID of user requesting deletion
         const tweetId = request["tweetid"]  // ID of tweet containing the comment
@@ -116,6 +118,16 @@
                 lapi.MiMeiPublish(authSid, "", tweetId)
             } catch(e) {
                 lapi.Error("Tweed delete_comment: Failed to backup/publish tweet %s: %s", tweetId, e)
+            }
+
+            // Remove comment from the requesting user's bookmark and favorite lists
+            try {
+                const userSid = lapi.MMOpen(authSid, appUserId, "cur")
+                lapi.Zrem(userSid, BOOKMARK_LIST, commentId)
+                lapi.Zrem(userSid, FAVORITE_LIST, commentId)
+                lapi.MMBackup(userSid, appUserId, "", "delref=true")
+            } catch(e) {
+                lapi.Error("Tweed delete_comment: Failed to remove comment from user lists %s: %s", appUserId, e)
             }
     
             // Update the parent tweet's score in application data

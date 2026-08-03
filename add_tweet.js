@@ -32,7 +32,7 @@
  * @param {string} request.agentAuth.mimeiId - User's Mimei ID
  * @param {number} request.agentAuth.timestamp - Request timestamp
  * @param {string} request.agentAuth.signature - Ed25519 signature
- * @param {string} request.ver - Version identifier
+ * @param {string} request.ver - Version identifier by Leither
  * @param {Array} args - Additional arguments (unused)
  */
 ((request, args)=>{

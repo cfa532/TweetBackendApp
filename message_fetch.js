@@ -31,6 +31,11 @@
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
         if (version === 'v2') {
+            // If result already has success field (e.g. delegated RunMApp call),
+            // return as-is to avoid double-wrapping.
+            if (result && typeof result === 'object' && 'success' in result) {
+                return result
+            }
             return {success: true, data: result}
         }
         return result

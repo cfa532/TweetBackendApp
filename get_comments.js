@@ -53,21 +53,88 @@
         const endRank = startRank + pageSize - 1;  // Zrevrange stop is inclusive
         const tweetId = request["tweetid"]  // ID of tweet to get comments for
         const mmsid = lapi.MMOpen("", tweetId, "last")  // Open tweet's memory space
-    
+        const TWT_CONTENT_KEY = "core_data_of_tweet"  // Key for tweet content storage
+        const parentTweet = lapi.Get(mmsid, TWT_CONTENT_KEY)
+
+        // Comments live in the same mimei as their parent tweet, so only trust a
+        // missing comment as "truly gone" (rather than just unsynced to this
+        // replica) when this node is confirmed to be the tweet author's home node.
+        // Failure here must not break the comments response itself (backward
+        // compat with callers that predate this cleanup), so it's isolated in
+        // its own try/catch and simply falls back to skipping cleanup.
+        let isHomeNode = false
+        if (!parentTweet?.authorId) {
+            lapi.Debug("Tweed get_comments: no parentTweet/authorId for tweetId=%s, skipping stale-comment cleanup", tweetId)
+        } else {
+            try {
+                const author = lapi.RunMApp("get_user_core_data", {aid: request["aid"], ver: "last",
+                    userid: parentTweet.authorId}, [])
+                isHomeNode = !!(author?.hostIds?.[0] && author.hostIds[0] === author.hostIds[1])
+                lapi.Debug("Tweed get_comments: tweetId=%s authorId=%s hostIds=%s isHomeNode=%s",
+                    tweetId, parentTweet.authorId, JSON.stringify(author?.hostIds), String(isHomeNode))
+            } catch (e) {
+                lapi.Error("Tweed get_comments: get_user_core_data failed for authorId=%s: %s", parentTweet.authorId, e)
+            }
+        }
+
         // ========================================================================
         // MAIN EXECUTION
         // ========================================================================
-        
+
         // Get comment IDs in reverse chronological order (newest first)
         const arr = lapi.Zrevrange(mmsid, COMMENT_LIST, startRank, endRank)
-        
-        // Convert comment IDs to full comment objects (tweets)
+
+        // Convert comment IDs to full comment objects (tweets).
+        // If get_tweet returns null and we're not on the home node, the comment
+        // may simply not be synced here yet — return a minimal stub {mid} so the
+        // client knows the ID. On the home node, a null result means the comment
+        // is genuinely gone.
+        //
+        // PAGINATION CONTRACT: the client infers "more comments exist" purely
+        // from response array LENGTH vs pageSize (see the comment above
+        // HproseInstance.fetchComments' response-processing loop). That only
+        // holds if this array always has exactly arr.length slots — one per raw
+        // Zrevrange entry — never fewer. A genuinely-stale comment on the home
+        // node must still occupy its slot as null rather than being dropped, or
+        // a page containing any stale comment would undercount and the client
+        // would conclude "no more comments" while more still exist (see
+        // get_tweet_feed.js / get_tweets_by_user.js, which had the identical
+        // bug via a different mechanism — an offset-expanding loop instead of a
+        // post-hoc filter).
+        const staleCommentIds = []
         const comments = arr.map(sp => {
-            return lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
-                appuserid: appUserId, tweetid: sp.Member}, [])
+            const commentId = sp.Member
+            const commentResp = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
+                version: 'v2', appuserid: appUserId, tweetid: commentId}, [])
+            const comment = commentResp?.success ? commentResp.data : null
+            if (comment) return comment
+            if (isHomeNode) {
+                staleCommentIds.push(commentId)
+                return null
+            }
+            lapi.Debug("Tweed get_comments: commentId=%s unresolved on tweetId=%s but this is not the home node; keeping stub", commentId, tweetId)
+            return {mid: commentId}
         })
-        // Note: Filter could be added here to remove null/undefined results
-        // .filter(e=> e)
+
+        // Best-effort: a failure anywhere in this cleanup must not break the
+        // comments response, since the comment list was already built above.
+        if (isHomeNode && staleCommentIds.length > 0) {
+            try {
+                const authSid = lapi.BELoginAsAuthor()
+                const writeSid = lapi.MMOpen(authSid, tweetId, "cur")
+                staleCommentIds.forEach(commentId => {
+                    lapi.Warn("Tweed get_comments: removing stale commentId=%s from tweetId=%s", commentId, tweetId)
+                    lapi.Zrem(writeSid, COMMENT_LIST, commentId)
+                })
+                lapi.Warn("Tweed get_comments: removed %d stale commentId(s) from tweetId=%s, page=%d",
+                    staleCommentIds.length, tweetId, pageNumber)
+                lapi.MMBackup(writeSid, tweetId, "", "delref=true")
+                lapi.MiMeiPublish(authSid, "", tweetId)
+            } catch (e) {
+                lapi.Error("Tweed get_comments: failed to remove stale commentIds for tweetId=%s: %s", tweetId, e)
+            }
+        }
+
         return wrapResponse(comments)
     } catch(e) {
         // ========================================================================

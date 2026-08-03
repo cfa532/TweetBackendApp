@@ -18,6 +18,7 @@
  * @param {string} request.tweetid - ID of tweet being bookmarked
  * @param {string} request.authorid - ID of tweet author
  * @param {string} request.userhostid - Host ID of the user
+ * @param {boolean|string} [request.isbookmarked] - Desired state; omitted for legacy toggle behavior
  * @param {Array} args - Additional arguments (unused)
  * @returns {Object} Updated tweet and user data with bookmark status
  */
@@ -33,6 +34,9 @@
     const tweetId = request["tweetid"]  // ID of tweet being bookmarked
     const authorId = request["authorid"]  // ID of tweet author
     const userHostId = request["userhostid"]  // Host ID of the user
+    const hasRequestedBookmarkState = Object.prototype.hasOwnProperty.call(request, "isbookmarked")
+        && request["isbookmarked"] !== null && request["isbookmarked"] !== undefined
+    const requestedBookmarkState = request["isbookmarked"] === true || request["isbookmarked"] === "true"
     
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
@@ -77,11 +81,12 @@
             // Delegate bookmark management to the node hosting the author
             let ret
             try {
-                ret = lapi.RunMApp("toggle_bookmark", {aid: APP_ID, ver: "last",
+                const remoteRequest = {aid: APP_ID, ver: "last",
                     nid: author.hostIds[0], sid: systemSid, userhostid: userHostId,
                     version: version,
-                    userid: userId, authorid: authorId, tweetid: tweetId}, []
-                )
+                    userid: userId, authorid: authorId, tweetid: tweetId}
+                if (hasRequestedBookmarkState) remoteRequest.isbookmarked = requestedBookmarkState
+                ret = lapi.RunMApp("toggle_bookmark", remoteRequest, [])
             } catch(e) {
                 lapi.Error("Tweed toggle_bookmark: Failed to call toggle_bookmark on remote node %s: %s, userId=%s, tweetId=%s", author.hostIds[0], e, userId, tweetId)
                 throw e
@@ -109,14 +114,20 @@
             // ================================================================
             
             // Toggle bookmark status in the tweet's bookmark list
-            const updatedTweet = toggleBookmarkOfTweet(userId, authorId, tweetId)
+            const updatedTweet = updateBookmarkOfTweet(
+                userId,
+                authorId,
+                tweetId,
+                hasRequestedBookmarkState ? requestedBookmarkState : null
+            )
             
             // Toggle the bookmark of the tweet in appUser's node
             let updatedUser
             try {
                 updatedUser = lapi.RunMApp("toggle_bookmark_by_user", {aid: APP_ID, ver: "last",
                     nid: userHostId, sid: systemSid,
-                    userid: userId, tweetid: tweetId, isbookmarked: updatedTweet.favorites[1]}, []
+                    userid: userId, tweetid: tweetId, isbookmarked: updatedTweet.favorites[1],
+                    skipcontentsync: userHostId === nodeId}, []
                 )
             } catch(e) {
                 lapi.Error("Tweed toggle_bookmark: Failed to call toggle_bookmark_by_user: %s, userId=%s, tweetId=%s", e, userId, tweetId)
@@ -146,10 +157,11 @@
      * @param {string} tweetId - ID of tweet being bookmarked
      * @returns {Object|null} Updated tweet object or null if error
      */
-    function toggleBookmarkOfTweet(
+    function updateBookmarkOfTweet(
         appUserId,     // AppUser who bookmarks the tweet 
         authorId,      // Author of the tweet
         tweetId,       // ID of tweet being bookmarked
+        requestedState // null for legacy toggle behavior
     ) {
         // Update bookmark list of a tweet
         try {
@@ -157,29 +169,32 @@
             const tweetSid = lapi.MMOpen(authSid, tweetId, "cur")  // Open tweet for editing
             
             // Check if user has already bookmarked this tweet
-            const hasMarked = lapi.Hget(tweetSid, BOOKMARK_LIST, appUserId) ? true : false
+            const wasBookmarked = lapi.Hget(tweetSid, BOOKMARK_LIST, appUserId) ? true : false
+            const isBookmarked = requestedState === null ? !wasBookmarked : requestedState
+            const bookmarkChanged = isBookmarked !== wasBookmarked
             
-            if (hasMarked) {
-                // Remove bookmark if already bookmarked
-                lapi.Hdel(tweetSid, BOOKMARK_LIST, appUserId)
-            } else {
-                // Add bookmark with timestamp
-                lapi.Hset(tweetSid, BOOKMARK_LIST, appUserId, Date.now())
+            if (bookmarkChanged) {
+                if (isBookmarked) {
+                    lapi.Hset(tweetSid, BOOKMARK_LIST, appUserId, Date.now())
+                } else {
+                    lapi.Hdel(tweetSid, BOOKMARK_LIST, appUserId)
+                }
+
+                // Update tweet data and publish changes
+                lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
+                lapi.MiMeiPublish(tweetSid, "", tweetId)
+
+                // Update the score of the user in AppData
+                lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
+                    userid: authorId, mid: tweetId}, []
+                )
             }
             
-            // Update tweet data and publish changes
-            lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
-            lapi.MiMeiPublish(tweetSid, "", tweetId)
-    
-            // Update the score of the user in AppData
-            lapi.RunMApp("node_update_score", {aid: APP_ID, ver:"last",
-                userid: authorId, mid: tweetId}, []
-            )
-            
             // Return updated tweet
-            return lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
-                tweetid: tweetId, appuserid: appUserId}, []
+            const tweetResp = lapi.RunMApp("get_tweet", {aid: APP_ID, ver: "last",
+                version: 'v2', tweetid: tweetId, appuserid: appUserId}, []
             )
+            return tweetResp?.success ? tweetResp.data : null
         } catch(e) {
             lapi.Error("Tweed toggle_bookmark: Error toggleBookmarkOfTweet: %s, request=%s", e, JSON.stringify(request))
             return null

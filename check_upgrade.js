@@ -28,6 +28,11 @@
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
         if (version === 'v2') {
+            // If result already has success field (e.g. delegated RunMApp call),
+            // return as-is to avoid double-wrapping.
+            if (result && typeof result === 'object' && 'success' in result) {
+                return result
+            }
             return {success: true, data: result}
         }
         return result
@@ -66,10 +71,10 @@
          */
         let ret = {
             // Dynamic version from package: appVersion.Versions[appVersion.Versions.length-1].Version
-            version: 57,  // Set larger than defaultConfig.versionName in build.gradle to force upgrade
+            version: 71,  // Set larger than defaultConfig.versionName in build.gradle to force upgrade
             packageId: mid,  // Must match the mid of installation package created by upload_package.js
             mission: "minor",  // App stops working without upgrade (minor, major, critical)
-            domain: "t1.www333.store",  // Base URL for deeplinks and sharing
+            domain: "t2.www333.store",  // Base URL for deeplinks and sharing
         }
         
         lapi.Debug("Tweed check_upgrade: %s", JSON.stringify(ret))

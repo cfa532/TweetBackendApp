@@ -1,16 +1,17 @@
 /**
  * Get Tweets By User Function
- * 
+ *
  * This function retrieves a paginated list of tweets from a specific user.
  * It includes privacy filtering and handles retweets with original tweet collection.
- * 
+ *
  * Key Features:
  * - Paginated tweet retrieval for a specific user
  * - Privacy filtering (hides private tweets from non-authors)
  * - Handles retweets with original tweet collection
  * - Reverse chronological ordering (newest first)
  * - Returns both tweets and original tweets for retweets
- * 
+ * - Cleans up stale tweet IDs from all user lists when appuserid === userid
+ *
  * @param {Object} request - The request object containing query parameters
  * @param {string} request.aid - Application ID
  * @param {string} request.userid - ID of user whose tweets to retrieve
@@ -24,9 +25,9 @@
     // ============================================================================
     // CONSTANTS AND INITIALIZATION
     // ============================================================================
-    
+
     const version = request.version || ""  // Version identifier for API compatibility
-    
+
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
         if (version === 'v2') {
@@ -38,7 +39,7 @@
         }
         return result
     }
-    
+
     // Helper function to wrap error response in v2 format if needed
     function wrapError(error) {
         if (version === 'v2') {
@@ -46,65 +47,157 @@
         }
         return {success: false, error: error.message}
     }
-    
+
     try {
         const TWT_LIST_KEY = "list_of_tweets_mid"  // Redis key for user's tweet list
+
         const pageNum = parseInt(request["pn"], 10)  // Page number (0-based)
         const pageSize = parseInt(request["ps"], 10)  // Number of tweets per page
-        const startRank = pageNum * pageSize  // Starting index for pagination (inclusive)
-        // Zrevrange start/stop are both inclusive — use startRank + pageSize - 1 so each page has exactly `pageSize` members (not pageSize+1, and no duplicate boundary with the next page).
-        const endRank = startRank + pageSize - 1
-        const userId = request["userid"]  // ID of user whose tweets to retrieve
-        const appUserId = request["appuserid"]  // ID of user requesting the tweets
-        const mmsid = lapi.MMOpen("", userId, "last")  // Open user's memory space
+        const userId = request["userid"]              // ID of user whose tweets to retrieve
+        const appUserId = request["appuserid"]        // ID of user requesting the tweets
+
+        const mmsid = lapi.MMOpen("", userId, "last")  // Read-only: latest version
 
         // ========================================================================
-        // MAIN EXECUTION
+        // WRITE SESSION (home node only — needed to clean up stale entries)
         // ========================================================================
-        
-        // Get tweets in reverse chronological order (newest first)
-        const arr = lapi.Zrevrange(mmsid, TWT_LIST_KEY, startRank, endRank)
-        
-        // Convert tweet IDs to full tweet objects with privacy filtering
-        let tweets = arr.map(sp => {
+
+        // Only safe to delete stale tweetIds from userId's lists when this node
+        // is confirmed to be userId's write/home node (hostIds[0]) — deleting
+        // from a stale replica would not be authoritative. Not gated on the
+        // requester being the owner: any caller can trigger this cleanup.
+        // Failure here must not break the list response itself (backward compat
+        // with callers that predate this cleanup), so it's isolated in its own
+        // try/catch and simply falls back to skipping cleanup.
+        let isHomeNode = false
+        try {
+            const owner = lapi.RunMApp("get_user_core_data", {aid: request["aid"], ver: "last",
+                userid: userId}, [])
+            isHomeNode = !!(owner?.hostIds?.[0] && owner.hostIds[0] === owner.hostIds[1])
+        } catch (e) {
+            lapi.Error("Tweed get_tweets_by_user: get_user_core_data failed for userId=%s: %s", userId, e)
+        }
+
+        let authSid = null
+        let userSid = null
+        if (isHomeNode) {
+            try {
+                authSid = lapi.BELoginAsAuthor()
+                userSid = lapi.MMOpen(authSid, userId, "cur")
+            } catch (e) {
+                lapi.Error("Tweed get_tweets_by_user: failed to open write session for userId=%s: %s", userId, e)
+                authSid = null
+                userSid = null
+                isHomeNode = false
+            }
+        }
+
+        // ========================================================================
+        // MAIN EXECUTION — one bounded Zrevrange, one output slot per raw entry
+        // ========================================================================
+        //
+        // PAGINATION CONTRACT (see HproseInstance.fetchUserTweets doc comment): the
+        // client infers "more pages exist" purely from response array LENGTH vs
+        // pageSize, not from how many entries were actually valid. That only holds
+        // if this array always reflects exactly what Zrevrange found in [offset,
+        // offset+pageSize-1] at query time — one slot per raw entry, null for
+        // anything that doesn't resolve to a visible tweet (stale/private), never
+        // fewer slots than were actually scanned.
+        //
+        // A prior version of this function instead looped, expanding the scan
+        // window to keep pulling more batches until it had a full page of VALID
+        // tweets, silently dropping stale/private ones instead of emitting a null
+        // for them. Combined with the stale-tweet Zrem cleanup below — which
+        // permanently shifts down the rank of every later item in the sorted set
+        // — each request's offset (pageNum * pageSize, computed fresh client-side
+        // with no knowledge of prior requests' Zrem calls) could drift out of sync
+        // with the true remaining content, producing a false "end of list" long
+        // before the user's tweets actually ran out (see get_tweet_feed.js, which
+        // had the identical bug). Single bounded batch + null placeholders
+        // side-steps this: since we only report on the exact range requested and
+        // never depend on rank stability across requests, the array length only
+        // ever reflects that single request's Zrevrange result.
+        const offset = pageNum * pageSize  // Start rank within the sorted set
+        const batch = lapi.Zrevrange(mmsid, TWT_LIST_KEY, offset, offset + pageSize - 1) || []
+
+        const originalTweets = []
+        const validTweetIds = []
+        const staleTweetIds = []
+
+        const tweets = batch.map(sp => {
             const tweetId = sp.Member
-            const tweet = lapi.RunMApp("get_tweet", {aid: request["aid"], ver:"last",
-                appuserid: appUserId, tweetid: tweetId}, [])
-            
-            // Hide private tweets from non-authors
-            if (tweet && tweet.isPrivate === true && appUserId !== tweet.authorId) {
+            if (!tweetId) return null
+
+            const tweetResp = lapi.RunMApp("get_tweet", {aid: request["aid"], ver: "last",
+                version: 'v2', appuserid: appUserId, tweetid: tweetId}, [])
+            const tweet = tweetResp?.success ? tweetResp.data : null
+
+            if (!tweet) {
+                // Tweet no longer exists — queue for removal from userId's lists,
+                // but still occupy this slot with null so the response length
+                // matches what was actually scanned.
+                if (isHomeNode) staleTweetIds.push(tweetId)
                 return null
             }
+
+            // Hide private tweets from non-authors (not stale — skip without
+            // removing), but still occupy the slot.
+            if (tweet.isPrivate === true && appUserId !== tweet.authorId) return null
+
+            validTweetIds.push(tweetId)
+
+            // Collect original tweet for retweets
+            if (tweet.originalTweetId) {
+                const origResp = lapi.RunMApp("get_tweet", {aid: request["aid"], ver: "last",
+                    version: 'v2', appuserid: appUserId, tweetid: tweet.originalTweetId}, [])
+                const origTweet = origResp?.success ? origResp.data : null
+                if (origTweet) originalTweets.push(origTweet)
+            }
+
             return tweet
         })
-        
-        // Collect original tweets for retweets (tweets with originalTweetId)
-        let originalTweets = []
-        tweets.forEach(tweet => {
-            if (tweet && tweet.originalTweetId) {
-                const originalTweet = lapi.RunMApp("get_tweet", {
-                    aid: request["aid"], 
-                    ver: "last",
-                    appuserid: appUserId, 
-                    tweetid: tweet.originalTweetId
-                }, [])
-                if (originalTweet) {
-                    originalTweets.push(originalTweet)
-                }
+
+        // Remove stale tweet IDs from all user lists. Best-effort: a failure
+        // here must not break the list response, since tweets were already
+        // fetched successfully above. Safe to do after building `tweets` since
+        // the response no longer depends on rank stability post-cleanup.
+        let didModify = false
+        if (isHomeNode && userSid && staleTweetIds.length > 0) {
+            try {
+                staleTweetIds.forEach(tweetId => {
+                    lapi.Warn("Tweed get_tweets_by_user: removing stale tweetId=%s from user lists, userId=%s", tweetId, userId)
+                    lapi.Zrem(userSid, TWT_LIST_KEY, tweetId)
+                })
+                didModify = true
+                lapi.Warn("Tweed get_tweets_by_user: removed %d stale tweetId(s) from user lists, userId=%s, page=%d",
+                    staleTweetIds.length, userId, pageNum)
+            } catch (e) {
+                lapi.Error("Tweed get_tweets_by_user: failed to remove stale tweetIds for userId=%s: %s", userId, e)
             }
-        })
-        
+        }
+
+        // Persist and publish user data if any stale entries were removed.
+        // Best-effort: a failure here must not break the list response.
+        if (didModify) {
+            try {
+                lapi.MMBackup(userSid, userId, "", "delref=true")
+                lapi.MiMeiPublish(authSid, "", userId)
+            } catch (e) {
+                lapi.Error("Tweed get_tweets_by_user: failed to persist/publish cleanup for userId=%s: %s", userId, e)
+            }
+        }
+
         return wrapResponse({
             success: true,
             tweets: tweets,
             originalTweets: originalTweets,
-            tidList: arr.map(sp => sp.Member)
+            tidList: validTweetIds
         })
     } catch(e) {
         // ========================================================================
         // ERROR HANDLING
         // ========================================================================
-        
+
         lapi.Error("Tweed Error get_tweets_by_user: %s, request=%s", e, JSON.stringify(request))
         return wrapError(e)
     }

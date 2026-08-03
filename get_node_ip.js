@@ -175,13 +175,15 @@
         if (ip.startsWith('[')) {
             return isPrivateIPv6(ip);
         }
-        // Split out port if present
-        const ipPart = ip.split(':')[0];
-        if (ipPart.includes(':')) {
-            // IPv6 without brackets
-            return isPrivateIPv6(ipPart);
+        // IPv6 without brackets. extractIPAndPort() passes bracketed IPv6 here
+        // without brackets, so check for multiple colons before stripping ports.
+        const colonCount = (ip.match(/:/g) || []).length;
+        if (colonCount > 1) {
+            return isPrivateIPv6(ip);
         }
-        // IPv4
+
+        // IPv4, with or without port.
+        const ipPart = ip.split(':')[0];
         return isPrivateIPv4(ipPart);
     }
 
