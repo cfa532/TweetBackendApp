@@ -47,7 +47,7 @@
     }
     
     try {
-        const APP_ID = request["aid"]  // Application ID assigned by Leither upon publication
+        const APP_ID = request.aid  // Application ID assigned by Leither upon publication
         const APP_EXT = "com.example.twitterclone"  // Application extension identifier
         const APP_MARK = "package upgrade download"  // Mark for upgrade package identification
 
@@ -77,7 +77,7 @@
             domain: "t2.www333.store",  // Base URL for deeplinks and sharing
         }
         
-        lapi.Debug("Tweed check_upgrade: %s", JSON.stringify(ret))
+        lapi.Debug("Tweed check_upgrade: %s.", JSON.stringify(ret))
         return wrapResponse(ret)
     } catch(e) {
         // ========================================================================
