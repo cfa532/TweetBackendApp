@@ -99,7 +99,7 @@
                     hostid: hostId,
                     appuserid: userId
                 }, [])
-                lapi.Debug("Tweed update_following_tweets: ret from home host %s", JSON.stringify(ret))
+                lapi.Debug("Tweed update_following_tweets: home host %s", JSON.stringify(ret))
             }
             
             // Get the updated appUser score from appUser.hostIds[0].
