@@ -77,7 +77,7 @@
             domain: "t1.www3.shop",  // Base URL for deeplinks and sharing
         }
         
-        lapi.Debug("Tweed check_upgrade: %s.", JSON.stringify(ret))
+        lapi.Debug("Tweed check_upgrade: %s", JSON.stringify(ret))
         return wrapResponse(ret)
     } catch(e) {
         // ========================================================================
