@@ -199,6 +199,8 @@
                     // Create reference to original tweet and sync it locally
                     // Note: Original tweet may not be available if deleted or on unreachable node
                     lapi.MMAddRef(authSid, authorId, tweet.originalTweetId)
+
+                    // If original tweet is on the same node, MimeiSync will throw an error.
                     lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
                     lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
                 } catch(e) {

@@ -47,7 +47,7 @@
     }
     
     try {
-        const APP_ID = request["aid"]  // Application ID assigned by Leither upon publication
+        const APP_ID = request.aid  // Application ID assigned by Leither upon publication
         const APP_EXT = "com.example.twitterclone"  // Application extension identifier
         const APP_MARK = "package upgrade download"  // Mark for upgrade package identification
 
@@ -71,10 +71,10 @@
          */
         let ret = {
             // Dynamic version from package: appVersion.Versions[appVersion.Versions.length-1].Version
-            version: 71,  // Set larger than defaultConfig.versionName in build.gradle to force upgrade
+            version: 72,  // Set larger than defaultConfig.versionName in build.gradle to force upgrade
             packageId: mid,  // Must match the mid of installation package created by upload_package.js
             mission: "minor",  // App stops working without upgrade (minor, major, critical)
-            domain: "t2.www333.store",  // Base URL for deeplinks and sharing
+            domain: "t1.www3.shop",  // Base URL for deeplinks and sharing
         }
         
         lapi.Debug("Tweed check_upgrade: %s", JSON.stringify(ret))

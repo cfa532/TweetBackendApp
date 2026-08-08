@@ -34,6 +34,7 @@
     const userId = request["userid"]          // actor: the user who is following/unfollowing the followingId
     const followingId = request["followingid"]        // target: the user to follow or unfollow
     const followingHostId = request["followingid_hostid"] || null  // host node of followingId (optional hint)
+    let stage = "initialize"
     
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
@@ -76,15 +77,18 @@
     
     try {
         // Initialize system session and get current node information
+        stage = "open app data node"
         const systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
         const nodeId = lapi.GetVar("", "hostid")  // Current node identifier
         let user
         try {
+            stage = "load actor user"
             user = getUser(userId)  // Get user data to determine hosting node
         } catch(e) {
             lapi.Error("Tweed toggle_following: getUser failed for userId %s, will try hostId hint: %s", userId, e)
         }
-        lapi.Debug("Tweed toggle_following: user=%s toggle %s on host=%s", JSON.stringify(user), followingId, followingHostId)
+        lapi.Debug("Tweed toggle_following: user=%s toggle %s on host=%s",
+            JSON.stringify(getUserForLog(user)), followingId, followingHostId)
         const userHostId = (Array.isArray(user?.hostIds) && user.hostIds.length > 0)
             ? user.hostIds[0]
             : (request.userid_hostid || null)  // fallback: caller-supplied hint (e.g. post-register auto-follow)
@@ -129,11 +133,14 @@
             // LOCAL USER HANDLING
             // ====================================================================
             
+            stage = "login as author"
             const authSid = lapi.BELoginAsAuthor()
 
             // Get the user to be followed/unfollowed
+            stage = "load target user"
             let followedUser = getUser(followingId)
-            lapi.Debug("Tweed toggle_following: followed user=%s with id=%s", JSON.stringify(followedUser), followingId)
+            lapi.Debug("Tweed toggle_following: followed user=%s with id=%s",
+                JSON.stringify(getUserForLog(followedUser)), followingId)
             if (!followedUser) {
                 // Target user not available locally - attempt to sync; use known host nid if available
                 try {
@@ -164,7 +171,9 @@
             // ====================================================================
             
             // Check if the target user is already in the following list
+            stage = "open actor snapshot"
             let userSid = lapi.MMOpen(authSid, userId, "last")
+            stage = "read following relationship"
             const isFollowing = lapi.Hget(userSid, FOLLOWINGS_LIST, followingId) ? true : false
             if (isFollowing) {
                 // ================================================================
@@ -177,7 +186,7 @@
                 const tweetsResult = lapi.RunMApp("get_tweet_id_list",
                     {aid: APP_ID, ver: "last", userid: followingId}, [])
                 const midList = Array.isArray(tweetsResult)
-                    ? tweetsResult.map(e => e.Member).filter(Boolean)
+                    ? tweetsResult.slice(0, 20).map(e => e.Member).filter(Boolean)
                     : []
                 
                 // Remove all their tweets from the following feed
@@ -216,32 +225,52 @@
                 lapi.Debug("Tweed toggle_following: %s following %s, host: %s, node: %s", userId, followingId, hostOfOther, nodeId)
                 
                 // Get all existing tweets from the user being followed
+                stage = "fetch target tweet list"
+                lapi.Debug("Tweed toggle_following: stage=%s target=%s targetHost=%s",
+                    stage, followingId, hostOfOther)
                 const tweetsResult = lapi.RunMApp("get_tweet_id_list", {aid: APP_ID, ver: "last",
                     nid: hostOfOther, sid: systemSid,
-                    version: version, userid: followingId
+                    userid: followingId
                 }, [])
-                const scorepairs = Array.isArray(tweetsResult)
+                lapi.Debug("Tweed toggle_following: target tweet list returned type=%s isArray=%s success=%s dataIsArray=%s count=%s message=%s",
+                    typeof tweetsResult,
+                    String(Array.isArray(tweetsResult)),
+                    String(tweetsResult?.success),
+                    String(Array.isArray(tweetsResult?.data)),
+                    String(Array.isArray(tweetsResult) ? tweetsResult.length :
+                        (Array.isArray(tweetsResult?.data) ? tweetsResult.data.length : -1)),
+                    tweetsResult?.message || "")
+                stage = "validate target tweet list"
+                const allScorepairs = Array.isArray(tweetsResult)
                     ? tweetsResult
                     : (tweetsResult?.success === true && Array.isArray(tweetsResult.data)
                         ? tweetsResult.data
                         : null)
-                if (!scorepairs) {
+                if (!allScorepairs) {
                     throw new Error(tweetsResult?.message || "Invalid tweet list response")
                 }
+                const scorepairs = allScorepairs.slice(0, 20)
 
                 // Persist the relationship and its initial feed entries together
                 // only after the target user's tweet list was loaded successfully.
+                stage = "open actor for update"
                 userSid = lapi.MMOpen(authSid, userId, "cur")
+                stage = "store following relationship"
                 lapi.Hset(userSid, FOLLOWINGS_LIST, followingId, Date.now())
                 
                 // Add all their tweets to the following feed
                 if (scorepairs.length > 0) {
+                    stage = "store initial following feed"
                     lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...scorepairs)
                 }
                 
                 // Backup user data and publish changes
+                stage = "backup actor user"
                 lapi.MMBackup(userSid, userId, "", "delref=true")
+                stage = "publish actor user"
                 lapi.MiMeiPublish(authSid, "", userId)
+                lapi.Debug("Tweed toggle_following: relationship persisted actor=%s target=%s tweetCount=%s",
+                    userId, followingId, String(scorepairs.length))
 
                 // Sync and provide the target user's content locally
                 try {
@@ -265,6 +294,7 @@
             }
     
             // Update the user's score in the application data
+            stage = "update actor score"
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver: "last",
                 userid: userId, mid: userId}, [])
             
@@ -272,7 +302,8 @@
             return wrapResponse(!isFollowing)
         }
     } catch(e) {
-        lapi.Error("Tweed Error toggle_following: %s, request=%s", e, JSON.stringify(request))
+        lapi.Error("Tweed Error toggle_following: stage=%s, message=%s, stack=%s, error=%s, request=%s",
+            stage, getErrorMessage(e), getErrorStack(e), safeStringify(e), JSON.stringify(request))
         return wrapError(e)
     }
 
@@ -294,5 +325,40 @@
             lapi.Error("Tweed toggle_following: getUser failed for mid=%s: %s", mid, e)
             throw e
         }
+    }
+
+    function getErrorMessage(error) {
+        try {
+            return error?.message || String(error)
+        } catch(e) {
+            return "Unable to read error message"
+        }
+    }
+
+    function getErrorStack(error) {
+        try {
+            return error?.stack || ""
+        } catch(e) {
+            return ""
+        }
+    }
+
+    function safeStringify(value) {
+        try {
+            return JSON.stringify(value)
+        } catch(e) {
+            return String(value)
+        }
+    }
+
+    function getUserForLog(user) {
+        if (!user || typeof user !== "object") {
+            return user
+        }
+        const logUser = {...user}
+        if ("password" in logUser) {
+            logUser.password = "[redacted]"
+        }
+        return logUser
     }
 })(request, args)
