@@ -28,4 +28,4 @@ require (
 	golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9 // indirect
 )
 
-replace Leither/lapi => github.com/3and4/Leither/lapi v0.1.1
+replace Leither/lapi => github.com/3and4/Leither/lapi v0.1.2-0.20260809182914-6f6d213c1ab3

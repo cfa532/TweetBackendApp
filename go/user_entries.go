@@ -86,7 +86,7 @@ func entryRegister(c *ctx) (any, error) {
 	}
 	raw, err := c.obj("user")
 	if err != nil {
-		c.errorf("Invalid user JSON: %s", c.str("user"))
+		c.errorf("Invalid user JSON: %s", redactParam("user", c.str("user")))
 		return fail(fmt.Errorf("Invalid user data format")), nil
 	}
 	user := userObj(raw)
@@ -97,7 +97,7 @@ func entryRegister(c *ctx) (any, error) {
 	user["hostIds"] = strSlice(cleanHostIDs(user.hostIDs()))
 
 	nodeID := c.nodeID()
-	c.debugf("nodeId=%s, user=%s", nodeID, c.str("user"))
+	c.debugf("nodeId=%s, user=%s", nodeID, redactParam("user", c.str("user")))
 
 	// The account is created here. Clients pick the node they want to register
 	// on and call it directly, so a request that arrives here is meant for here.

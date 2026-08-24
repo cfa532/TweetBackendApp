@@ -41,6 +41,9 @@ cd go && go build ./...
 `go.mod` exists only for that check. It maps the import path the interpreter
 provides, `Leither/lapi`, onto the published module `github.com/3and4/Leither/lapi`.
 Leither generates its own manifest at upload time and does not read `go.mod`.
+The same rule applies to the other interpreter-provided packages listed below:
+local tooling may need ordinary module requirements, but the deployed MApp must
+import the exact paths registered by Leither.
 
 ## Deploying
 
@@ -54,23 +57,19 @@ the directory must stay `twbe` to keep the same AppID.
 cd ~/demo && ./twbe.sh
 ```
 
-Verified working on Leither **V0.23.95**. Five things about this platform are not
-in the published docs and were each found the hard way:
+Verified on Leither **V0.23.95** and re-verified on **V0.24.02**.
 
-**1. The app directory must contain no `.js` files.** Leither builds the app's
-entry list from the `.js` basenames it finds, *recursively* — including a
-`mmroot/` subdirectory. With any present, the router rejects every request with
-`unknown entry` before `RunMApp` is ever called, even though `--dry-run` reports
-`type=go`. Confirm with:
+V0.24.02 renamed CLI flags. `runapp` lost the `-v` shorthand (use `--app-ver`),
+`mimei publish` documents `--mid <mid>` (the positional form still works, so
+`twbe.sh` is unaffected), and `lapp release` uses `--app-ver`. Six things about
+this platform are not in the published docs and were each found the hard way:
 
-```bash
-./Leither lpki runapp --local ./twbe health --dry-run -a gen8.key
-```
-
-`Available entries: []` is what a Go MApp should show. The static assets that
-used to live alongside the JS (`index.html`, `bootstrap.min.js`, …) are parked in
-`~/demo/deploy-backups/twbe-static-assets/`; they cannot be served from this app
-directory any more.
+**1. `.js` files alongside the Go sources — fixed in V0.24.02.** On V0.23.95,
+Leither built the entry list from `.js` basenames found recursively (including
+`mmroot/`) and rejected every request with `unknown entry` before `RunMApp` ran.
+On V0.24.02 the Go dispatcher answers correctly even while `--dry-run` still
+lists the JS basenames, so the web assets (`index.html`, `bootstrap.min.js`, …)
+now live in `twbe/` beside the Go sources, which is what the site needs.
 
 **2. `ver=cur` serves a stale compile.** After an upload, `cur` kept running the
 previous build while the source on disk was current. Numbered versions and `last`
@@ -97,8 +96,25 @@ result to legacy callers, so an error otherwise arrives as a bare `<nil>`.
 local-mode limit only — it works in container mode. Test those with `--id`:
 
 ```bash
-./Leither lpki runapp --id d4lRyhABgqOnqY4bURSm_T-4FZ4 check_upgrade -v last -a gen8.key
+./Leither lpki runapp --id d4lRyhABgqOnqY4bURSm_T-4FZ4 check_upgrade --app-ver last -a gen8.key
 ```
+
+**6. A request with no entry is the web root, not an error.** When a browser
+opens the domain, Leither renders `~/demo/temp.html` (a Go template filled with
+`{{.MID}}` and the provider `{{.Addrs}}`), and the page then fetches
+`/mm/<mid>:last/` from the fastest provider. Alongside that, the application is
+called with **no entry at all** — the request carries `mid`, `ver`, `author` and
+browser headers only. The JavaScript app satisfied this implicitly; a Go MApp
+dispatching from a table must handle it, or the browser gets
+`unknown entry ""` instead of the site. `serveWebRoot` in `main.go` answers it.
+
+**7. Request parameters must not be logged verbatim.** The JavaScript entries
+logged `JSON.stringify(request)` on every failure, which wrote the plaintext
+password to the node log on a failed login and a failed profile update (it
+travels as its own parameter and inside the `user` blob). `requestJSON` in
+`runtime.go` redacts `password`, the password inside `user`, and the `signature`
+inside `agentAuth` before logging. Note the node itself still logs stored records
+through `[p2p] SyncMDBKVData`, which is outside this app's control.
 
 ### Verified on the live node
 
@@ -213,17 +229,44 @@ layer consumes it, so `RunMApp`'s `Entry` argument is empty and the real name is
 in `Request["entry"]`; `--local` passes it positionally. `main.go` reads both.
 This was the single blocking bug for HTTP serving.
 
-### 4. Standard library assumptions
+### 4. Interpreter-provided packages
 
-The interpreter provides only part of the standard library. `unicode/utf16` is
-**absent** — confirmed by a failed compile on the node — so `json.go` spells out
-surrogate-pair handling itself. The code uses only `fmt`, `io`, `errors`,
-`strings`, `strconv`, `sort` and `time`. JSON and base64 are hand-written
-(`json.go`, `base64.go`) rather than taken from `encoding/json` and
-`encoding/base64`, and no `net/http` or `crypto/*` is used anywhere. If the
-deployed interpreter does provide the full standard library, `json.go` and
-`base64.go` can be swapped for the stdlib versions with no change elsewhere —
-`jsonParse`, `jsonStringify` and `base64Decode` are the only entry points.
+Leither does not expose an unrestricted Go module environment. Its ixgo runtime
+registers an allowlist of packages that MApp source may import. In addition to
+the small standard-library set already exercised by this port (`errors`, `fmt`,
+`io`, `sort`, `strconv`, `strings`, and `time`), the following imports are
+confirmed available:
+
+| Import path | Conventional alias | Purpose |
+|-------------|--------------------|---------|
+| `bytes` | `bytes` | Byte buffers and readers |
+| `encoding/gob` | `gob` | Go value encoding used by typed Leither results |
+| `fmt` | `fmt` | Formatting and errors |
+| `io` | `io` | Stream interfaces and helpers |
+| `net/http` | `http` | HTTP clients, requests, responses, and handlers exposed by the runtime |
+| `os` | `os` | Runtime-exposed operating-system types and operations |
+| `strings` | `strings` | String processing |
+| `time` | `time` | Time values and durations |
+| `Leither/lapi` | `lapi` | Leither's in-container API surface |
+| `github.com/hprose/hprose-golang/v3/rpc/core` | `core` | Hprose RPC core types |
+| `github.com/hprose/hprose-golang/v3/rpc/websocket` | `websocket` | Hprose WebSocket transport |
+| `github.com/shirou/gopsutil/disk` | `disk` | Disk statistics exposed to the interpreter |
+| `github.com/shirou/gopsutil/mem` | `mem` | Memory statistics exposed to the interpreter |
+
+Package availability means that Leither registers the import; it does not make
+the MApp equivalent to a native Go process. The interpreter restrictions above
+still apply, especially the absence of package-level variable initialisation and
+`init()` execution. Libraries that depend on those mechanisms can import and
+compile yet behave incorrectly, so every required library operation must be
+probed on the deployed Leither version.
+
+Earlier V0.23.95 probes found several common packages missing, including
+`unicode/utf8`, `unicode/utf16`, `encoding/base64`, `crypto/*`, and `regexp`.
+Those results are version-specific. In particular, the earlier conclusion that
+`bytes` and `net/http` were unavailable is superseded by the current confirmed
+allowlist. This backend still keeps its hand-written JSON and base64 adapters to
+avoid changing established behavior; their existence should not be read as the
+current runtime's complete package inventory.
 
 ## Behaviour preserved deliberately
 

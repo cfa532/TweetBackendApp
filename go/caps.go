@@ -21,44 +21,35 @@
 //
 //   - mimeiSync uses BEMMSync, which is on the interface and does the same job.
 //
-// What does NOT work, verified on Leither V0.23.95:
+// What does NOT, re-verified on Leither V0.24.02 by compiling calls against the
+// node's own interpreter-registered lapi:
 //
-//   - Everything else. Act(sid, name, args...) looked like a generic escape
-//     hatch, but it resolves *variables*, not actions: every name tried returns
-//     "5020:Variable names unavailable". There is no in-app substitute either —
-//     net/http and crypto/* are both absent from the interpreter, so these
-//     cannot be reimplemented here.
+//   - All seven remain absent. Act(sid, name, args...) is not a route to them:
+//     it resolves nothing at all, failing even for "ver", a name GetVar answers.
+//     api/VarAct.md marks Act a draft holding 待定 (pending) APIs, so an empty
+//     registry is intended. There is no in-app substitute either — net/http and
+//     crypto/* are absent from the interpreter allowlist.
+//
+// Each function below therefore fails immediately and names the lapi method it
+// wants, rather than attempting a call that cannot succeed. Attempting Act first
+// only cost a round trip per write and logged "5020:Variable names unavailable",
+// which reads like a misconfiguration rather than a missing API. The line above
+// each return shows the single edit that restores the capability.
 //
 // The consequences are real and mostly silent:
 //
 //   - Nothing this app writes is announced to the network. A new tweet, comment
 //     or account is stored and readable on its own node, and invisible to every
-//     other node. Writes still report success.
-//   - The five operations that span two owners (see callRemote) fail outright.
+//     other node. Writes still report success, which matches the guidance in
+//     LEITHER_AND_MIMEI.md §7: commit success and publication success are
+//     separate facts and must be tracked separately.
+//   - The operations that span two owners (see callRemote) fail outright.
 //   - Agent signatures are not verified; see checkSignature in auth.go.
-//
-// These calls are kept, rather than deleted, so the shape of the application is
-// preserved and a single edit here restores full behaviour once the node exposes
-// them. Publishing and providing log and continue; cross-node calls surface the
-// failure.
 package lapp
 
 import (
 	"errors"
 	"fmt"
-	"strings"
-)
-
-// Action names attempted via Act. None currently resolves; they are retained so
-// the intended mapping is documented if Act ever gains them.
-const (
-	actRunMApp         = "runmapp"
-	actMiMeiProvide    = "mimeiprovide"
-	actMiMeiPublish    = "mimeipublish"
-	actMiMeiUnprovide  = "mimeiunprovide"
-	actMiMeiUnpublish  = "mimeiunpublish"
-	actMiMeiIsProvider = "mimeiisprovider"
-	actEd25519Verify   = "ed25519verify"
 )
 
 // capUnsupportedError reports that this node build offers no route to a
@@ -77,35 +68,6 @@ func (e capUnsupportedError) Error() string {
 func isCapUnsupported(err error) bool {
 	var target capUnsupportedError
 	return errors.As(err, &target)
-}
-
-// act invokes a node action, translating a missing action into
-// errCapUnsupported.
-func (c *ctx) act(sid, name string, args ...string) (any, error) {
-	ret, err := c.api.Act(sid, name, args...)
-	if err != nil {
-		if isUnknownAction(err) {
-			return nil, capUnsupportedError{action: name}
-		}
-		return nil, fmt.Errorf("%s: %v", name, err)
-	}
-	return ret, nil
-}
-
-// isUnknownAction recognises the node's "no such action" rejection. The node
-// reports it as an ordinary error, so the text is the only signal available.
-//
-// "variable names unavailable" is the one V0.23.95 actually returns: Act
-// resolves variables, and every capability name here is absent from that
-// namespace. Matching it is what lets callers degrade deliberately instead of
-// treating a missing capability as a transient failure.
-func isUnknownAction(err error) bool {
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "variable names unavailable") ||
-		strings.Contains(msg, "not found") ||
-		strings.Contains(msg, "unknown") ||
-		strings.Contains(msg, "unsupported") ||
-		strings.Contains(msg, "no such")
 }
 
 // ---------------------------------------------------------------------------
@@ -132,22 +94,18 @@ func (c *ctx) callRemote(nodeID, entry string, params map[string]string) (any, e
 		return nil, fmt.Errorf("callRemote(%s): empty target node", entry)
 	}
 	params[reqNodeID] = nodeID
-
-	// Act carries strings only, so the parameter map travels as JSON.
-	payload := make(map[string]any, len(params))
-	for k, v := range params {
-		payload[k] = v
-	}
-	ret, err := c.act(c.sid(), actRunMApp, entry, jsonStringify(payload))
-	if err != nil {
-		return nil, err
-	}
-	return normalizeRemoteResult(ret), nil
+	// When lapi exposes it:
+	//   return normalizeRemoteResult(c.api.RunMApp(entry, params, nil, "nid="+nodeID))
+	return nil, capUnsupportedError{action: "RunMApp(nid=" + nodeID + ", entry=" + entry + ")"}
 }
 
-// normalizeRemoteResult decodes a cross-node reply. A remote node returns
-// the same envelope shape a local call would, but it may arrive as a JSON
-// string depending on the transport.
+// normalizeRemoteResult decodes a cross-node reply. A remote node returns the
+// same envelope shape a local call would, but it may arrive as a JSON string
+// depending on the transport.
+//
+// Currently unreferenced except by the restoration line in callRemote: it is
+// kept because it is needed the moment RunMApp becomes callable, and writing it
+// again from scratch is where a transport-shape bug would creep in.
 func normalizeRemoteResult(ret any) any {
 	if s, ok := ret.(string); ok {
 		if looksLikeJSONObject(s) || looksLikeJSONArray(s) {
@@ -180,35 +138,32 @@ func (c *ctx) mimeiSync(mid string, param map[string]string) error {
 
 // mimeiProvide announces that this node serves a copy of mid.
 func (c *ctx) mimeiProvide(sid, mid string) error {
-	_, err := c.act(sid, actMiMeiProvide, "", mid)
-	return err
+	// When lapi exposes it: _, err := c.api.MiMeiProvide(sid, "", mid); return err
+	return capUnsupportedError{action: "MiMeiProvide"}
 }
 
 // mimeiPublish publishes mid to the DHT so other nodes can discover it.
 func (c *ctx) mimeiPublish(sid, mid string) error {
-	_, err := c.act(sid, actMiMeiPublish, "", mid)
-	return err
+	// When lapi exposes it: _, err := c.api.MiMeiPublish(sid, "", mid); return err
+	return capUnsupportedError{action: "MiMeiPublish"}
 }
 
 // mimeiUnprovide withdraws this node's claim to serve mid.
 func (c *ctx) mimeiUnprovide(sid, mid string) error {
-	_, err := c.act(sid, actMiMeiUnprovide, "", mid)
-	return err
+	// When lapi exposes it: _, err := c.api.MiMeiUnprovide(sid, "", mid); return err
+	return capUnsupportedError{action: "MiMeiUnprovide"}
 }
 
 // mimeiUnpublish withdraws mid from the DHT.
 func (c *ctx) mimeiUnpublish(sid, mid string) error {
-	_, err := c.act(sid, actMiMeiUnpublish, "", mid)
-	return err
+	// When lapi exposes it: _, err := c.api.MiMeiUnpublish(sid, "", mid); return err
+	return capUnsupportedError{action: "MiMeiUnpublish"}
 }
 
 // mimeiIsProvider reports whether this node serves a copy of mid.
 func (c *ctx) mimeiIsProvider(sid, mid string) (bool, error) {
-	ret, err := c.act(sid, actMiMeiIsProvider, mid)
-	if err != nil {
-		return false, err
-	}
-	return toBool(ret), nil
+	// When lapi exposes it: return c.api.MiMeiIsProvider(sid, mid)
+	return false, capUnsupportedError{action: "MiMeiIsProvider"}
 }
 
 // syncBestEffort pulls an object and announces the local copy, logging failures.
@@ -231,9 +186,7 @@ func (c *ctx) syncBestEffort(sid, mid string) {
 //
 // All three arguments are base64url strings, matching what the clients send.
 func (c *ctx) ed25519Verify(publicKey, message, signature string) (bool, error) {
-	ret, err := c.act(c.sid(), actEd25519Verify, publicKey, message, signature)
-	if err != nil {
-		return false, err
-	}
-	return toBool(ret), nil
+	// When lapi exposes it:
+	//   return c.api.Ed25519Verify(publicKey, message, signature)
+	return false, capUnsupportedError{action: "Ed25519Verify"}
 }

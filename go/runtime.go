@@ -201,12 +201,55 @@ func (c *ctx) infof(format string, v ...any)  { c.api.Info(c.logPrefix()+format,
 func (c *ctx) warnf(format string, v ...any)  { c.api.Warn(c.logPrefix()+format, v...) }
 func (c *ctx) errorf(format string, v ...any) { c.api.Error(c.logPrefix()+format, v...) }
 
-// requestJSON renders the request map for error logs, matching the
-// JSON.stringify(request) the JavaScript error handlers logged.
+// requestJSON renders the request map for error logs.
+//
+// Credential material is removed first. The JavaScript version logged
+// JSON.stringify(request) verbatim, which put a plaintext password in the node
+// log on every failed login and every failed profile update — the password
+// travels either as its own parameter or inside the "user" blob. Diagnosis
+// needs the shape of a request, not its secrets.
 func (c *ctx) requestJSON() string {
 	m := make(map[string]any, len(c.req))
 	for k, v := range c.req {
-		m[k] = v
+		m[k] = redactParam(k, v)
 	}
 	return jsonStringify(m)
+}
+
+// redactedMark replaces a secret in a log line.
+const redactedMark = "[redacted]"
+
+// redactParam strips secrets from one request parameter, keeping the rest of
+// the value readable so the log line is still worth having.
+func redactParam(key, value string) string {
+	if value == "" {
+		return value
+	}
+	switch key {
+	case "password":
+		return redactedMark
+	case "user":
+		// A user object carries the password as a field.
+		return redactJSONFields(value, "password")
+	case "agentAuth":
+		// The signature is the agent's authentication material.
+		return redactJSONFields(value, "signature")
+	}
+	return value
+}
+
+// redactJSONFields replaces named fields inside a JSON object parameter. A
+// value that cannot be parsed is redacted whole rather than logged blind, since
+// an unparseable blob may still contain the secret.
+func redactJSONFields(raw string, fields ...string) string {
+	obj, err := jsonParseObject(raw)
+	if err != nil {
+		return redactedMark
+	}
+	for _, f := range fields {
+		if v, ok := obj[f]; ok && v != nil && v != "" {
+			obj[f] = redactedMark
+		}
+	}
+	return jsonStringify(obj)
 }
