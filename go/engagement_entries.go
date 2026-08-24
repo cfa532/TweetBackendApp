@@ -230,7 +230,7 @@ func (c *ctx) toggleEngagementByUser(kind engagementKind) (any, error) {
 	if err == nil {
 		return result, nil
 	}
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	userData, fallbackErr := c.callEntry("get_user_core_data", map[string]string{
 		reqAppID:  c.appID(),
 		reqAppVer: verLast,
@@ -344,7 +344,7 @@ func boolParam(v bool) string {
 // wrapErrString reports an engagement failure. Legacy callers read the message
 // under "error".
 func (c *ctx) wrapErrString(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		out := respErr(err)
 		out["error"] = err.Error()

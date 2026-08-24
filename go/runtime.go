@@ -195,11 +195,24 @@ func (c *ctx) callEntryMap(entry string, params map[string]string) (map[string]a
 
 func (c *ctx) logPrefix() string { return "Tweed " + c.entry + ": " }
 
+// failPrefix marks a request that failed outright, as opposed to a step that
+// went wrong on the way. The JavaScript entries used it in their catch blocks,
+// so "Tweed Error" is the grep that finds failures and only failures. Keeping
+// the two prefixes distinct is what makes that filter useful.
+func (c *ctx) failPrefix() string { return "Tweed Error " + c.entry + ": " }
+
 func (c *ctx) tracef(format string, v ...any) { c.api.Trace(c.logPrefix()+format, v...) }
 func (c *ctx) debugf(format string, v ...any) { c.api.Debug(c.logPrefix()+format, v...) }
 func (c *ctx) infof(format string, v ...any)  { c.api.Info(c.logPrefix()+format, v...) }
 func (c *ctx) warnf(format string, v ...any)  { c.api.Warn(c.logPrefix()+format, v...) }
 func (c *ctx) errorf(format string, v ...any) { c.api.Error(c.logPrefix()+format, v...) }
+
+// failf logs a request that is being abandoned. It is the counterpart of the
+// JavaScript catch blocks and always reports the error with the request that
+// produced it, credentials removed.
+func (c *ctx) failf(err error) {
+	c.api.Error(c.failPrefix()+"%v, request=%s", err, c.requestJSON())
+}
 
 // requestJSON renders the request map for error logs.
 //

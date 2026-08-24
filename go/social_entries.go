@@ -45,7 +45,7 @@ func entryToggleFollowing(c *ctx) (any, error) {
 	// toggle_following predates the version parameter and defaults to v2.
 	enveloped := c.version() == "" || c.isV2()
 	fail := func(err error) any {
-		c.errorf("%v, request=%s", err, c.requestJSON())
+		c.failf(err)
 		if enveloped {
 			return respErr(err)
 		}
@@ -559,7 +559,7 @@ func (c *ctx) recoverUser(userID string) any {
 // wrapErrUsers reports a listing failure with an empty user list, so a client
 // can render it without a nil check.
 func (c *ctx) wrapErrUsers(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		out := respErr(err)
 		out["data"] = map[string]any{"users": []any{}}
@@ -598,7 +598,7 @@ func (c *ctx) relationshipPairs(listKey string) (any, error) {
 
 // wrapErrMap reports a listing failure whose empty value is an object.
 func (c *ctx) wrapErrMap(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		out := respErr(err)
 		out["data"] = map[string]any{}
@@ -680,7 +680,7 @@ func entryBlockUser(c *ctx) (any, error) {
 
 // wrapErrSuccess reports a failure whose legacy shape is a bare success flag.
 func (c *ctx) wrapErrSuccess(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		return respErr(err)
 	}

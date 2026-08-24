@@ -71,7 +71,7 @@ func entryRegister(c *ctx) (any, error) {
 	// register predates the version parameter and treats its absence as v2.
 	enveloped := c.version() == "" || c.isV2()
 	fail := func(err error) any {
-		c.errorf("%v, request=%s", err, c.requestJSON())
+		c.failf(err)
 		if enveloped {
 			return respErr(err)
 		}

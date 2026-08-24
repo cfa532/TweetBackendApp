@@ -221,6 +221,30 @@ start failing with `PoolTimeoutError`. `LEITHER_AND_MIMEI.md` §9.5 describes th
 browser restriction; the fix belongs upstream of it — announcements served to a
 public origin should be filtered to publicly routable addresses.
 
+## P14 — The node logs request credentials in plaintext
+
+Calling an entry with a password writes it to the node log twice, before the
+application runs and regardless of what the application does:
+
+```
+[frame][I] actionEntry /entry?...&username=u&password=wrongpw&version=v2
+[app][D]   RunMApp PreLogin param=map[... password:wrongpw ...]
+```
+
+The first is at **Info**, so it is present in ordinary logs, not just debug. Any
+entry taking a credential as a request parameter is affected — here `login`, and
+`register`/`set_author_core_data`, which carry the password inside a `user` JSON
+blob.
+
+This application now redacts credentials from its own log lines
+(`"password":"[redacted]"`), but that cannot help: the node has already logged
+the plaintext by the time the entry is called. It affects the JavaScript
+implementation identically and always has.
+
+Worth either omitting known-secret parameter names from `actionEntry` and
+`RunMApp PreLogin`, or moving both lines behind a level that production does not
+enable.
+
 ## P11 — Documentation
 
 - Broken links on vzhan.cn (HTTP 500): `doc.html`, `capabilities.html`,

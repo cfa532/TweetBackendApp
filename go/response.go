@@ -75,7 +75,7 @@ func (c *ctx) wrapNotNull(result any, notFound string) any {
 // wrapErr logs and reports a failure to a v2 caller. Legacy callers received no
 // value at all and detected failure by its absence, so nil is returned.
 func (c *ctx) wrapErr(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		return respErr(err)
 	}
@@ -86,7 +86,7 @@ func (c *ctx) wrapErr(err error) any {
 // null would leave a v3 client unable to tell a missing object from a dead
 // connection, and so unable to act on the result.
 func (c *ctx) wrapErrV23(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() || c.isV3() {
 		return respErr(err)
 	}
@@ -96,7 +96,7 @@ func (c *ctx) wrapErrV23(err error) any {
 // wrapErrStatus reports a failure to v2 callers in the envelope and to legacy
 // callers as the status/reason object they expect.
 func (c *ctx) wrapErrStatus(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		return respErr(err)
 	}
@@ -106,7 +106,7 @@ func (c *ctx) wrapErrStatus(err error) any {
 // wrapErrAlways reports a failure in the envelope to every caller, for entries
 // that never had a legacy error shape.
 func (c *ctx) wrapErrAlways(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	return respErr(err)
 }
 

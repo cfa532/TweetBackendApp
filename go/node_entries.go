@@ -294,7 +294,7 @@ func entryGetProviderIP(c *ctx) (any, error) {
 func entryGetProviderIPs(c *ctx) (any, error) {
 	providers, err := c.providerAddresses(c.str(reqMID))
 	if err != nil {
-		c.errorf("%v, request=%s", err, c.requestJSON())
+		c.failf(err)
 		return respErr(err), nil
 	}
 	if providers == nil {
@@ -378,7 +378,7 @@ func (c *ctx) providerAddresses(mid string) ([]providerAddr, error) {
 // wrapErrProvider reports a provider lookup failure; legacy callers read the
 // result as a string and receive an empty one.
 func (c *ctx) wrapErrProvider(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		return respErr(err)
 	}

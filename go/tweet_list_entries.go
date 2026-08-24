@@ -387,7 +387,7 @@ func entryGetTweetsByUser(c *ctx) (any, error) {
 // respErrField reports a timeline failure. Legacy callers received the message
 // under "error" rather than "message".
 func respErrField(c *ctx, err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		return respErr(err)
 	}
@@ -601,7 +601,7 @@ func (c *ctx) wrapPinned(result any) any {
 // wrapErrBool reports a toggle failure. Legacy callers read the result as a
 // boolean, so a failure is reported as false.
 func (c *ctx) wrapErrBool(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		return respErr(err)
 	}
