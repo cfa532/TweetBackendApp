@@ -449,7 +449,11 @@ func entryGetUser(c *ctx) (any, error) {
 // entrySyncUser pulls an account's current data from its root node onto this
 // one. It is the low-level half of resync_user.
 func entrySyncUser(c *ctx) (any, error) {
-	if err := c.mimeiSync(c.str(reqMID), nil); err != nil {
+	authSid, err := c.authSid()
+	if err != nil {
+		return c.wrapErr(err), nil
+	}
+	if err := c.mimeiSync(authSid, c.str(reqMID), nil); err != nil {
 		return c.wrapErr(err), nil
 	}
 	return c.wrap(map[string]any{"success": true}), nil

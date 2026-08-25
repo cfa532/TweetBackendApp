@@ -4,10 +4,14 @@ Found porting a 68-entry backend from JS to Go. Reproduced on a live node at
 **V0.23.95** and **re-verified unchanged on V0.24.02**, linux/amd64. Probes are
 single files run with `./Leither lpki runapp --local <dir> x -a gen8.key`.
 
-Re-verification method improved: P2/P3/P7 were originally checked by compiling
-against the published `github.com/3and4/Leither/lapi` module. They are now
-confirmed by compiling calls against **the node's own interpreter-registered
-`lapi`**, which is the authoritative surface. All seven remain absent.
+**Correction (V0.24.02).** P2/P3 were originally reported as missing APIs. They
+are not missing — they are unpublished. `lapi.GetLApi()` returns a `*frame.LApi`
+whose method set is larger than the `lapi.LApi` interface it is typed as, and it
+carries `MiMeiSync`, `MiMeiPublish`, `MiMeiProvide`, `MiMeiUnprovide`,
+`MiMeiUnpublish`, `MiMeiIsProvider` and `RunMApp`. Asserting the handle to a
+locally declared interface reaches all seven, and this app now does. Only
+`Ed25519Verify` (P7) is genuinely absent. P2 and P3 are rewritten below as what
+they actually are: an interface-surface problem, not an absence.
 
 **Not a problem:** the Go language implementation. A conformance probe covering
 defer ordering, named-return-defer, panic/recover, per-iteration loop capture,
@@ -41,32 +45,64 @@ Fix on our side: no package-level vars at all. Tables/structs come from
 functions, and an `errors.New` sentinel became an error *type* (a package-level
 sentinel is `nil`, so `errors.Is` against it silently misclassifies).
 
-## P2 — No way to publish or provide → written content never reaches the network
+## P2 — Replication APIs exist but are not on the published interface
 
 `MiMeiPublish`, `MiMeiProvide`, `MiMeiUnprovide`, `MiMeiUnpublish`,
-`MiMeiIsProvider` exist as CLI commands but nowhere in the Go API — not in
-`lapi`, not in `api/MiMei.md`.
+`MiMeiIsProvider` and `MiMeiSync` are all present on the concrete `*frame.LApi`
+returned by `lapi.GetLApi()`, and all work. None is declared on the `lapi.LApi`
+interface that the value is typed as, and none appears in
+`github.com/3and4/Leither/lapi` at any published version — checked on `main`
+(last commit 2026-08-09) and on tags `lapi/v0.1.0` and `lapi/v0.1.1`. They are
+also absent from `api/MiMei.md`, which documents `MMCreate`, `MMOpen`,
+`MMBackup`, `MMAddRef` and friends but no replication call.
 
-A MApp can therefore write but never announce. A new account, tweet or comment
-is stored and readable on its own node and invisible everywhere else, while the
-write reports success. Live:
+The consequence is not that a MApp cannot replicate — it is that a MApp cannot
+discover that it can. Written straightforwardly, the call does not compile, and
+the natural conclusion is that the platform cannot do it. The original report
+here reached exactly that conclusion.
+
+Verified live, signatures read off the node with `fmt.Sprintf("%T", ...)`:
 
 ```
-[mapp][W] Tweed login: publish iq1w-iqAbwGsZX653vV0lL1PL_D failed:
-          mimeipublish: 5020:Variable names unavailable:mimeipublish
+MiMeiSync        func(sid, dhts, mid string, param map[string]string) error
+MiMeiPublish     func(sid, dhts, mid string) ([]lapi.DhtReply, error)
+MiMeiProvide     func(sid, dhts, mid string) ([]lapi.DhtReply, error)
+MiMeiUnprovide   func(sid, dhts, mid string) ([]lapi.DhtReply, error)
+MiMeiUnpublish   func(sid, dhts, mid string) ([]lapi.DhtReply, error)
+MiMeiIsProvider  func(sid, mid string) (bool, error)
 ```
 
-`MMRelease` is not a substitute (per `api/MiMei.md` §1.5 it designates an
-existing version as the release). `BEMMSync` covers only the pull direction.
+These match the JavaScript call sites exactly, including the `""` second
+argument for "all DHTs" — so the Go and JS surfaces are the same API, and only
+the Go type declaration hides it.
 
-**This is what currently makes the port non-viable in production.**
+**Ask:** declare these on `lapi.LApi` (or on the embedded `IMiMei`) and publish
+the module. `Leither/api` does expose them, but by handing back the internal
+`*frame.LApi`, which is not something an app should be asked to depend on.
 
-## P3 — `RunMApp` is absent from `LApi`
+**Workaround applied:** `go/caps.go` asserts the handle to one small interface
+per method, so a build lacking a method degrades to a typed error instead of a
+compile failure.
 
-Declared on `ILApp`, which `LApi` does not embed, so a MApp cannot call another
-node or another app. Five operations here inherently span two owners on two
-nodes and cannot be split by the caller — e.g. a follow writes to both users'
-accounts, which live on different nodes.
+## P3 — `RunMApp` is declared on `ILApp`, which `LApi` does not embed
+
+`RunMApp` is present on the concrete handle and works, but `LApi` embeds only
+`IBackEnd`, `IAuth`, `IVarAct`, `IMiMei` and `INet` — not `ILApp` — so it is
+invisible to a MApp written against the published interface. Five operations
+here inherently span two owners on two nodes and cannot be split by the caller;
+a follow, for example, writes to both users' accounts, which live on different
+nodes.
+
+Live signature:
+
+```
+RunMApp  func(entry string, req map[string]string, args []any, opts ...string) (any, error)
+```
+
+**Ask:** add `ILApp` to the interfaces `LApi` embeds. This is a one-line change
+and is the smallest of the fixes listed here.
+
+**Workaround applied:** same type assertion as P2.
 
 ## P4 — `Entry` is empty in container mode
 
@@ -189,8 +225,12 @@ A `systemctl restart leither-tweet` fixed it completely:
 | `get_user_core_data` | timeout | 0.66 s |
 | `get_tweet_feed` (10 tweets) | timeout | 0.29 s |
 
-For comparison, gen8 at 1 day 6 h uptime sits at **87 MB**. The growth is not
-proportionate to load and looks like a leak; 3.4 GB is ~39× the healthy figure.
+**Cause identified — see P17.** The growth is per-request leakage of interpreter
+compilation state on Go MApp calls (~8-20 MB per request). The "gen8 sits at
+87 MB" comparison originally made here was read off the wrong process; gen8's
+serving process was at 12.8 GB. A restart clears it because it discards the
+accumulated compilation artifacts, which is why the fix below works and why it
+does not last.
 
 Two things make this expensive to diagnose from the application side:
 
@@ -245,6 +285,170 @@ Worth either omitting known-secret parameter names from `actionEntry` and
 `RunMApp PreLogin`, or moving both lines behind a level that production does not
 enable.
 
+## P15 — `SyncMiMei` panics when the only providers are the calling node
+
+Both entry points — `BEMMSync` on the published interface and `MiMeiSync` on the
+concrete handle — funnel into the same `SyncMiMei`, and both produce the
+identical panic, so this is one bug in the node, not a property of either API:
+
+```
+MiMeiSync -> SyncMiMei:(runtime.boundsError{x:0, y:0, signed:false, code:0x0}) stack:
+Leither/pnet.(*MiMei).getSyncInfo(...)   D:/workspace/src/Leither/pnet/dhtMiMei.go:495
+Leither/pnet.(*MiMei).getSyncInfo2(...)  D:/workspace/src/Leither/pnet/dhtMiMei.go:404
+Leither/pnet.(*MiMei).SyncMiMei(...)     D:/workspace/src/Leither/pnet/dhtMiMei.go:1061
+```
+
+`boundsError{x:0, y:0}` is index 0 of an empty slice. Three cases isolate the
+trigger:
+
+| mid | provider list | result |
+|---|---|---|
+| `d4lRy…` (twbe app) | has a remote provider | `<nil>` — succeeds |
+| `zzzz…` (nonexistent) | none | clean `30000:No MiMei mid[...]` |
+| `iq1w…` (a user) | **all six are this node's own addresses** | panic |
+
+So the failing case is precisely: the object exists, and every announced
+provider is the calling node itself. `getSyncInfo` evidently drops self from the
+provider list and then indexes `[0]` without checking the result is non-empty.
+A nonexistent mid is rejected earlier and never reaches that code, which is why
+that case is clean.
+
+This also explains the latency previously recorded here (5.6s / 33.5s / 16.9s
+through the `sync_user` entry): the panicking calls were spending that time in
+provider lookup before crashing, long enough to blow past TweetWeb's 15s client
+timeout and make a `toggle_following` that succeeded server-side report failure.
+
+**Fix:** a length check at `dhtMiMei.go:495`. The condition is already known to
+the platform's own users — the JavaScript entries carry the comment "if original
+tweet is on the same node, MimeiSync will throw an error" — so returning a typed
+"nothing to sync from" error rather than panicking would match expectations.
+
+### Confirmed in production, and the node does it to itself
+
+Observed on a live node (minipc, `~/tweet/logs/Leither.log`, window
+09:32-10:37). The node logs the argument that panics, one line above the error:
+
+```
+[p2p][D] SyncMiMei mids=[] err=SyncMiMei:(runtime.boundsError{x:0, y:0, ...}) stack:
+[p2p][D] sync qg6sX_XmwJFFp-pqwNziMUbksOn fail SyncMiMei:(runtime.boundsError{...})
+```
+
+Across that window:
+
+| `mids` argument | occurrences | outcome |
+|---|---|---|
+| `mids=[]` | 10 | panic, every time |
+| `mids=[d4lRy...]` | 2 | fine |
+| `mids=[SN61... 2Tcd... heWg...]` | 1 | fine |
+
+So the trigger is exact: **`SyncMiMei` is entered with an empty mid list and
+indexes `[0]` anyway.** This is the same fault as the provider experiment above,
+one step further in — when nothing remains to pull from, the list `getSyncInfo`
+builds is empty rather than the call being rejected.
+
+It is not only reachable from an application. Two node-internal callers hit it
+in the same window:
+
+```
+[cai][D] CheckDBProvide MiMeiProvide err=SyncMiMei:(runtime.boundsError{...})
+Leither/pnet.(*MiMei).routineMiMeiSync(...)
+```
+
+`routineMiMeiSync` frames appear 23 times in the current log and 40 times in the
+previous one, so the background sync routine is hitting this continuously,
+independent of any MApp. An app-side workaround cannot help those.
+
+Seven distinct panic events occurred in a 65-minute window, triggered from
+`toggle_following`, `sync_user`, and `CheckDBProvide`.
+
+**Workaround applied:** `syncIfRemote` in `go/caps.go` compares the owning host
+against this node and skips the call entirely when they match. This covers the
+application's own calls only.
+
+## P17 — Every Go MApp request leaks megabytes of interpreter compilation state
+
+**This supersedes P16, whose conclusion was wrong** (see the correction at the
+end of this section). It is the most serious issue in this document: it makes a
+Go MApp unusable in production regardless of what the app does.
+
+### Measurement
+
+Same node, same trivial `health` entry, 30 sequential requests, nothing else
+running. RSS read from `/proc/<pid>/status` of the process that owns the
+listening socket:
+
+| node | app | RSS delta over 30 calls | per call |
+|---|---|---|---|
+| minipc | **Go** (`twbe`) | **+609 MB** | **20.3 MB** |
+| minipc | JS (`tweet1`) | +22.7 MB | 0.76 MB |
+| gen8 | **Go** (`twbe`) | **+242 MB** | **8.1 MB** |
+| gen8 | JS (`tweet1`) | +22.7 MB | 0.76 MB |
+
+The JS control is identical on both nodes to three significant figures, so the
+harness is sound and the difference is the application runtime, not the node,
+the entry, or the measurement.
+
+The memory is never returned. minipc climbed 116 MB -> 740 MB during the 30
+calls above and stayed there; gen8's serving process has reached **12.8 GB**
+over four days of ordinary use.
+
+### Cause
+
+A heap profile from a live node (`/debug/pprof/heap`, 610 MB in use) is
+dominated by the interpreter compiling Go source, not by application data:
+
+```
+77.44MB  12.70%  github.com/goplus/ixgo.(*function).regInstr
+72.34MB  11.86%  go/types.(*Checker).recordTypeAndValue
+31.00MB   5.08%  go/types.newVar
+29.08MB   4.77%  github.com/goplus/ixgo.(*visitor).function   (cum 150.82MB, 24.73%)
+26.51MB   4.35%  golang.org/x/tools/go/ssa.createFunction
+16.42MB   2.69%  go/types.(*Checker).recordUse
+15.00MB   2.46%  golang.org/x/tools/go/ssa.(*Function).newBasicBlock
+```
+
+Type-checker state, SSA function bodies and registered instructions — the
+artifacts of compiling the app — are retained per request rather than compiled
+once and reused, or compiled and freed. Goroutines are not the problem: the same
+node showed only 69.
+
+This is also the likely explanation for the throughput gap measured separately
+here: the Go MApp serves `health` in ~200 ms against the JS app's ~9 ms on the
+same node, a ~21x difference that no application logic accounts for.
+
+### Consequence
+
+A node dies after a few hundred Go MApp requests. At 20 MB per call, 150 calls
+is 3 GB. Past roughly 3 GB the node still answers a plain HTTP probe in 8 ms
+while every application call takes minutes — a `health` entry measured at
+**2 m 3.8 s** — so clients time out and the node looks healthy to any monitor
+that probes the port rather than the app.
+
+Observed end to end: a browser login failed three times with "Could not fetch
+user data" because the account's home node had degraded this way, while the
+identical call served in **0.08 s** against the same node freshly restarted.
+
+**No application-side workaround exists.** The allocation happens in the node
+before app code runs.
+
+### Correction to P16
+
+P16 reported "gen8 1d 17h / 0.08 GB / 1560 calls" against "minipc 58 min /
+3.28 GB / 369 calls" and concluded the growth did not track application traffic.
+The gen8 figure was taken from the wrong process: that host runs two `Leither`
+processes, and `ps -C Leither | head -1` returned a stray `Leither ipfs add`
+helper (12 MB, idle) rather than the node. gen8's serving process was at
+**12.8 GB**, not 0.08 GB.
+
+The corrected conclusion is the opposite of P16's: growth tracks application
+traffic closely — but only **Go** MApp traffic, which is why a node serving
+mostly JS appears stable. Always resolve the pid from the listening socket:
+
+```
+PID=$(ss -lntp | grep ":<port>" | grep -oE "pid=[0-9]+" | head -1 | cut -d= -f2)
+awk "/VmRSS/{print \$2}" /proc/$PID/status
+```
+
 ## P11 — Documentation
 
 - Broken links on vzhan.cn (HTTP 500): `doc.html`, `capabilities.html`,
@@ -264,13 +468,29 @@ improvement. P4 remains a trap rather than a footnote, though: both official
 examples (`hello`, `echo`) still dispatch on `switch Entry`, so both compile,
 pass `--local`, and serve nothing once deployed.
 
-P1, P2, P3, P6, P7, P8 are unchanged.
+P2 and P3 are reclassified: the APIs exist and this app now uses them, so
+neither blocks production any more. What remains is that both are unreachable
+through the published interface, which is a discoverability and stability
+problem rather than a functional one.
+
+P1, P6, P7, P8 are unchanged. P15 now has a precise root cause and repro, and
+P17 — the per-request interpreter memory leak — is new and is the most serious
+item here.
 
 ## Priority
 
-1. **P1** — silent, hits ordinary Go code, breaks libraries.
-2. **P2** — content never reaches the network; blocks production.
-3. **P3/P4/P5** — cross-node calls, and two ways a correct app serves nothing.
-4. **P6/P7** — stdlib and crypto.
+1. **P17** — every Go MApp request leaks 8-20 MB of interpreter state. A node
+   dies after a few hundred calls, and no application-side fix is possible.
+   This blocks the Go port from production on its own.
+2. **P1** — silent, hits ordinary Go code, breaks libraries.
+3. **P15** — a node-side panic on a case that occurs in normal use; reached by
+   both sync APIs and by the node's own background routine.
+4. **P2/P3** — not blocking any more, but every MApp author will hit the same
+   dead end until the methods are declared on `lapi.LApi`. P3 is a one-line fix.
+5. **P4/P5** — two ways a correct app serves nothing.
+6. **P6/P7** — stdlib and crypto. P7 (`Ed25519Verify`) is the only capability
+   still genuinely absent, and agent signatures go unverified without it.
 
-P1, P4, P5, P6 have workarounds already applied here. **P2 and P3 have none.**
+P1, P2, P3, P4, P5, P6 and P15 have workarounds applied here. **P7 and P17 have
+none.** P17 in particular is invisible to the application: the allocation
+happens in the node before app code runs.

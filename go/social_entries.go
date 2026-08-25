@@ -115,7 +115,7 @@ func entryToggleFollowing(c *ctx) (any, error) {
 	}
 	c.debugf("followed user=%s with id=%s", jsonStringify(redactUser(followed)), followingID)
 	if followed == nil {
-		if err := c.mimeiSync(followingID, nil); err != nil {
+		if err := c.mimeiSync(authSid, followingID, nil); err != nil {
 			c.errorf("Failed to sync followed user %s from nid=%s: %v", followingID, followingHostID, err)
 		} else if err := c.mimeiProvide(authSid, followingID); err != nil {
 			c.errorf("Failed to sync followed user %s from nid=%s: %v", followingID, followingHostID, err)
@@ -204,8 +204,12 @@ func (c *ctx) follow(authSid, systemSid, userID, followingID, hostOfOther, nodeI
 	c.debugf("relationship persisted actor=%s target=%s tweetCount=%d", userID, followingID, len(pairs))
 
 	// Hold a local copy of the followed account so their profile renders
-	// without a network round trip.
-	if err := c.mimeiSync(followingID, nil); err != nil {
+	// without a network round trip — but only when another node owns it.
+	// Following someone hosted here needs no copy, and attempting it blocks the
+	// whole request for seconds before failing.
+	if hostOfOther == nodeID {
+		c.debugf("skipping sync of %s: this node already hosts it", followingID)
+	} else if err := c.mimeiSync(authSid, followingID, nil); err != nil {
 		c.errorf("Failed to sync followed user %s: %v", followingID, err)
 	} else if err := c.mimeiProvide(authSid, followingID); err != nil {
 		c.errorf("Failed to sync followed user %s: %v", followingID, err)
@@ -543,7 +547,7 @@ func (c *ctx) recoverUser(userID string) any {
 
 	if authSid, err := c.authSid(); err != nil {
 		c.errorf("failed to sync/provide userId=%s: %v", userID, err)
-	} else if err := c.mimeiSync(userID, nil); err != nil {
+	} else if err := c.mimeiSync(authSid, userID, nil); err != nil {
 		c.errorf("failed to sync/provide userId=%s: %v", userID, err)
 	} else if err := c.mimeiProvide(authSid, userID); err != nil {
 		c.errorf("failed to sync/provide userId=%s: %v", userID, err)

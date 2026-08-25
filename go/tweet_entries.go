@@ -113,11 +113,23 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 	// A retweet points at the quoted tweet. Pulling that tweet here is
 	// best-effort: it may have been deleted, or live on an unreachable node, and
 	// the retweet is still valid without it.
+	//
+	// The quoted tweet is often on this very node — quoting someone whose posts
+	// you are already reading is the common case — and syncing it then is what
+	// the JavaScript version described as "if original tweet is on the same
+	// node, MimeiSync will throw an error". Resolving the original author's host
+	// first costs one local read and avoids seconds of blocked request.
 	if originalID := tweet.originalTweetID(); originalID != "" {
 		if err := c.addRef(authSid, authorID, originalID); err != nil {
 			c.errorf("Error sync original tweet: %v, tweet=%s", err, jsonStringify(map[string]any(tweet)))
 		} else {
-			c.syncBestEffort(authSid, originalID)
+			originalHost := ""
+			if origAuthor := tweet.originalAuthorID(); origAuthor != "" {
+				if u, err := c.loadUser(origAuthor); err == nil {
+					originalHost = u.hostID()
+				}
+			}
+			c.syncIfRemote(authSid, originalID, originalHost)
 		}
 	}
 
@@ -349,7 +361,7 @@ func (c *ctx) syncForDetailView(tweetID string, tweet tweetObj, mmsid string) (t
 
 	c.debugf("fromdetailview syncing tweetId=%s, not yet a provider on nodeId=%s (writeHostId=%s)",
 		tweetID, nodeID, writeHostID)
-	if err := c.mimeiSync(tweetID, nil); err != nil {
+	if err := c.mimeiSync(systemSid, tweetID, nil); err != nil {
 		c.errorf("fromdetailview sync failed for %s: %v", tweetID, err)
 		return nil, ""
 	}

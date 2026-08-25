@@ -148,23 +148,36 @@ responsibility.
 
 ## Limitations to resolve before production
 
-### 1. Node operations with no Go API — `caps.go`
+### 1. Node operations missing from the published interface — `caps.go`
 
-The JavaScript runtime exposed a `lapi` global that is richer than the Go
-`lapi.LApi` interface a MApp receives from `GetLApi()`. Seven operations have
-**no method on that interface**. This was verified by compiling against
-`github.com/3and4/Leither/lapi`:
+The JavaScript runtime exposed a `lapi` global richer than the Go `lapi.LApi`
+interface a MApp receives from `GetLApi()`. The methods are not actually
+missing from the node: at runtime the handle is a `*frame.LApi`, and that
+concrete type carries them. They are simply absent from the interface the value
+is typed as, and from `github.com/3and4/Leither/lapi` at every published
+version.
 
-| Operation | Status in Go |
-|-----------|--------------|
-| `RunMApp` (another node) | declared on `ILApp`, which is not part of `LApi` |
-| `MiMeiSync` | replaced by `BEMMSync`, which **is** on the interface |
-| `MiMeiPublish` | absent |
-| `MiMeiProvide` | absent |
-| `MiMeiUnprovide` | absent |
-| `MiMeiUnpublish` | absent |
-| `MiMeiIsProvider` | absent |
-| `Ed25519Verify` | absent |
+`caps.go` therefore asserts the handle to a small locally declared interface,
+one per operation. Signatures were read off a live node with
+`fmt.Sprintf("%T", ...)` and match the JavaScript call sites exactly, including
+the `""` second argument meaning "all DHTs".
+
+| Operation | Status on V0.24.02 | JS call it mirrors |
+|-----------|--------------------|--------------------|
+| `MiMeiSync` | works | `MiMeiSync(sid, "", mid, {})` |
+| `MiMeiPublish` | works | `MiMeiPublish(sid, "", mid)` |
+| `MiMeiProvide` | works | `MiMeiProvide(sid, "", mid)` |
+| `MiMeiUnprovide` | works | — |
+| `MiMeiUnpublish` | works | — |
+| `MiMeiIsProvider` | works | `MiMeiIsProvider(sid, mid)` |
+| `RunMApp` (another node) | works | — |
+| `Ed25519Verify` | **absent under every spelling tried** | — |
+
+Why an assertion rather than importing the package that declares them:
+`Leither/api` does expose them, but hands back the internal `*frame.LApi`.
+Depending on a node's internal type buys nothing the assertion does not, and an
+assertion degrades — on a build lacking a method the caller gets
+`capUnsupportedError` instead of a compile error or a panic.
 
 `RunMApp` was by far the biggest of these in the original — 97 call sites. Most
 were intra-app and are now direct Go calls through `callEntry`, needing no node
@@ -181,13 +194,7 @@ cannot be split by the caller:
 - `node_update_mid_by_score` → `node_get_score` on the object's owner
 - `toggle_following` → `get_tweet_id_list`, reading the followed user's tweets
 
-Every one of these funnels through `caps.go`. They are attempted through
-`Act(sid, name, args...)`, the interface's generic escape hatch, using the
-action names at the top of that file. **If the node does not register those
-actions, `Act` returns an error and the operation reports
-`errCapUnsupported`.**
-
-Callers already distinguish the two cases:
+Callers distinguish best-effort work from work that changes the answer:
 
 - Publishing and providing are best-effort replication; those callers log and
   continue, so writes still succeed locally.
@@ -198,8 +205,12 @@ Callers already distinguish the two cases:
   `lapi.Ed25519Verify` was missing. Agent posting should be treated as
   unauthenticated until real verification is wired up.
 
-To resolve: confirm what the deployed node exposes and edit `caps.go` only. No
-entry code depends on how these are implemented.
+One node-side bug remains relevant here. `SyncMiMei` panics with a bounds error
+when an object's only announced providers are the calling node itself — there is
+nothing to pull from, and it indexes an empty slice rather than returning an
+error. Both `MiMeiSync` and `BEMMSync` reach it, so the choice of API does not
+avoid it. `syncIfRemote` skips the call when this node already owns the object,
+which is both correct and what dodges the panic.
 
 ### 2. `upload_compressed_hls` — extraction step not portable
 

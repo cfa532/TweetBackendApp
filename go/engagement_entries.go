@@ -297,7 +297,7 @@ func (c *ctx) applyEngagementToUser(kind engagementKind, userID, tweetID string,
 	}
 
 	if changed && wanted && !skipContentSync {
-		if err := c.mimeiSync(tweetID, nil); err != nil {
+		if err := c.mimeiSync(authSid, tweetID, nil); err != nil {
 			c.errorf("Failed to sync tweet %s: %v", tweetID, err)
 		}
 		if err := c.mimeiProvide(authSid, tweetID); err != nil {

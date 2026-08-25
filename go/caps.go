@@ -1,55 +1,84 @@
-// caps.go — node capabilities the Go MApp API does not expose directly.
+// caps.go — node capabilities reached through the concrete API value.
 //
-// The JavaScript runtime handed scripts a `lapi` global that was richer than the
-// Go `lapi.LApi` interface a MApp receives from GetLApi(). Seven operations the
-// original app relied on have no method on that interface (verified by
-// compiling against github.com/3and4/Leither/lapi):
+// A MApp receives its API handle from lapi.GetLApi(), typed as the published
+// lapi.LApi interface. That interface is narrower than the object behind it: at
+// runtime the handle is a *frame.LApi, and the concrete type carries the
+// replication and cross-node calls the original JavaScript app used through its
+// own richer `lapi` global.
 //
-//	RunMApp          calling another node    declared on ILApp, not on LApi
-//	MiMeiSync        pull an object's data   see BEMMSync below
-//	MiMeiProvide     announce local copy     absent
-//	MiMeiPublish     publish to the DHT      absent
-//	MiMeiUnprovide   withdraw announcement   absent
-//	MiMeiUnpublish   withdraw from the DHT   absent
-//	MiMeiIsProvider  provider check          absent
-//	Ed25519Verify    signature check         absent
+// The methods below are therefore reached by asserting the handle to a small
+// interface declared here, one per operation. Nothing outside this file needs
+// to know that, and the app keeps importing only the published "Leither/lapi".
 //
-// Every use of those operations funnels through this file, so a node build that
-// does expose them needs edits only here and nowhere in the entry code.
+// Why an assertion rather than importing the package that declares them:
 //
-// What works:
+//   - "Leither/api" does expose them, but it hands back the internal
+//     *frame.LApi directly. Depending on a node's internal type would couple
+//     this app to a surface its authors have not published, and offers nothing
+//     the assertion does not.
+//   - github.com/3and4/Leither/lapi does not declare them at any published
+//     version (checked on main and on tags lapi/v0.1.0 and lapi/v0.1.1), so the
+//     published interface cannot be used and `go build` cannot see them either.
+//   - An assertion degrades: on a node build whose handle lacks a method, the
+//     assertion fails and the caller gets capUnsupportedError instead of a
+//     compile error or a panic. The signatures below were read off a live node
+//     with fmt.Sprintf("%T", ...) and match the JavaScript call sites exactly.
 //
-//   - mimeiSync uses BEMMSync, which is on the interface and does the same job.
+// Confirmed present on Leither V0.24.02, with the JS call that matches:
 //
-// What does NOT, re-verified on Leither V0.24.02 by compiling calls against the
-// node's own interpreter-registered lapi:
+//	MiMeiSync        lapi.MiMeiSync(sid, "", mid, {})     sync_user.js:51
+//	MiMeiPublish     lapi.MiMeiPublish(sid, "", mid)      share_file.js:128
+//	MiMeiProvide     lapi.MiMeiProvide(sid, "", mid)      get_tweet.js:106
+//	MiMeiUnprovide   —
+//	MiMeiUnpublish   —
+//	MiMeiIsProvider  lapi.MiMeiIsProvider(sid, mid)       get_tweet.js:101
+//	RunMApp          calling another node
 //
-//   - All seven remain absent. Act(sid, name, args...) is not a route to them:
-//     it resolves nothing at all, failing even for "ver", a name GetVar answers.
-//     api/VarAct.md marks Act a draft holding 待定 (pending) APIs, so an empty
-//     registry is intended. There is no in-app substitute either — net/http and
-//     crypto/* are absent from the interpreter allowlist.
+// Still absent, with real consequences:
 //
-// Each function below therefore fails immediately and names the lapi method it
-// wants, rather than attempting a call that cannot succeed. Attempting Act first
-// only cost a round trip per write and logged "5020:Variable names unavailable",
-// which reads like a misconfiguration rather than a missing API. The line above
-// each return shows the single edit that restores the capability.
-//
-// The consequences are real and mostly silent:
-//
-//   - Nothing this app writes is announced to the network. A new tweet, comment
-//     or account is stored and readable on its own node, and invisible to every
-//     other node. Writes still report success, which matches the guidance in
-//     LEITHER_AND_MIMEI.md §7: commit success and publication success are
-//     separate facts and must be tracked separately.
-//   - The operations that span two owners (see callRemote) fail outright.
-//   - Agent signatures are not verified; see checkSignature in auth.go.
+//	Ed25519Verify    agent signatures are not verified; see checkSignature in
+//	                 auth.go. No in-app substitute exists either: crypto/* is
+//	                 not in the interpreter's allowlist.
 package lapp
 
 import (
+	"Leither/lapi"
 	"errors"
 	"fmt"
+)
+
+// ---------------------------------------------------------------------------
+// Optional capabilities of the API handle
+// ---------------------------------------------------------------------------
+
+// Each interface names one method the concrete handle may carry beyond
+// lapi.LApi. Signatures must match the node's exactly or the assertion fails
+// silently and the capability reports itself unavailable.
+//
+// The second parameter of the MiMei calls selects which DHTs to act on; the
+// JavaScript passes "" everywhere, meaning all of them, and so does this app.
+type (
+	mimeiSyncer interface {
+		MiMeiSync(sid, dhts, mid string, param map[string]string) error
+	}
+	mimeiPublisher interface {
+		MiMeiPublish(sid, dhts, mid string) ([]lapi.DhtReply, error)
+	}
+	mimeiProvider interface {
+		MiMeiProvide(sid, dhts, mid string) ([]lapi.DhtReply, error)
+	}
+	mimeiUnprovider interface {
+		MiMeiUnprovide(sid, dhts, mid string) ([]lapi.DhtReply, error)
+	}
+	mimeiUnpublisher interface {
+		MiMeiUnpublish(sid, dhts, mid string) ([]lapi.DhtReply, error)
+	}
+	mimeiProviderCheck interface {
+		MiMeiIsProvider(sid, mid string) (bool, error)
+	}
+	mappRunner interface {
+		RunMApp(entry string, req map[string]string, args []any, opts ...string) (any, error)
+	}
 )
 
 // capUnsupportedError reports that this node build offers no route to a
@@ -94,18 +123,20 @@ func (c *ctx) callRemote(nodeID, entry string, params map[string]string) (any, e
 		return nil, fmt.Errorf("callRemote(%s): empty target node", entry)
 	}
 	params[reqNodeID] = nodeID
-	// When lapi exposes it:
-	//   return normalizeRemoteResult(c.api.RunMApp(entry, params, nil, "nid="+nodeID))
-	return nil, capUnsupportedError{action: "RunMApp(nid=" + nodeID + ", entry=" + entry + ")"}
+	runner, ok := c.api.(mappRunner)
+	if !ok {
+		return nil, capUnsupportedError{action: "RunMApp(nid=" + nodeID + ", entry=" + entry + ")"}
+	}
+	ret, err := runner.RunMApp(entry, params, nil, "nid="+nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("RunMApp(nid=%s, entry=%s): %v", nodeID, entry, err)
+	}
+	return normalizeRemoteResult(ret), nil
 }
 
 // normalizeRemoteResult decodes a cross-node reply. A remote node returns the
 // same envelope shape a local call would, but it may arrive as a JSON string
 // depending on the transport.
-//
-// Currently unreferenced except by the restoration line in callRemote: it is
-// kept because it is needed the moment RunMApp becomes callable, and writing it
-// again from scratch is where a transport-shape bug would creep in.
 func normalizeRemoteResult(ret any) any {
 	if s, ok := ret.(string); ok {
 		if looksLikeJSONObject(s) || looksLikeJSONArray(s) {
@@ -122,13 +153,23 @@ func normalizeRemoteResult(ret any) any {
 // ---------------------------------------------------------------------------
 
 // mimeiSync pulls an object's current data from the network onto this node.
-// BEMMSync is the interface method for this and is used directly.
-func (c *ctx) mimeiSync(mid string, param map[string]string) error {
+//
+// BEMMSync is the fallback: it is on the published interface and does the same
+// job, but takes no session and on this node build has been seen to block for
+// tens of seconds and to panic inside SyncMiMei. MiMeiSync is what the
+// JavaScript used and is preferred whenever the handle carries it.
+func (c *ctx) mimeiSync(sid, mid string, param map[string]string) error {
 	if mid == "" {
 		return fmt.Errorf("mimeiSync: empty mid")
 	}
 	if param == nil {
 		param = map[string]string{}
+	}
+	if s, ok := c.api.(mimeiSyncer); ok {
+		if err := s.MiMeiSync(sid, "", mid, param); err != nil {
+			return fmt.Errorf("MiMeiSync(%s): %v", mid, err)
+		}
+		return nil
 	}
 	if err := c.api.BEMMSync("", mid, param); err != nil {
 		return fmt.Errorf("BEMMSync(%s): %v", mid, err)
@@ -138,37 +179,73 @@ func (c *ctx) mimeiSync(mid string, param map[string]string) error {
 
 // mimeiProvide announces that this node serves a copy of mid.
 func (c *ctx) mimeiProvide(sid, mid string) error {
-	// When lapi exposes it: _, err := c.api.MiMeiProvide(sid, "", mid); return err
-	return capUnsupportedError{action: "MiMeiProvide"}
+	p, ok := c.api.(mimeiProvider)
+	if !ok {
+		return capUnsupportedError{action: "MiMeiProvide"}
+	}
+	_, err := p.MiMeiProvide(sid, "", mid)
+	return err
 }
 
 // mimeiPublish publishes mid to the DHT so other nodes can discover it.
 func (c *ctx) mimeiPublish(sid, mid string) error {
-	// When lapi exposes it: _, err := c.api.MiMeiPublish(sid, "", mid); return err
-	return capUnsupportedError{action: "MiMeiPublish"}
+	p, ok := c.api.(mimeiPublisher)
+	if !ok {
+		return capUnsupportedError{action: "MiMeiPublish"}
+	}
+	_, err := p.MiMeiPublish(sid, "", mid)
+	return err
 }
 
 // mimeiUnprovide withdraws this node's claim to serve mid.
 func (c *ctx) mimeiUnprovide(sid, mid string) error {
-	// When lapi exposes it: _, err := c.api.MiMeiUnprovide(sid, "", mid); return err
-	return capUnsupportedError{action: "MiMeiUnprovide"}
+	p, ok := c.api.(mimeiUnprovider)
+	if !ok {
+		return capUnsupportedError{action: "MiMeiUnprovide"}
+	}
+	_, err := p.MiMeiUnprovide(sid, "", mid)
+	return err
 }
 
 // mimeiUnpublish withdraws mid from the DHT.
 func (c *ctx) mimeiUnpublish(sid, mid string) error {
-	// When lapi exposes it: _, err := c.api.MiMeiUnpublish(sid, "", mid); return err
-	return capUnsupportedError{action: "MiMeiUnpublish"}
+	p, ok := c.api.(mimeiUnpublisher)
+	if !ok {
+		return capUnsupportedError{action: "MiMeiUnpublish"}
+	}
+	_, err := p.MiMeiUnpublish(sid, "", mid)
+	return err
 }
 
 // mimeiIsProvider reports whether this node serves a copy of mid.
 func (c *ctx) mimeiIsProvider(sid, mid string) (bool, error) {
-	// When lapi exposes it: return c.api.MiMeiIsProvider(sid, mid)
-	return false, capUnsupportedError{action: "MiMeiIsProvider"}
+	p, ok := c.api.(mimeiProviderCheck)
+	if !ok {
+		return false, capUnsupportedError{action: "MiMeiIsProvider"}
+	}
+	return p.MiMeiIsProvider(sid, mid)
+}
+
+// syncIfRemote pulls an object only when another node owns it.
+//
+// Synchronising a mimei this node already hosts cannot work — there is nowhere
+// to pull from. The JavaScript entries made the call regardless and swallowed
+// the error ("If original tweet is on the same node, MimeiSync will throw an
+// error"); skipping it saves that round trip.
+//
+// ownerHost is the node that owns mid. An unknown owner is treated as remote,
+// since attempting the sync is the recoverable choice.
+func (c *ctx) syncIfRemote(sid, mid, ownerHost string) {
+	if ownerHost != "" && ownerHost == c.nodeID() {
+		c.debugf("skipping sync of %s: this node already hosts it", mid)
+		return
+	}
+	c.syncBestEffort(sid, mid)
 }
 
 // syncBestEffort pulls an object and announces the local copy, logging failures.
 func (c *ctx) syncBestEffort(sid, mid string) {
-	if err := c.mimeiSync(mid, nil); err != nil {
+	if err := c.mimeiSync(sid, mid, nil); err != nil {
 		c.warnf("sync %s failed: %v", mid, err)
 		return
 	}
@@ -185,8 +262,8 @@ func (c *ctx) syncBestEffort(sid, mid string) {
 // It backs agent-token authentication.
 //
 // All three arguments are base64url strings, matching what the clients send.
+// No node build seen so far carries this method under any spelling, so agent
+// signatures remain unverified.
 func (c *ctx) ed25519Verify(publicKey, message, signature string) (bool, error) {
-	// When lapi exposes it:
-	//   return c.api.Ed25519Verify(publicKey, message, signature)
 	return false, capUnsupportedError{action: "Ed25519Verify"}
 }

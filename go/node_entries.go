@@ -123,7 +123,7 @@ func entryNodeUpdateMidByScore(c *ctx) (any, error) {
 	}
 	if remote != localScore {
 		c.debugf("mid=%s, new score=%d, old score=%d, userId=%s", mid, remote, localScore, userID)
-		if err := c.mimeiSync(mid, nil); err != nil {
+		if err := c.mimeiSync(systemSid, mid, nil); err != nil {
 			return c.wrapErr(err), nil
 		}
 		// The home node's score is adopted verbatim, so this node records how
@@ -140,7 +140,7 @@ func (c *ctx) initialiseMid(systemSid, userID, mid string) error {
 	if err := c.zaddSeq(systemSid, userID, mid); err != nil {
 		return err
 	}
-	if err := c.mimeiSync(mid, nil); err != nil {
+	if err := c.mimeiSync(systemSid, mid, nil); err != nil {
 		return err
 	}
 	return c.mimeiProvide(systemSid, mid)
@@ -165,7 +165,7 @@ func entryMimeiProvide(c *ctx) (any, error) {
 	}
 
 	if provide {
-		if err := c.mimeiSync(targetID, nil); err != nil {
+		if err := c.mimeiSync(authSid, targetID, nil); err != nil {
 			return c.wrapErr(err), nil
 		}
 		if err := c.mimeiProvide(authSid, targetID); err != nil {
