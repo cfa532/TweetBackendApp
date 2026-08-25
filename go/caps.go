@@ -154,10 +154,10 @@ func normalizeRemoteResult(ret any) any {
 
 // mimeiSync pulls an object's current data from the network onto this node.
 //
-// BEMMSync is the fallback: it is on the published interface and does the same
-// job, but takes no session and on this node build has been seen to block for
-// tens of seconds and to panic inside SyncMiMei. MiMeiSync is what the
-// JavaScript used and is preferred whenever the handle carries it.
+// This is MiMeiSync(sid, "", mid, {}), the same call the JavaScript made.
+// BEMMSync is not used as a substitute: it is the node's internal entry point,
+// takes no session, and reaches the identical SyncMiMei, so falling back to it
+// would buy nothing and would hide a node that stopped offering MiMeiSync.
 func (c *ctx) mimeiSync(sid, mid string, param map[string]string) error {
 	if mid == "" {
 		return fmt.Errorf("mimeiSync: empty mid")
@@ -165,14 +165,12 @@ func (c *ctx) mimeiSync(sid, mid string, param map[string]string) error {
 	if param == nil {
 		param = map[string]string{}
 	}
-	if s, ok := c.api.(mimeiSyncer); ok {
-		if err := s.MiMeiSync(sid, "", mid, param); err != nil {
-			return fmt.Errorf("MiMeiSync(%s): %v", mid, err)
-		}
-		return nil
+	s, ok := c.api.(mimeiSyncer)
+	if !ok {
+		return capUnsupportedError{action: "MiMeiSync"}
 	}
-	if err := c.api.BEMMSync("", mid, param); err != nil {
-		return fmt.Errorf("BEMMSync(%s): %v", mid, err)
+	if err := s.MiMeiSync(sid, "", mid, param); err != nil {
+		return fmt.Errorf("MiMeiSync(%s): %v", mid, err)
 	}
 	return nil
 }
