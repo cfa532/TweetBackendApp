@@ -127,7 +127,7 @@
         if (relationshipType === "followings") {
             lapi.Hdel(ownerSid, FAILED_FOLLOWING_ACCESSES, otherId)
         }
-        lapi.MMBackup(ownerSid, ownerId, "", "delref=true")
+        lapi.MMBackup(ownerSid, ownerId, "", "delref=false")
         lapi.MiMeiPublish(authSid, "", ownerId)
 
         try {

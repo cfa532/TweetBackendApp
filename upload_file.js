@@ -55,7 +55,7 @@
         lapi.MMAddRef(sid, userId, request["cid"])
         
         // Update user data and publish changes
-        lapi.MMBackup(sid, userId, "", "delref=true")
+        lapi.MMBackup(sid, userId, "", "delref=false")
         lapi.MiMeiPublish(authSid, "", userId)
 
         lapi.Debug("Tweed upload_file: Attached file to user mid=%s", userId)

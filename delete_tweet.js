@@ -144,7 +144,7 @@
                 });
                 
                 // Permanently delete the tweet
-                lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
+                lapi.MMBackup(tweetSid, tweetId, "", "delref=false")
                 lapi.MiMeiUnpublish(tweetSid, "", tweetId)  // Remove from network
                 lapi.MMDelVers(tweetSid, tweetId)  // Delete all versions
 
@@ -169,7 +169,7 @@
             lapi.Zrem(userSid, FAVORITE_LIST, tweetId)  // Remove from favorites
             
             // Update user data and publish changes
-            lapi.MMBackup(userSid, userId, "", "delref=true")
+            lapi.MMBackup(userSid, userId, "", "delref=false")
             lapi.MiMeiPublish(authSid, "", userId)
 
             lapi.Debug("Tweed delete_tweet: Delete tweet %s %s", tweetId, JSON.stringify(deletedTweet))

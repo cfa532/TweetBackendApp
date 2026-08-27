@@ -113,7 +113,7 @@
                     }
 
                     // Update user data and publish changes
-                    lapi.MMBackup(userSid, userId, "", "delref=true")
+                    lapi.MMBackup(userSid, userId, "", "delref=false")
                 } catch(e) {
                     lapi.Error("Tweed toggle_bookmark_by_user: Failed to update bookmark list: %s, userId=%s, tweetId=%s", e, userId, tweetId)
                     throw e

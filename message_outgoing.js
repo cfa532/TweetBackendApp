@@ -94,7 +94,7 @@
             // 2. Store actual message content in Hset
             lapi.Zadd(msgSid, receiptId, sp)
             lapi.Hset(msgSid, receiptId, sp.Member, msg)
-            lapi.MMBackup(msgSid, msgMid, "", "delref=true")
+            lapi.MMBackup(msgSid, msgMid, "", "delref=false")
             return wrapResponse(true)
         }
     } catch(e) {

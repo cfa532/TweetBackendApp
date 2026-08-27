@@ -181,7 +181,7 @@
                 }
 
                 // Update tweet data and publish changes
-                lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
+                lapi.MMBackup(tweetSid, tweetId, "", "delref=false")
                 lapi.MiMeiPublish(tweetSid, "", tweetId)
 
                 // Update the score of the user in AppData

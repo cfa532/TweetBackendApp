@@ -114,7 +114,7 @@
             
             // Backup tweet data and publish changes
             try {
-                lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
+                lapi.MMBackup(tweetSid, tweetId, "", "delref=false")
                 lapi.MiMeiPublish(authSid, "", tweetId)
             } catch(e) {
                 lapi.Error("Tweed delete_comment: Failed to backup/publish tweet %s: %s", tweetId, e)
@@ -125,7 +125,7 @@
                 const userSid = lapi.MMOpen(authSid, appUserId, "cur")
                 lapi.Zrem(userSid, BOOKMARK_LIST, commentId)
                 lapi.Zrem(userSid, FAVORITE_LIST, commentId)
-                lapi.MMBackup(userSid, appUserId, "", "delref=true")
+                lapi.MMBackup(userSid, appUserId, "", "delref=false")
             } catch(e) {
                 lapi.Error("Tweed delete_comment: Failed to remove comment from user lists %s: %s", appUserId, e)
             }

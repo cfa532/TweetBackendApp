@@ -183,7 +183,7 @@
             });
             
             // Backup tweet data and publish it
-            lapi.MMBackup(authSid, tweetId, "", "delref=true")
+            lapi.MMBackup(authSid, tweetId, "", "delref=false")
             lapi.MiMeiPublish(authSid, "", tweetId)  // Make tweet available to other nodes
     
             // Add tweet to author's tweet list and following feed
@@ -210,7 +210,7 @@
             }
             // Create reference from author to tweet and update author data
             lapi.MMAddRef(authSid, authorId, tweetId)
-            lapi.MMBackup(authSid, authorId, "", "delref=true")
+            lapi.MMBackup(authSid, authorId, "", "delref=false")
             lapi.MiMeiPublish(authSid, "", authorId)  // Publish updated author data
     
             // Update the author's score in application data

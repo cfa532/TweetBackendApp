@@ -68,7 +68,7 @@
                 let authSid = lapi.BELoginAsAuthor()
                 let sid = lapi.MMOpen(authSid, referenceId, "cur")
                 lapi.MMAddRef(sid, referenceId, cid)
-                lapi.MMBackup(sid, referenceId, "", "delref=true")
+                lapi.MMBackup(sid, referenceId, "", "delref=false")
             }
 
             // No reference to add, this is an attachment of a tweet

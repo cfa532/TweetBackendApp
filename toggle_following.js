@@ -199,7 +199,7 @@
                 lapi.Hdel(userSid, FOLLOWINGS_LIST, followingId)
                 
                 // Backup user data and publish changes
-                lapi.MMBackup(userSid, userId, "", "delref=true")
+                lapi.MMBackup(userSid, userId, "", "delref=false")
                 lapi.MiMeiPublish(authSid, "", userId)
                 // Update follower count on the target user's node
                 try {
@@ -266,7 +266,7 @@
                 
                 // Backup user data and publish changes
                 stage = "backup actor user"
-                lapi.MMBackup(userSid, userId, "", "delref=true")
+                lapi.MMBackup(userSid, userId, "", "delref=false")
                 stage = "publish actor user"
                 lapi.MiMeiPublish(authSid, "", userId)
                 lapi.Debug("Tweed toggle_following: relationship persisted actor=%s target=%s tweetCount=%s",

@@ -159,7 +159,7 @@
 
             tweet.content = content
             lapi.Set(tweetSid, TWT_CONTENT_KEY, tweet)
-            lapi.MMBackup(authSid, tweetId, "", "delref=true")
+            lapi.MMBackup(authSid, tweetId, "", "delref=false")
             lapi.MiMeiPublish(authSid, "", tweetId)
 
             lapi.Debug("Tweed update_tweet: local tweet=%s", JSON.stringify(tweet))

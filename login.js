@@ -137,7 +137,7 @@
                 // Update user data and publish changes
                 const userSid = lapi.MMOpen(authSid, userId, "cur")
                 lapi.Set(userSid, OWNER_DATA_KEY, userInDB)
-                lapi.MMBackup(authSid, userInDB.mid, "", "delref=true")
+                lapi.MMBackup(authSid, userInDB.mid, "", "delref=false")
                 lapi.MiMeiPublish(authSid, "", userInDB.mid)
 
                 // ================================================================

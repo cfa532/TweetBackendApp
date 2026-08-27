@@ -71,10 +71,10 @@ func (c *ctx) backup(sid, mid, memo string, opts ...string) error {
 	return nil
 }
 
-// backupDelRef commits with delref=true, which drops references that were
+// backupDelRef commits with delref=false, which drops references that were
 // removed in this revision. Used after deleting a child object.
 func (c *ctx) backupDelRef(sid, mid, memo string) error {
-	return c.backup(sid, mid, memo, "delref=true")
+	return c.backup(sid, mid, memo, "delref=false")
 }
 
 // ---------------------------------------------------------------------------

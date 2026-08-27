@@ -110,7 +110,7 @@
             lapi.Zadd(msgSid, LAST_FETCH_MSG, sp)  // If member exists, score will be updated, otherwise insert
             
             // Backup the Mimei to ensure data persistence
-            lapi.MMBackup(authSid, msgMid, "", "delref=true")
+            lapi.MMBackup(authSid, msgMid, "", "delref=false")
             return wrapResponse(messages)
         }
     } catch(e) {

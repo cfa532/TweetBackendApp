@@ -245,7 +245,7 @@
             // Save the updated user data
             try {
                 lapi.Set(userSid, OWNER_DATA_KEY, userInDB)
-                lapi.MMBackup(userSid, userInDB.mid, "", "delref=true")
+                lapi.MMBackup(userSid, userInDB.mid, "", "delref=false")
                 lapi.MiMeiProvide(authSid, "", userInDB.mid)
             } catch(e) {
                 lapi.Error("Tweed set_author_core_data: Failed to save user data %s: %s", userInDB.mid, e)

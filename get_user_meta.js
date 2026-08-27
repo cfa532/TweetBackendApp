@@ -192,7 +192,7 @@
         // Persist and publish root-node cleanup once after the page is built.
         if (didModify) {
             try {
-                lapi.MMBackup(userSid, userId, "", "delref=true")
+                lapi.MMBackup(userSid, userId, "", "delref=false")
                 lapi.MiMeiPublish(authSid, "", userId)
             } catch (e) {
                 lapi.Error("Tweed get_user_meta: failed to persist/publish cleanup for userId=%s: %s", userId, e)

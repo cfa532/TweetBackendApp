@@ -183,7 +183,7 @@
             // Persist both feed updates and access-failure bookkeeping on the
             // calling user's authoritative home object.
             if (tweets.length > 0 || callingUserChanged) {
-                lapi.MMBackup(mmsid, userId, "", "delref=true")
+                lapi.MMBackup(mmsid, userId, "", "delref=false")
                 lapi.MiMeiPublish(mmsid, "", userId)
                 callingUserChanged = false
             }
@@ -200,7 +200,7 @@
         // successful part of that mutation while still returning the error.
         if (callingUserChanged && callingUserSid) {
             try {
-                lapi.MMBackup(callingUserSid, userId, "", "delref=true")
+                lapi.MMBackup(callingUserSid, userId, "", "delref=false")
                 lapi.MiMeiPublish(callingUserSid, "", userId)
             } catch(persistError) {
                 lapi.Error("Tweed update_following_tweets: failed to persist partial following access state: %s, userId=%s", persistError, userId)
