@@ -35,9 +35,9 @@ func entryUpdateTweet(c *ctx) (any, error) {
 	tweetID := c.str("tweetid")
 	content := c.str("content")
 
-	// Resolved to reject an edit for a user this node does not know; the reply
-	// shape for that case is part of the client contract.
-	if err := c.requireKnownUser(appUserID); err != nil {
+	// Only the author edits, and the tweet lives on their root node; the reply
+	// shape for a rejection is part of the client contract.
+	if err := c.requireRootNode(appUserID); err != nil {
 		return respErr(err), nil
 	}
 
@@ -181,8 +181,8 @@ func entryToggleTweetPrivacy(c *ctx) (any, error) {
 	appUserID := c.str("appuserid")
 	tweetID := c.str("tweetid")
 
-	// Resolved to reject a request for a user this node does not know.
-	if err := c.requireKnownUser(appUserID); err != nil {
+	// Only the author flips this, and the tweet lives on their root node.
+	if err := c.requireRootNode(appUserID); err != nil {
 		return c.wrapErr(err), nil
 	}
 
@@ -536,8 +536,8 @@ func entryTogglePinnedTweet(c *ctx) (any, error) {
 	tweetID := c.str("tweetid")
 	appUserID := c.str("appuserid")
 
-	// Resolved to reject a request for a user this node does not know.
-	if err := c.requireKnownUser(appUserID); err != nil {
+	// The pinned list is part of the profile, which lives on its root node.
+	if err := c.requireRootNode(appUserID); err != nil {
 		return c.wrapErrBool(err), nil
 	}
 
@@ -633,8 +633,8 @@ func (c *ctx) updateRetweetList(entry string, add bool) (any, error) {
 	appUserID := c.str("appuserid")
 	authorID := c.str("authorid")
 
-	// Resolved to reject a request naming an author this node does not know.
-	if err := c.requireKnownUser(authorID); err != nil {
+	// The list lives inside the author's tweet, so this must be their node.
+	if err := c.requireRootNode(authorID); err != nil {
 		return c.wrapErr(fmt.Errorf("Author not found or missing host")), nil
 	}
 

@@ -115,6 +115,8 @@ func isCapUnsupported(err error) bool {
 //	set_author_core_data -> sync_user, warming the node an account is moving to
 //	node_update_mid_by_score -> node_get_score, comparing against the owner
 //	toggle_following  -> get_tweet_id_list, reading the followed user's tweets
+//	add_comment       -> add_tweet, creating a quote-comment's retweet half on
+//	                     the node of the writer who owns it
 //
 // params must already contain aid/ver/sid and the entry's own arguments; nid is
 // set here.
@@ -224,7 +226,43 @@ func (c *ctx) mimeiIsProvider(sid, mid string) (bool, error) {
 	return p.MiMeiIsProvider(sid, mid)
 }
 
-// syncIfRemote pulls an object only when another node owns it.
+// When to force a synchronisation, and when to let the provider table decide
+//
+// A node that already provides a mimei is kept current by the node's own
+// replication, so pulling it again buys nothing. That makes MiMeiIsProvider —
+// a local table lookup, no network — the right gate for anything whose purpose
+// is possession rather than freshness. Only explicit user recovery still forces
+// a sync:
+//
+//   - Feed, tweet-detail and profile pull-to-refresh reach
+//     node_update_mid_by_score, sync_user or resync_user, and the user is
+//     waiting on the newest data. Being a provider says the copy will catch up,
+//     not that it already has. See the client policy in
+//     docs/LEITHER_DATA_AND_SYNC_CONTRACT.md.
+//   - Everything else takes or keeps a copy: following an account, saving a
+//     tweet, quoting one, mimei_provide. Freshness is not the point, possession
+//     is, and replication supplies the rest. These go through ensureProvided.
+//
+// Pulling an object back after a write would be a third case, since the copy
+// here would be stale by exactly that write. It does not arise: clients address
+// the account's root node directly (routing.go) and this app forwards no write.
+//
+// A site that has no copy at all (recoverUser, initialiseMid) needs no gate:
+// this node cannot be providing what it does not hold.
+
+// alreadyProviding reports whether this node already serves mid and so needs no
+// copy pulled. A check that cannot be answered reports false, which leaves the
+// caller doing the work it would have done anyway.
+func (c *ctx) alreadyProviding(sid, mid string) bool {
+	provided, err := c.mimeiIsProvider(sid, mid)
+	if err != nil {
+		c.warnf("provider check %s failed: %v", mid, err)
+		return false
+	}
+	return provided
+}
+
+// syncIfRemote takes a copy of an object only when another node owns it.
 //
 // Synchronising a mimei this node already hosts cannot work — there is nowhere
 // to pull from. The JavaScript entries made the call regardless and swallowed
@@ -238,11 +276,19 @@ func (c *ctx) syncIfRemote(sid, mid, ownerHost string) {
 		c.debugf("skipping sync of %s: this node already hosts it", mid)
 		return
 	}
-	c.syncBestEffort(sid, mid)
+	c.ensureProvided(sid, mid)
 }
 
-// syncBestEffort pulls an object and announces the local copy, logging failures.
-func (c *ctx) syncBestEffort(sid, mid string) {
+// ensureProvided makes this node one of mid's providers, logging failures.
+//
+// Nothing is pulled when the node already provides the object, because
+// replication keeps a provided copy current. Callers that need the newest data
+// now — the recovery entries above — must call mimeiSync directly instead.
+func (c *ctx) ensureProvided(sid, mid string) {
+	if c.alreadyProviding(sid, mid) {
+		c.debugf("skipping sync of %s: this node already provides it", mid)
+		return
+	}
 	if err := c.mimeiSync(sid, mid, nil); err != nil {
 		c.warnf("sync %s failed: %v", mid, err)
 		return

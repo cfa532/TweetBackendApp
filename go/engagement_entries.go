@@ -88,8 +88,8 @@ func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 
 	requested, stateGiven := c.requestedState(kind.stateParam)
 
-	// Resolved to reject a request naming an author this node does not know.
-	if err := c.requireKnownUser(authorID); err != nil {
+	// The tweet lives on its author's root node, so this must be that node.
+	if err := c.requireRootNode(authorID); err != nil {
 		return c.wrapErrString(fmt.Errorf("Author host not found")), nil
 	}
 	systemSid, err := c.nodeDataSid(verCur)
@@ -248,10 +248,10 @@ func (c *ctx) applyEngagementToUser(kind engagementKind, userID, tweetID string,
 	if err != nil {
 		return nil, err
 	}
-	// Resolved to reject a request for a user this node does not know. The
-	// caller side of this pair still addresses the user's own node directly,
-	// because the tweet's list and the user's list live on different nodes.
-	if err := c.requireKnownUser(userID); err != nil {
+	// The list written here is the user's own, so this must be their root
+	// node. The caller side of this pair addresses it directly, because the
+	// tweet's list and the user's list live on different nodes.
+	if err := c.requireRootNode(userID); err != nil {
 		return nil, err
 	}
 
@@ -297,12 +297,10 @@ func (c *ctx) applyEngagementToUser(kind engagementKind, userID, tweetID string,
 	}
 
 	if changed && wanted && !skipContentSync {
-		if err := c.mimeiSync(authSid, tweetID, nil); err != nil {
-			c.errorf("Failed to sync tweet %s: %v", tweetID, err)
-		}
-		if err := c.mimeiProvide(authSid, tweetID); err != nil {
-			c.errorf("Failed to provide tweet %s: %v", tweetID, err)
-		}
+		// Saving a tweet means this node should hold it; ensureProvided skips
+		// the pull when it already does. skipcontentsync is the caller's hint
+		// that the tweet is on this node, which the provider table confirms.
+		c.ensureProvided(authSid, tweetID)
 	}
 	// Un-saving deliberately does not unprovide or delete the local copy: this
 	// node may hold the only reachable copy of the tweet.

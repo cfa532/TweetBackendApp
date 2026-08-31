@@ -200,9 +200,15 @@
                     // Note: Original tweet may not be available if deleted or on unreachable node
                     lapi.MMAddRef(authSid, authorId, tweet.originalTweetId)
 
-                    // If original tweet is on the same node, MimeiSync will throw an error.
-                    lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
-                    lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
+                    // Quoting a tweet means this node should hold it. One it
+                    // already provides is kept current by Leither, so only a
+                    // missing original is pulled — which also covers the case
+                    // this comment used to describe: if the original tweet is on
+                    // the same node, MimeiSync will throw an error.
+                    if (!lapi.MiMeiIsProvider(authSid, tweet.originalTweetId)) {
+                        lapi.MiMeiSync(authSid, "", tweet.originalTweetId, {})
+                        lapi.MiMeiProvide(authSid, "", tweet.originalTweetId)
+                    }
                 } catch(e) {
                     // This is acceptable - retweet can exist without original tweet data
                     lapi.Error("Tweed add_tweet: Error sync original tweet: %s, tweet=%s", e, JSON.stringify(tweet))

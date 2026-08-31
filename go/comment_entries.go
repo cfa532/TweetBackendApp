@@ -30,10 +30,16 @@ func entryAddComment(c *ctx) (any, error) {
 	// for the same thing.
 	tweetAuthorID := firstNonEmpty(c.str("tweetauthorid"), c.str("userid"))
 	tweetID := c.str("tweetid")
-	hostID := c.str("hostid")
 
 	if tweetAuthorID == "" {
 		return respErr(fmt.Errorf("Missing parent author ID: expected tweetauthorid")), nil
+	}
+	// A comment is stored on its parent's author's root node and referenced by
+	// the parent, so this must be that node — the identity that decides it is the
+	// parent's author, never the writer of the comment. All three clients send
+	// add_comment to that node's writable route.
+	if err := c.requireRootNode(tweetAuthorID); err != nil {
+		return respErr(err), nil
 	}
 	comment, err := c.obj("comment")
 	if err != nil {
@@ -44,17 +50,7 @@ func entryAddComment(c *ctx) (any, error) {
 	// by its writer, and the comment itself with the quote fields stripped.
 	retweetID := ""
 	if mapStr(comment, "originalTweetId") != "" && mapStr(comment, "originalAuthorId") != "" {
-		ret, err := c.callEntryMap("add_tweet", map[string]string{
-			reqAppID:  c.appID(),
-			reqAppVer: verLast,
-			"hostid":  hostID,
-			"tweet":   c.str("comment"),
-		})
-		if err != nil {
-			c.warnf("quoted tweet creation failed: %v", err)
-		} else if mapBool(ret, "success") {
-			retweetID = mapStr(ret, "mid")
-		}
+		retweetID = c.createQuotedRetweet(tweetObj(comment).authorID())
 		delete(comment, "originalTweetId")
 		delete(comment, "originalAuthorId")
 	}
@@ -136,6 +132,57 @@ func entryAddComment(c *ctx) (any, error) {
 		"count":     count,
 		"retweetid": retweetID,
 	}), nil
+}
+
+// createQuotedRetweet creates the retweet half of a quote-comment, on the node
+// that owns it, and returns its id.
+//
+// The retweet belongs to the writer of the comment, so it belongs on the
+// writer's root node — and this is the parent author's node, which is a
+// different one whenever someone quotes across nodes. The JavaScript entry
+// could call add_tweet locally because add_tweet forwarded a misdirected
+// request itself; the Go one does not forward (routing.go), so the hop is made
+// here. It is the same two-owners-on-two-nodes case the other callRemote sites
+// cover, and it is why add_tweet can require its own root node.
+//
+// Best effort, as it has always been: a comment whose quoted retweet could not
+// be created is still a comment, and the caller reports an empty retweet id.
+func (c *ctx) createQuotedRetweet(writerID string) string {
+	writer, err := c.loadUser(writerID)
+	if err != nil || writer == nil || !writer.hasValidHost() {
+		c.warnf("quoted tweet creation failed: no known host for writer %s: %v", writerID, err)
+		return ""
+	}
+
+	params := map[string]string{
+		reqAppID:  c.appID(),
+		reqAppVer: verLast,
+		"tweet":   c.str("comment"),
+	}
+
+	var ret map[string]any
+	if writerHost := writer.hostID(); writerHost == c.nodeID() {
+		ret, err = c.callEntryMap("add_tweet", params)
+	} else {
+		systemSid, sidErr := c.nodeDataSid(verCur)
+		if sidErr != nil {
+			c.warnf("quoted tweet creation failed: %v", sidErr)
+			return ""
+		}
+		params[reqSid] = systemSid
+		var raw any
+		raw, err = c.callRemote(writerHost, "add_tweet", params)
+		ret, _ = toMap(raw)
+	}
+	if err != nil {
+		c.warnf("quoted tweet creation failed: %v", err)
+		return ""
+	}
+	if !mapBool(ret, "success") {
+		c.warnf("quoted tweet creation failed on node %s: %s", writer.hostID(), jsonStringify(ret))
+		return ""
+	}
+	return mapStr(ret, "mid")
 }
 
 // commentCount reads a parent's comment count from its committed version.

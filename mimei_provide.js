@@ -55,15 +55,21 @@
             // PROVIDE CONTENT TO DHT NETWORK
             // ================================================================
             
-            // Sync content before providing to ensure latest version
-            lapi.MiMeiSync(authSid, "", targetId, {})
-            
-            // Provide content to DHT network for discovery
-            try {
-                let dhtreply = lapi.MiMeiProvide(authSid, "", targetId)
-                lapi.Debug("Tweed mimei_provide: provide targetId=%s, dhtreply=%s", targetId, JSON.stringify(dhtreply))
-            } catch(e) {
-                lapi.Error("Tweed mimei_provide: Failed to provide %s: %s", targetId, e)
+            // Content this node already provides is kept current by Leither,
+            // so the whole request is a no-op.
+            if (lapi.MiMeiIsProvider(authSid, targetId)) {
+                lapi.Debug("Tweed mimei_provide: already providing targetId=%s", targetId)
+            } else {
+                // Sync content before providing to ensure latest version
+                lapi.MiMeiSync(authSid, "", targetId, {})
+                
+                // Provide content to DHT network for discovery
+                try {
+                    let dhtreply = lapi.MiMeiProvide(authSid, "", targetId)
+                    lapi.Debug("Tweed mimei_provide: provide targetId=%s, dhtreply=%s", targetId, JSON.stringify(dhtreply))
+                } catch(e) {
+                    lapi.Error("Tweed mimei_provide: Failed to provide %s: %s", targetId, e)
+                }
             }
         } else {
             // ================================================================

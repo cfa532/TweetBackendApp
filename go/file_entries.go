@@ -253,8 +253,8 @@ func entryShareFile(c *ctx) (any, error) {
 		return c.wrapErr(err), nil
 	}
 
-	// Resolved to reject a share from a user this node does not know.
-	if err := c.requireKnownUser(userID); err != nil {
+	// The share is recorded on the sharing user's own account.
+	if err := c.requireRootNode(userID); err != nil {
 		return c.wrapErr(err), nil
 	}
 

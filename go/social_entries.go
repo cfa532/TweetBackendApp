@@ -204,16 +204,11 @@ func (c *ctx) follow(authSid, systemSid, userID, followingID, hostOfOther, nodeI
 	c.debugf("relationship persisted actor=%s target=%s tweetCount=%d", userID, followingID, len(pairs))
 
 	// Hold a local copy of the followed account so their profile renders
-	// without a network round trip — but only when another node owns it.
-	// Following someone hosted here needs no copy, and attempting it blocks the
-	// whole request for seconds before failing.
-	if hostOfOther == nodeID {
-		c.debugf("skipping sync of %s: this node already hosts it", followingID)
-	} else if err := c.mimeiSync(authSid, followingID, nil); err != nil {
-		c.errorf("Failed to sync followed user %s: %v", followingID, err)
-	} else if err := c.mimeiProvide(authSid, followingID); err != nil {
-		c.errorf("Failed to sync followed user %s: %v", followingID, err)
-	}
+	// without a network round trip — but only when another node owns it and
+	// this node is not already serving it. Following someone hosted here needs
+	// no copy, and attempting it blocks the whole request for seconds before
+	// failing.
+	c.syncIfRemote(authSid, followingID, hostOfOther)
 
 	if err := c.updateFollowerSide(systemSid, followingID, userID, hostOfOther, true); err != nil {
 		c.errorf("toggle_follower failed: %v, %s", err, c.requestJSON())
@@ -292,11 +287,15 @@ func (c *ctx) updateFollowerSide(systemSid, targetID, actorID, targetHost string
 // targetTweetList reads a user's public tweet list, from their own node when
 // that is not this one.
 func (c *ctx) targetTweetList(systemSid, followingID, hostOfOther string) ([]lapi.ScorePair, error) {
+	// v2 is asked for so a failure on the answering node arrives as a message.
+	// Without it that node reports an error as an empty list, which is
+	// indistinguishable from a user who has posted nothing.
 	params := map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		reqSid:    systemSid,
-		"userid":  followingID,
+		reqAppID:   c.appID(),
+		reqAppVer:  verLast,
+		reqSid:     systemSid,
+		reqVersion: versionV2,
+		"userid":   followingID,
 	}
 	var result any
 	var err error
@@ -324,6 +323,11 @@ func (c *ctx) targetTweetList(systemSid, followingID, hostOfOther string) ([]lap
 			return nil, fmt.Errorf("%s", msg)
 		}
 	}
+	// The response is unusable and says nothing about why. Logging it is the
+	// only way to tell an unreachable node from one answering in a shape this
+	// does not know; a follow is refused either way.
+	c.errorf("unusable tweet list response from %s for user %s: %s",
+		hostOfOther, followingID, jsonStringify(result))
 	return nil, fmt.Errorf("Invalid tweet list response")
 }
 
@@ -405,10 +409,10 @@ func entryToggleFollower(c *ctx) (any, error) {
 		return c.wrapErr(fmt.Errorf("Cannot follow yourself")), nil
 	}
 
-	// Resolved to reject a request for a user this node does not know. The
-	// caller side still addresses this user's own node directly, because a
-	// follow writes to two accounts that live on two different nodes.
-	if err := c.requireKnownUser(userID); err != nil {
+	// The follower list written here is this user's own, so this must be their
+	// root node. The caller side addresses it directly, because a follow writes
+	// to two accounts that live on two different nodes.
+	if err := c.requireRootNode(userID); err != nil {
 		return c.wrapErr(fmt.Errorf("User host not found")), nil
 	}
 
@@ -638,8 +642,8 @@ func entryBlockUser(c *ctx) (any, error) {
 	blockedUserID := c.str("blocked")
 	userID := c.str("userid")
 
-	// Resolved to reject a request for a user this node does not know.
-	if err := c.requireKnownUser(userID); err != nil {
+	// The block list and the unfollow both write this user's own account.
+	if err := c.requireRootNode(userID); err != nil {
 		return c.wrapErrSuccess(err), nil
 	}
 

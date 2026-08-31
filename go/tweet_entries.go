@@ -44,6 +44,13 @@ func entryAddTweet(c *ctx) (any, error) {
 		}))
 		return respErr(fmt.Errorf("User host not found")), nil
 	}
+	// The tweet is stored on its author's root node and referenced by their
+	// account, so creating it anywhere else writes a copy the root never learns
+	// about. Clients address that node; add_comment reaches it through
+	// createQuotedRetweet.
+	if err := c.requireRootNodeFor(user, tweet.authorID()); err != nil {
+		return respErr(err), nil
+	}
 	return c.addTweetLocal(tweet, user, agentAuth)
 }
 
@@ -471,6 +478,11 @@ func entryDeleteTweet(c *ctx) (any, error) {
 			"userId": userID, "nodeId": c.nodeID(),
 		}))
 		return respErr(fmt.Errorf("User host not found")), nil
+	}
+	// Both paths write the requester's own account: the author's deletes the
+	// tweet, anyone else's removes it from their lists.
+	if err := c.requireRootNodeFor(user, userID); err != nil {
+		return respErr(err), nil
 	}
 
 	authSid, err := c.authSid()

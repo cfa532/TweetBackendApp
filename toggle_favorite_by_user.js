@@ -139,14 +139,15 @@
             // ================================================================
             
             if (favoriteChanged && isFavorite && !skipContentSync) {
-                // Sync and provide favorited content to ensure availability
+                // Saving a tweet means this node should hold it. One it already
+                // provides is kept current by Leither, so only a tweet missing
+                // from the provider table is pulled. skipcontentsync is the
+                // caller's hint for the same thing; this confirms it locally.
                 try {
-                    lapi.MiMeiSync(authSid, "", tweetId, {})
-                } catch(e) {
-                    lapi.Error("Tweed toggle_favorite_by_user: Failed to sync tweet %s: %s", tweetId, e)
-                }
-                try {
-                    lapi.MiMeiProvide(authSid, "", tweetId)
+                    if (!lapi.MiMeiIsProvider(authSid, tweetId)) {
+                        lapi.MiMeiSync(authSid, "", tweetId, {})
+                        lapi.MiMeiProvide(authSid, "", tweetId)
+                    }
                 } catch(e) {
                     lapi.Error("Tweed toggle_favorite_by_user: Failed to provide tweet %s: %s", tweetId, e)
                 }

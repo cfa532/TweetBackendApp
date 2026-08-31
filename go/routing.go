@@ -3,33 +3,68 @@
 // Every account has one root node, named by user.hostIds[0], and that is where
 // writes to the account and to anything it owns must happen. Choosing that node
 // is the client's job: it knows which node owns the account and calls it
-// directly. The backend no longer inspects the host and bounces a misdirected
-// request onwards.
+// directly. The backend does not bounce a misdirected request onwards — it
+// refuses it, because writing here instead would produce a second copy of the
+// account that replication has no way to reconcile with the root's.
 //
-// What remains is the existence check the entries always did alongside that
-// routing. An account this node has never seen, or one with no host recorded,
-// still fails the request rather than being written blindly.
+// Alongside that, the existence check the entries always did. An account this
+// node has never seen, or one with no host recorded, still fails the request
+// rather than being written blindly.
 package lapp
 
 import "fmt"
 
-// requireKnownUser rejects a write naming an account this node cannot resolve.
+// knownUser loads an account, rejecting one this node cannot resolve.
 //
 // The error text is unchanged from when this also decided routing, because
 // clients match on it.
-func (c *ctx) requireKnownUser(userID string) error {
+func (c *ctx) knownUser(userID string) (userObj, error) {
 	user, err := c.loadUser(userID)
 	if err != nil {
 		c.errorf("getUser failed for mid=%s: %v", userID, err)
-		return err
+		return nil, err
 	}
 	if user == nil || !user.hasValidHost() {
 		c.errorf("missing host for user %s", jsonStringify(map[string]any{
 			"userId": userID, "nodeId": c.nodeID(),
 		}))
-		return fmt.Errorf("User not found or missing host")
+		return nil, fmt.Errorf("User not found or missing host")
 	}
-	return nil
+	return user, nil
+}
+
+// requireKnownUser rejects a request naming an account this node cannot
+// resolve. Reads use this; a write wants requireRootNode below.
+func (c *ctx) requireKnownUser(userID string) error {
+	_, err := c.knownUser(userID)
+	return err
+}
+
+// requireRootNode rejects a write that has arrived at the wrong node.
+//
+// The account's root node owns every write to it, so a request that reaches any
+// other node is a caller addressing the wrong one. Performing it would write a
+// copy that the root never learns about and that the next synchronisation from
+// the root overwrites, losing the write silently. Refusing says so at once.
+func (c *ctx) requireRootNode(userID string) error {
+	user, err := c.knownUser(userID)
+	if err != nil {
+		return err
+	}
+	return c.requireRootNodeFor(user, userID)
+}
+
+// requireRootNodeFor is requireRootNode for a caller that holds the account
+// already, so the check costs no second read.
+func (c *ctx) requireRootNodeFor(user userObj, userID string) error {
+	nodeID := c.nodeID()
+	if user.hostID() == nodeID {
+		return nil
+	}
+	c.errorf("write aimed at the wrong node %s", jsonStringify(map[string]any{
+		"userId": userID, "rootNode": user.hostID(), "nodeId": nodeID,
+	}))
+	return fmt.Errorf("Node %s is not the root node for user %s", nodeID, userID)
 }
 
 // present reports whether a request parameter was supplied at all, including as

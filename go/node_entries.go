@@ -153,7 +153,8 @@ func (c *ctx) initialiseMid(systemSid, userID, mid string) error {
 // entryMimeiProvide starts or stops serving an object from this node.
 //
 // Providing pulls a current copy first, so the node does not advertise content
-// it cannot serve. Withdrawing also drops the stored versions, since nothing on
+// it cannot serve — unless the node already serves it, which makes the whole
+// request a no-op. Withdrawing also drops the stored versions, since nothing on
 // this node refers to them any more.
 func entryMimeiProvide(c *ctx) (any, error) {
 	targetID := c.str(reqMID)
@@ -165,6 +166,10 @@ func entryMimeiProvide(c *ctx) (any, error) {
 	}
 
 	if provide {
+		if c.alreadyProviding(authSid, targetID) {
+			c.debugf("already providing targetId=%s", targetID)
+			return c.wrap(map[string]any{"success": true}), nil
+		}
 		if err := c.mimeiSync(authSid, targetID, nil); err != nil {
 			return c.wrapErr(err), nil
 		}
