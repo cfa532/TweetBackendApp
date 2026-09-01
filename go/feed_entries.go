@@ -138,6 +138,12 @@ func (c *ctx) pullFeedFromRoot(userID, rootHost string, lastScore int64) (any, e
 }
 
 // refreshFeedLocally walks the user's followings and collects their new tweets.
+//
+// The account is held open for writing for the whole walk, and anything else
+// that reads it queues behind that. Nothing belongs in here beyond the
+// synchronisation each following needs: announcing the tweets this refresh
+// picked up was tried and made every other request to this node wait on a
+// MiMeiProvide per tweet. The node advertises what it holds on its own.
 func (c *ctx) refreshFeedLocally(authSid, userID string, lastScore int64, tracker *followingAccessTracker) (any, error) {
 	mmsid, err := c.api.MMOpen(authSid, userID, verCur)
 	if err != nil {
@@ -237,7 +243,6 @@ func (c *ctx) collectFollowingTweets(uid, userID string, lastScore int64, userSi
 			c.errorf("updateUser error: %v, uid=%s", err, uid)
 			return nil, nil
 		}
-		c.provideFeedTweets(newTweets)
 	}
 
 	tweets := []any{}
@@ -247,49 +252,6 @@ func (c *ctx) collectFollowingTweets(uid, userID string, lastScore int64, userSi
 		}
 	}
 	return tweets, nil
-}
-
-// provideFeedTweets announces the tweets a refresh has just pulled in, so this
-// node serves them to the network instead of only holding them.
-//
-// Synchronising the followed account carries its new tweet objects onto this
-// node, but the DHT still lists only the author's node as a provider.
-//
-// MiMeiIsProvider answers from the local provider table without going to the
-// network, so checking every tweet is cheap and only a miss costs a round trip.
-// The check also decides correctness, not just cost:
-//
-//   - A tweet this node already provides needs nothing further. The node's own
-//     replication keeps a provided copy current, so an announcement would be a
-//     no-op and a sync would be redundant.
-//   - MiMeiProvide reaches SyncMiMei internally (LEITHER_ISSUES.md P15, the
-//     node-internal "CheckDBProvide MiMeiProvide err=SyncMiMei" line), so the
-//     announcement pulls the tweet as part of publishing it and needs no sync
-//     of its own. That same path panics when the calling node is the only
-//     announced provider — which is precisely the case the check skips.
-//
-// Every failure is logged and skipped: the feed entry is already stored, and
-// the announcement only affects where other nodes can read the tweet from.
-func (c *ctx) provideFeedTweets(tweets []lapi.ScorePair) {
-	systemSid, err := c.nodeDataSid(verCur)
-	if err != nil {
-		c.errorf("provide feed tweets failed: %v", err)
-		return
-	}
-	for _, pair := range tweets {
-		isProvider, err := c.mimeiIsProvider(systemSid, pair.Member)
-		if err != nil {
-			c.errorf("provider check %s failed: %v", pair.Member, err)
-			continue
-		}
-		if isProvider {
-			continue
-		}
-		c.debugf("providing tweetId=%s on nodeId=%s", pair.Member, c.nodeID())
-		if err := c.mimeiProvide(systemSid, pair.Member); err != nil {
-			c.warnf("provide %s failed: %v", pair.Member, err)
-		}
-	}
 }
 
 // ---------------------------------------------------------------------------

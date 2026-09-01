@@ -265,7 +265,6 @@
             // Add new tweets to the followings_tweets sorted set
             if (arr.length > 0) {
                 lapi.Zadd(userSid, FOLLOWINGS_TWEETS, ...arr)
-                provideNewTweets(arr)
             }
             
             // Fetch tweet details for each new tweet
@@ -296,51 +295,6 @@
             }
             lapi.Error("Tweed update_following_tweets: updateUser error: %s, uid=%s", e, uid)
             return []
-        }
-    }
-
-    /**
-     * Announces the tweets this refresh has just pulled in, so the node serves
-     * them to the network instead of only holding them. node_update_mid_by_score
-     * above carries the followed user's new tweet objects onto this node, but
-     * the DHT still lists only the author's node as a provider.
-     *
-     * MiMeiIsProvider answers from the local provider table without going to
-     * the network, so checking every tweet is cheap and only a miss costs a
-     * round trip. The check also decides correctness, not just cost. A tweet
-     * this node already provides needs nothing further: the node's own
-     * replication keeps a provided copy current, so an announcement would be a
-     * no-op and a sync would be redundant. And MiMeiProvide reaches SyncMiMei
-     * internally (LEITHER_ISSUES.md P15, the node-internal "CheckDBProvide
-     * MiMeiProvide err=SyncMiMei" line), so the announcement pulls the tweet as
-     * part of publishing it and needs no sync of its own — while that same path
-     * panics when the calling node is the only announced provider, which is
-     * precisely the case the check skips.
-     *
-     * Each failure is logged and skipped rather than thrown: the feed entry is
-     * already stored, and the announcement only affects where other nodes can
-     * read the tweet from. Letting it reach updateUser's catch would drop the
-     * remaining tweets of this following and log a misleading read error.
-     *
-     * @param {Array} arr - ScorePair entries of the tweets just added
-     */
-    function provideNewTweets(arr) {
-        let systemSid
-        try {
-            systemSid = lapi.BEOpenAppDataNode("cur", APP_ID)
-        } catch(e) {
-            lapi.Error("Tweed update_following_tweets: provideNewTweets: no app data area: %s", e)
-            return
-        }
-        for (const e of arr) {
-            try {
-                if (!lapi.MiMeiIsProvider(systemSid, e.Member)) {
-                    lapi.Debug("Tweed update_following_tweets: providing tweetId=%s on nodeId=%s", e.Member, nodeId)
-                    lapi.MiMeiProvide(systemSid, "", e.Member)
-                }
-            } catch(err) {
-                lapi.Error("Tweed update_following_tweets: provide failed for %s: %s", e.Member, err)
-            }
         }
     }
 
