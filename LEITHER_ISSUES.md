@@ -449,6 +449,37 @@ PID=$(ss -lntp | grep ":<port>" | grep -oE "pid=[0-9]+" | head -1 | cut -d= -f2)
 awk "/VmRSS/{print \$2}" /proc/$PID/status
 ```
 
+## P18 — A published version is not served under `last` until the node restarts
+
+`twbe.sh` uploads the sources, backs them up as a new version and publishes the
+app mimei. `showapp` then reports the new version as `Last`, and that version is
+fetchable by number — but the node keeps serving previously compiled code to
+anyone who asks for `ver=last`.
+
+Observed on the entry `get_tweet_id_list`, whose reply changed shape between
+versions: a `[]lapi.ScorePair` became a list of maps, so JSON key order changed
+from struct field order to sorted order, making the running version visible from
+outside.
+
+| request | ksbox | gen8 |
+|---|---|---|
+| `ver=last` | old | old |
+| `ver=cur` | new | old |
+| `ver=1603`, explicit | new | new |
+
+Two further backups (1601, then 1603) did not move what `last` resolved to. A
+node restart did. So the sources upload, back up, publish and synchronise
+correctly — only the label resolution is stale, and it is stale per node: after
+restarting one node, the other still served the old code under `last`.
+
+Practical effect: everything asks for `last`. The clients send `ver: "last"`,
+and this app's own cross-node calls pass it too, so a fix can be published
+repeatedly and still run nowhere while every step of the deployment reports
+success.
+
+**Workaround:** restart the node after publishing, and confirm with an entry
+whose output differs between versions rather than trusting `showapp`.
+
 ## P11 — Documentation
 
 - Broken links on vzhan.cn (HTTP 500): `doc.html`, `capabilities.html`,
@@ -475,7 +506,9 @@ problem rather than a functional one.
 
 P1, P6, P7, P8 are unchanged. P15 now has a precise root cause and repro, and
 P17 — the per-request interpreter memory leak — is new and is the most serious
-item here.
+item here. P18 is new: a published version is not served under `last` until the
+node restarts, which makes a successful deployment indistinguishable from one
+that changed nothing.
 
 ## Priority
 
@@ -485,10 +518,13 @@ item here.
 2. **P1** — silent, hits ordinary Go code, breaks libraries.
 3. **P15** — a node-side panic on a case that occurs in normal use; reached by
    both sync APIs and by the node's own background routine.
-4. **P2/P3** — not blocking any more, but every MApp author will hit the same
+4. **P18** — a deployment that reports success everywhere and changes nothing
+   until the node is restarted. Trivially worked around once known; expensive
+   until then, because it looks exactly like a bug that was not fixed.
+5. **P2/P3** — not blocking any more, but every MApp author will hit the same
    dead end until the methods are declared on `lapi.LApi`. P3 is a one-line fix.
-5. **P4/P5** — two ways a correct app serves nothing.
-6. **P6/P7** — stdlib and crypto. P7 (`Ed25519Verify`) is the only capability
+6. **P4/P5** — two ways a correct app serves nothing.
+7. **P6/P7** — stdlib and crypto. P7 (`Ed25519Verify`) is the only capability
    still genuinely absent, and agent signatures go unverified without it.
 
 P1, P2, P3, P4, P5, P6 and P15 have workarounds applied here. **P7 and P17 have

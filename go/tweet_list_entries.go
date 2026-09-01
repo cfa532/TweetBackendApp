@@ -271,11 +271,8 @@ func entryGetTweetIDList(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErrList(err), nil
 	}
-	if public == nil {
-		public = []lapi.ScorePair{}
-	}
 	c.debugf("user=%s publicTweetCount=%d", userID, len(public))
-	return c.wrap(public), nil
+	return c.wrap(scorePairValues(public)), nil
 }
 
 // ---------------------------------------------------------------------------

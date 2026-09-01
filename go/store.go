@@ -282,6 +282,21 @@ func (c *ctx) zrangebyscore(mmsid, key string, min, max int64, offset, count int
 }
 
 // members extracts the member ids from score pairs.
+// scorePairValues renders score pairs for a reply.
+//
+// A []lapi.ScorePair does not survive a cross-node RunMApp: the far side
+// receives Go's default formatting of each element — "&{1787586723343 iBa3sq…}"
+// — instead of a structure, and cannot read a score or a member out of it.
+// Plain maps carry the same field names the JavaScript entry produced, so the
+// local caller and the remote one decode the identical shape.
+func scorePairValues(pairs []lapi.ScorePair) []any {
+	out := make([]any, 0, len(pairs))
+	for _, pair := range pairs {
+		out = append(out, map[string]any{"Score": pair.Score, "Member": pair.Member})
+	}
+	return out
+}
+
 func members(pairs []lapi.ScorePair) []string {
 	out := make([]string, 0, len(pairs))
 	for _, p := range pairs {
