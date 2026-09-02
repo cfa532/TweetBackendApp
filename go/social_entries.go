@@ -101,6 +101,18 @@ func entryToggleFollowing(c *ctx) (any, error) {
 		c.errorf("missing host for user %s", jsonStringify(map[string]any{"userId": userID, "nodeId": nodeID}))
 		return fail(fmt.Errorf("User host not found for user %s on %s", userID, nodeID)), nil
 	}
+	// The follow is written into the actor's own account — the relationship and
+	// the seeded feed entries — so only its root node may perform it. Doing it
+	// on a replica publishes a copy the root never learns about, which the next
+	// synchronisation from the root discards. requireRootNodeFor is not used
+	// here because the host may have come from the caller's hint above, which is
+	// what makes a follow work right after registration.
+	if userHostID != nodeID {
+		c.errorf("write aimed at the wrong node %s", jsonStringify(map[string]any{
+			"userId": userID, "rootNode": userHostID, "nodeId": nodeID,
+		}))
+		return fail(fmt.Errorf("Node %s is not the root node for user %s", nodeID, userID)), nil
+	}
 
 	authSid, err := c.authSid()
 	if err != nil {

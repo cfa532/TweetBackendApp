@@ -418,6 +418,12 @@ func entryDeleteAccount(c *ctx) (any, error) {
 		}))
 		return c.wrapErrDelete(fmt.Errorf("User not found or missing host")), nil
 	}
+	// Deleting anywhere else would drop a replica while the root kept serving
+	// the account, so the deletion would appear to succeed and then undo itself
+	// on the next synchronisation.
+	if err := c.requireRootNodeFor(user, userID); err != nil {
+		return c.wrapErrDelete(err), nil
+	}
 
 	// A failure to delete the tweets must not stop the account itself from
 	// being removed; the user asked for the account to go.

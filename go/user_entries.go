@@ -7,9 +7,14 @@
 // and engagement lists.
 //
 // Accounts are owned by one node. user.hostIds[0] names it, and every write to
-// the account belongs there — but choosing that node is the client's job. These
-// entries write to whichever node they are called on, and only refuse when the
-// account is unknown here.
+// the account belongs there; choosing that node is the client's job and
+// requireRootNode in routing.go refuses a write that arrived anywhere else.
+//
+// Two entries here are outside that rule by necessity. register creates the
+// account, so there is no root node to consult yet — the node handling the
+// request becomes it. login authenticates with reads, which any node holding a
+// copy can serve, because a client cannot know the root node until this reply
+// tells it; only the lastLogin write that follows is confined to the root.
 package lapp
 
 import (
@@ -222,8 +227,10 @@ func (c *ctx) registerReply(enveloped bool, result map[string]any) any {
 // entryLogin authenticates a username and password.
 //
 // The account id is derived from the username, so no lookup table is needed;
-// the password is checked by re-deriving its content id and comparing. The
-// lastLogin write lands on whichever node the client called.
+// the password is checked by re-deriving its content id and comparing. Both are
+// reads, so a client may authenticate against any node holding a copy of the
+// account — it has no way to know the root node before this reply tells it. The
+// lastLogin write that follows is confined to that root node.
 func entryLogin(c *ctx) (any, error) {
 	username := c.str("username")
 	password := c.str("password")
@@ -260,24 +267,38 @@ func entryLogin(c *ctx) (any, error) {
 		return c.wrapErrStatus(fmt.Errorf("Wrong password")), nil
 	}
 
-	// Authenticated from here on. A failure while recording the login must not
-	// turn a valid login into a rejection, so the remaining errors fall through
-	// to returning the account.
-	now := nowMillis()
-	user["lastLogin"] = now
+	// Authenticated from here on.
+	//
+	// Recording the login writes to the account, so it happens only on the
+	// account's root node: writing here on a replica would publish a copy the
+	// root never learns about and the next synchronisation would discard it.
+	// Authentication itself is a read and succeeds on any node holding a copy,
+	// which is what lets a client sign in before it knows where the account
+	// lives — hostIds arrives in this very reply. On any other node the account
+	// is returned with the stored lastLogin rather than a value that was never
+	// saved.
+	//
+	// A failure while recording must not turn a valid login into a rejection,
+	// so the errors below fall through to returning the account.
 	c.debugf("user=%s", user.username())
+	if user.hostID() == c.nodeID() {
+		now := nowMillis()
+		user["lastLogin"] = now
 
-	// A creation timestamp that is absent, non-positive, in the future, or more
-	// than two years before this login is not usable for ordering; fall back to
-	// the login time.
-	const twoYearsMillis = int64(2 * 365 * 24 * 60 * 60 * 1000)
-	created := mapInt(user, "timestamp", 0)
-	if created <= 0 || created > now || created < now-twoYearsMillis {
-		user["timestamp"] = now
-	}
+		// A creation timestamp that is absent, non-positive, in the future, or
+		// more than two years before this login is not usable for ordering;
+		// fall back to the login time.
+		const twoYearsMillis = int64(2 * 365 * 24 * 60 * 60 * 1000)
+		created := mapInt(user, "timestamp", 0)
+		if created <= 0 || created > now || created < now-twoYearsMillis {
+			user["timestamp"] = now
+		}
 
-	if err := c.recordLogin(authSid, userID, user); err != nil {
-		c.errorf("%v, loginOK=true, user=%s", err, user.username())
+		if err := c.recordLogin(authSid, userID, user); err != nil {
+			c.errorf("%v, loginOK=true, user=%s", err, user.username())
+		}
+	} else {
+		c.debugf("not the root node for %s; lastLogin not recorded here", userID)
 	}
 
 	user.stripPassword()
@@ -636,6 +657,12 @@ func entrySetUserAvatar(c *ctx) (any, error) {
 		}))
 		return c.wrapErr(fmt.Errorf("User not found or missing host")), nil
 	}
+	// The avatar is a field of the account, so this must be the account's root
+	// node. The check reuses the object already read above rather than loading
+	// it a second time.
+	if err := c.requireRootNodeFor(user, userID); err != nil {
+		return c.wrapErr(err), nil
+	}
 
 	user["avatar"] = avatar
 	mid := user.mid()
@@ -685,7 +712,9 @@ func entryVerifyAgentToken(c *ctx) (any, error) {
 			requestData = parsed
 		}
 	}
-	return c.verifyAgentAuth(auth, requestData).toMap(), nil
+	// This entry exists to answer whether a signature verifies, so it does not
+	// accept one the node could not check — matching verify_agent_token.js.
+	return c.verifyAgentAuth(auth, requestData, false).toMap(), nil
 }
 
 // firstNonEmpty returns the first non-empty argument.

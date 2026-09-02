@@ -14,13 +14,15 @@ import "fmt"
 
 // entryAddTweet creates a tweet.
 //
-// The tweet is written here, on the node the client chose to call. The caller
-// must be authorised either as a peer node holding a valid app code or as an
-// agent with a signature over the request.
+// The tweet is written on its author's root node, which the client addresses
+// directly; a request that reached any other node is refused below. The caller
+// must also be authorised, either as a peer node holding a valid app code or as
+// an agent with a signature over the request.
 //
-// The author's account is still loaded, both to reject a tweet whose author
-// this node does not know and to supply the host used when attributing a
-// front-end request in authorizePost.
+// The author's account is loaded once and serves three purposes: rejecting a
+// tweet whose author this node does not know, deciding the routing check, and
+// supplying the host used when attributing a front-end request in
+// authorizePost.
 func entryAddTweet(c *ctx) (any, error) {
 	raw, err := c.obj("tweet")
 	if err != nil {
@@ -168,10 +170,13 @@ func (c *ctx) authorizePost(tweet tweetObj, user userObj, agentAuth map[string]a
 	if agentAuth != nil {
 		// The signature covers the author and content, so an agent cannot take a
 		// signature issued for one user and post as another.
+		//
+		// A well-formed but unverifiable signature is accepted here, as
+		// add_tweet.js did; verify_agent_token refuses the same signature.
 		result := c.verifyAgentAuth(agentAuth, map[string]any{
 			"authorId": tweet.authorID(),
 			"content":  tweet.content(),
-		})
+		}, true)
 		if !result.valid {
 			c.warnf("Agent authentication failed: %s", result.reason)
 			return fmt.Errorf("Agent authentication failed: %s", result.reason)

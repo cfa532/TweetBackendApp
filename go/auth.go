@@ -80,7 +80,13 @@ func parseAgentAuth(raw string) (map[string]any, error) {
 // auth block, serialised as JSON with keys sorted at every level. The client
 // builds the same string before signing, so any disagreement about field order
 // or number formatting shows up as an invalid signature.
-func (c *ctx) verifyAgentAuth(auth map[string]any, requestData map[string]any) agentAuthResult {
+//
+// allowUnverified decides what happens when the node offers no verification
+// routine, and the two callers differ exactly as their JavaScript predecessors
+// did. add_tweet accepts a well-formed signature so that agent posting keeps
+// working; verify_agent_token, whose only job is to report whether a signature
+// verifies, refuses rather than claiming a check it never performed.
+func (c *ctx) verifyAgentAuth(auth map[string]any, requestData map[string]any, allowUnverified bool) agentAuthResult {
 	mimeiID := mapStr(auth, "mimeiId")
 	signature := mapStr(auth, "signature")
 	timestamp := mapInt(auth, "timestamp", 0)
@@ -119,7 +125,7 @@ func (c *ctx) verifyAgentAuth(auth map[string]any, requestData map[string]any) a
 	// client signs.
 	message := jsonStringify(signed)
 
-	valid, err := c.checkSignature(publicKey, message, signature)
+	valid, err := c.checkSignature(publicKey, message, signature, allowUnverified)
 	if err != nil {
 		c.errorf("Agent verification error: %v", err)
 		return agentAuthInvalid("Verification failed: " + err.Error())
@@ -134,19 +140,24 @@ func (c *ctx) verifyAgentAuth(auth map[string]any, requestData map[string]any) a
 
 // checkSignature verifies a detached Ed25519 signature.
 //
-// When the node offers no verification routine the check degrades to
-// confirming the signature is well formed — 64 decodable bytes. That is the
-// same degradation the JavaScript implementation applied when lapi.Ed25519Verify
-// was absent, and it is deliberately weak: it establishes that a signature was
-// supplied, not that it is the right one. See caps.go for how to restore full
-// verification.
-func (c *ctx) checkSignature(publicKey, message, signature string) (bool, error) {
+// When the node offers no verification routine and allowUnverified is set, the
+// check degrades to confirming the signature is well formed — 64 decodable
+// bytes. That is the same degradation add_tweet.js applied when
+// lapi.Ed25519Verify was absent, and it is deliberately weak: it establishes
+// that a signature was supplied, not that it is the right one. Without
+// allowUnverified the signature is simply rejected, as verify_agent_token.js
+// did. See caps.go for how to restore full verification.
+func (c *ctx) checkSignature(publicKey, message, signature string, allowUnverified bool) (bool, error) {
 	valid, err := c.ed25519Verify(publicKey, message, signature)
 	if err == nil {
 		return valid, nil
 	}
 	if !isCapUnsupported(err) {
 		return false, err
+	}
+	if !allowUnverified {
+		c.errorf("No Ed25519 verification available")
+		return false, nil
 	}
 
 	sig, decodeErr := base64Decode(signature)

@@ -354,17 +354,22 @@ func entryGetTweetsByUser(c *ctx) (any, error) {
 	// Cleanup is best-effort: the page was assembled successfully and must be
 	// returned even if pruning fails.
 	if isHome && len(stale) > 0 {
-		removed := 0
+		// A prune that failed part way is left uncommitted, as get_pinned_tweets
+		// and get_user_meta do: the removals live only in the open handle until
+		// the backup, so abandoning them costs nothing and the next page retries
+		// the whole set. Publishing half of them would advertise a list that no
+		// single scan ever produced.
+		failed := false
 		for _, tweetID := range stale {
 			c.warnf("removing stale tweetId=%s from user lists, userId=%s", tweetID, userID)
 			if err := c.zrem(writeSid, userTweetList, tweetID); err != nil {
 				c.errorf("failed to remove stale tweetIds for userId=%s: %v", userID, err)
+				failed = true
 				break
 			}
-			removed++
 		}
-		if removed > 0 {
-			c.warnf("removed %d stale tweetId(s) from user lists, userId=%s, page=%d", removed, userID, pageNum)
+		if !failed {
+			c.warnf("removed %d stale tweetId(s) from user lists, userId=%s, page=%d", len(stale), userID, pageNum)
 			if err := c.backupDelRef(writeSid, userID, ""); err != nil {
 				c.errorf("failed to persist/publish cleanup for userId=%s: %v", userID, err)
 			} else if err := c.mimeiPublish(authSid, userID); err != nil {
@@ -631,8 +636,11 @@ func (c *ctx) updateRetweetList(entry string, add bool) (any, error) {
 	authorID := c.str("authorid")
 
 	// The list lives inside the author's tweet, so this must be their node.
+	// The failure is reported as it happened: a wrong-node call and an unknown
+	// author are different problems, and collapsing both into one message sent
+	// whoever had to debug it looking for the wrong thing.
 	if err := c.requireRootNode(authorID); err != nil {
-		return c.wrapErr(fmt.Errorf("Author not found or missing host")), nil
+		return c.wrapErr(err), nil
 	}
 
 	authSid, err := c.authSid()

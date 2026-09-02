@@ -305,10 +305,26 @@ func (c *ctx) pruneComments(tweetID string, commentIDs []string, page int64) err
 // authorship check is made here; the client decides who may ask. Each step is
 // isolated because a partly deleted comment is worse than a fully deleted one:
 // once the versions are gone, the list entry and reference must still go.
+//
+// The comment and the parent's list of them live on the parent author's root
+// node — the same identity add_comment writes under — so that is where the
+// deletion belongs. The parent is read to learn who that is, since the request
+// only names the parent object.
 func entryDeleteComment(c *ctx) (any, error) {
 	appUserID := c.str("appuserid")
 	tweetID := c.str("tweetid")
 	commentID := c.str("commentid")
+
+	parent, err := c.loadTweet(tweetID)
+	if err != nil {
+		return respErr(err), nil
+	}
+	if parent == nil {
+		return respErr(fmt.Errorf("Tweet not found")), nil
+	}
+	if err := c.requireRootNode(parent.authorID()); err != nil {
+		return respErr(err), nil
+	}
 
 	authSid, err := c.authSid()
 	if err != nil {

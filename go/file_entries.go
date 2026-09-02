@@ -428,12 +428,12 @@ func entryUploadPackage(c *ctx) (any, error) {
 // are edited by hand when a release ships.
 const (
 	// upgradeVersion must exceed the version the clients report, or they will
-	// not offer the upgrade.
-	upgradeVersion = 72
+	// not offer the upgrade. It is kept in step with check_upgrade.js.
+	upgradeVersion = 73
 	// upgradeMission is how insistent the prompt is: minor, major or critical.
 	upgradeMission = "minor"
 	// upgradeDomain is the base host used for deep links and sharing.
-	upgradeDomain = "t1.w3w3.store"
+	upgradeDomain = "t1.w333w.site"
 )
 
 // entryCheckUpgrade tells a client whether a newer build exists and where to

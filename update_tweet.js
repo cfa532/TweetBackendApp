@@ -44,7 +44,16 @@
             if (!attachment || typeof attachment.mid !== "string" || attachment.mid.length === 0) {
                 throw new Error("Each attachment must have a valid mid")
             }
-            attachment.timestamp = Number(attachment.timestamp)
+            // Coerce a numeric timestamp and leave anything else as the client
+            // sent it. Number(undefined) is NaN, which JSON.stringify writes as
+            // null, so coercing unconditionally stored null over a missing
+            // timestamp — and add_tweet stores whatever arrived, because its own
+            // coercion runs after the write.
+            const ts = attachment.timestamp
+            if (typeof ts === "number" || (typeof ts === "string" && ts.trim() !== "")) {
+                const numeric = Number(ts)
+                if (Number.isFinite(numeric)) attachment.timestamp = numeric
+            }
         })
         return attachments
     }

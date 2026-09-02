@@ -98,6 +98,14 @@ func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 	}
 
 	updatedTweet := c.applyEngagementToTweet(kind, userID, authorID, tweetID, requested, stateGiven)
+	if updatedTweet == nil {
+		// The user's half is mirrored from the tweet's own record below. Without
+		// that record there is nothing to mirror, and reading the missing flag as
+		// false would tell the user's node to drop a save the user still has.
+		// The JavaScript entry failed here too, by dereferencing the absent
+		// tweet.
+		return c.wrapErrString(fmt.Errorf("Failed to read tweet %s after updating it", tweetID)), nil
+	}
 
 	// The user's own list is updated from the state the tweet ended up in, not
 	// from what was requested, so a no-op toggle stays a no-op on both sides.
@@ -138,9 +146,9 @@ func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 // applyEngagementToTweet flips or sets the tweet's record of this user, and
 // returns the tweet as it now stands.
 //
-// A failure here yields a nil tweet rather than an error: the caller still
-// updates the user's list, matching the previous behaviour where this step was
-// self-contained.
+// Every failure inside is logged and yields a nil tweet, so the individual steps
+// stay self-contained; the caller decides what an absent tweet means, and it
+// abandons the toggle rather than mirroring a state it never read.
 func (c *ctx) applyEngagementToTweet(kind engagementKind, userID, authorID, tweetID string, requested, stateGiven bool) any {
 	authSid, err := c.authSid()
 	if err != nil {

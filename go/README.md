@@ -47,15 +47,37 @@ import the exact paths registered by Leither.
 
 ## Deploying
 
-The debug app (`twbe`, AppID `d4lRyhABgqOnqY4bURSm_T-4FZ4`) deploys with the
-existing `~/demo/twbe.sh` on gen8, unchanged — the Go sources go in `~/demo/twbe`
-exactly where the `.js` files used to, and the script's `uploadapp` / `backup` /
-`mimei publish` sequence works as-is. App name comes from the directory name, so
-the directory must stay `twbe` to keep the same AppID.
+gen8 is always the publication target for the debug app (`twbe`, AppID
+`d4lRyhABgqOnqY4bURSm_T-4FZ4`). Its public IP is volatile, so resolve it only
+through the Cloudflare-managed `gen8.leither.uk` hostname. Do not publish TWBE
+from minipc or ksbox and do not pin a resolved gen8 IP in a command or document.
+
+Copy the production Go sources into `/home/pi/demo/twbe/` on gen8. The target
+directory must stay named `twbe` because its name determines the AppID. Exclude
+tests, local module files, and documentation from the MApp package:
 
 ```bash
-cd ~/demo && ./twbe.sh
+rsync -av -e 'ssh -p 220' \
+  --exclude='*_test.go' \
+  --include='*.go' \
+  --exclude='*' \
+  go/ pi@gen8.leither.uk:/home/pi/demo/twbe/
 ```
+
+Compare at least one changed file hash before publishing, then run the existing
+gen8 script. Its `uploadapp` / `backup` / `mimei publish` sequence remains the
+authoritative publisher:
+
+```bash
+shasum -a 256 go/file_entries.go
+ssh -p 220 pi@gen8.leither.uk \
+  'shasum -a 256 /home/pi/demo/twbe/file_entries.go'
+ssh -p 220 pi@gen8.leither.uk 'cd /home/pi/demo && ./twbe.sh'
+```
+
+The final command must report a new numbered version and successful MiMei
+publication. Address verification calls by numbered version first, then confirm
+that `last` returns the same result.
 
 Verified on Leither **V0.23.95** and re-verified on **V0.24.02**.
 
@@ -76,9 +98,11 @@ previous build while the source on disk was current. Numbered versions and `last
 pick up the new code, so run `lapp backup` (which twbe.sh does) and address
 `last`. Clients already use `ver=last`.
 
-**3. `twbe.sh`'s `-n ReyCUFHHZmk...` is gen8 itself**, not a separate service
-node — `Leither getvar nodeid` on gen8 returns exactly that id. So `./twbe.sh`
-alone publishes everything; a second local `uploadapp` is redundant.
+**3. `twbe.sh` targets gen8 itself.** gen8's node ID is
+`ReyCUFHHZmk0N5w_wxUeEuoY5Xr`; it is not a separate service node. Run
+`./twbe.sh` on gen8 after copying the sources into `/home/pi/demo/twbe/`. A
+second upload from minipc or ksbox is redundant and is no longer part of the
+publication procedure.
 
 **4. `-r` takes one string, separated by semicolons** — not repeated flags, not
 `&`, not commas. Repeated `-r` silently keeps only the last, which looks exactly
@@ -131,20 +155,39 @@ restoring it is a `cp` back into `~/demo/twbe` followed by `./twbe.sh`.
 
 ## Which node handles a request
 
-Clients choose the node they write to. An entry writes to whichever node it was
-called on, and refuses only when the account it names is unknown there.
+Every account has one root node, `user.hostIds[0]`, and every write to that
+account — or to anything it owns — belongs there. Choosing that node is the
+client's job: it knows which node owns the account and calls it directly.
 
-The previous implementation did this differently: each write entry began by
-comparing `user.hostIds[0]` against the current node and, if they differed,
-forwarded the whole request onwards. That forwarding was legacy and has been
-removed from all 21 entries that carried it. What remains at the top of those
-entries is the account existence check that accompanied it, in `routing.go` as
-`requireKnownUser` — the error text is unchanged, since clients match on it.
+A write that arrives anywhere else is **refused**, by `requireRootNode` in
+`routing.go`. Performing it instead would write a copy the root never learns
+about and the next synchronisation from the root would discard it, losing the
+write silently; refusing says so at once. The accompanying existence check,
+`requireKnownUser`, still rejects an account this node has never seen, and its
+error text is unchanged since clients match on it.
 
-The consequence worth knowing: nothing now stops a write landing on a node that
-does not own the account, so a client calling the wrong node will produce a
-change that synchronisation later discards. Choosing correctly is the client's
-responsibility.
+The previous implementation did this differently: each write entry compared
+`user.hostIds[0]` against the current node and, if they differed, forwarded the
+whole request onwards. That forwarding is gone from all 21 entries that carried
+it — the backend does not bounce a misdirected request, because the client is
+better placed to address the right node than the wrong node is to relay.
+
+Entries outside that rule, each for a stated reason:
+
+- **`login`** authenticates with reads, so it answers on any node holding a copy
+  of the account — a client cannot know the root node before this reply tells it.
+  Only the `lastLogin` write that follows is confined to the root.
+- **`register`** creates the account, so there is no root node to consult yet.
+  The node handling the request becomes it.
+- **`set_author_core_data`** writes the profile wherever it was called, which is
+  what lets an account move off a node that has since disappeared.
+- **`upload_file`** and **`upload_ipfs`** attach a reference to whichever object
+  they were given, on the node they were called on. Neither the JavaScript
+  version nor this one checks where that object is rooted, so a misdirected
+  attachment is still possible here.
+
+What the forwarding left behind is five `RunMApp` calls that genuinely span two
+owners on two nodes; they are listed under *caps.go* below.
 
 ## Limitations to resolve before production
 
@@ -181,8 +224,8 @@ assertion degrades — on a build lacking a method the caller gets
 
 `RunMApp` was by far the biggest of these in the original — 97 call sites. Most
 were intra-app and are now direct Go calls through `callEntry`, needing no node
-API at all. The rest were request forwarding, which has since been removed (see
-*Which node handles a request* above).
+API at all. The rest were request forwarding, which misdirected writes no longer
+receive (see *Which node handles a request* above).
 
 What is left is five calls that genuinely span two owners on two nodes and
 cannot be split by the caller:

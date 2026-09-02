@@ -27,7 +27,6 @@
     
     const v4Only = request["v4only"] === "true" ? true : false;  // IPv4-only filter flag
     const mid = request["mid"];  // Mimei ID to get provider IPs for
-    let rawData = lapi.GetVar("", "mmprovsips", mid);  // Get provider IP data
     
     // Helper function to wrap response in v2 format
     function wrapResponse(result) {
@@ -42,17 +41,21 @@
         return {success: false, message: error.message || String(error), error: error}
     }
     
-    // Handle double-encoded JSON (some data may be encoded twice)
-    let providers = JSON.parse(rawData);
-    if (typeof providers === 'string') {
-        providers = JSON.parse(providers);
-    }
-
     // ============================================================================
     // MAIN EXECUTION
     // ============================================================================
     
     try {
+        // Read and decode inside the try: malformed provider data must be
+        // reported through wrapError like any other failure. Parsing it at the
+        // top level threw past the catch and failed the whole request.
+        const rawData = lapi.GetVar("", "mmprovsips", mid);  // Get provider IP data
+
+        // Handle double-encoded JSON (some data may be encoded twice)
+        let providers = rawData ? JSON.parse(rawData) : null;
+        if (typeof providers === 'string') {
+            providers = JSON.parse(providers);
+        }
         if (!providers || !Array.isArray(providers)) {
             return wrapResponse([]);
         }
