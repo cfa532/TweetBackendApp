@@ -1,5 +1,24 @@
 # Tweet backend to support user operations.
 
+## Browser fallback and share-domain changes
+
+The canonical, repeatable domain-replacement procedure lives in the sibling
+TweetWeb repository at
+`../TweetWeb/docs/BROWSER_FALLBACK_DOMAIN_MIGRATION.md`. Do not maintain a
+second migration checklist here.
+
+TweetBackendApp participates in that migration through two values that must
+stay synchronized:
+
+- `check_upgrade.js`: JavaScript `domain` response field
+- `go/file_entries.go`: Go `upgradeDomain` value
+
+The backend values omit the URL scheme and use `t1.<current-domain>`. They must
+be changed and published together with the Cloudflare Worker's
+`BROWSER_FALLBACK_ORIGIN`, DNS, nginx, and current documentation. Editing these
+source files without running the respective gen8 publishers does not update
+clients.
+
 ## Testing:
 
 App mid: d4lRyhABgqOnqY4bURSm_T-4FZ4
