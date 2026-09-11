@@ -85,13 +85,13 @@
         // SCORE COMPARISON
         // ========================================================================
         
-        // Get the current score from the remote host
+        // Request the bare numeric score. Forwarding the caller's v2 version
+        // would wrap it in an envelope that cannot be compared or stored as a score.
         const remoteScore = lapi.RunMApp("node_get_score", {
             aid: APP_ID,
             ver: request.ver,
             nid: hostId,        // Remote host ID
             sid: systemSid,     // Necessary to prove the user's authenticity
-            version: version,
             userid: userId,
             mid: mid,
         }, [])

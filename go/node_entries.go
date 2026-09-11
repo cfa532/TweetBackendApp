@@ -101,13 +101,14 @@ func entryNodeUpdateMidByScore(c *ctx) (any, error) {
 		return c.wrap(map[string]any{"success": true}), nil
 	}
 
+	// This internal read needs the bare numeric score. Forwarding the caller's
+	// v2 version wraps it in an envelope that toInt64 cannot decode.
 	remoteScore, err := c.callRemote(hostID, "node_get_score", map[string]string{
-		reqAppID:   c.appID(),
-		reqAppVer:  c.ver(),
-		reqSid:     systemSid,
-		reqVersion: c.version(),
-		"userid":   userID,
-		reqMID:     mid,
+		reqAppID:  c.appID(),
+		reqAppVer: c.ver(),
+		reqSid:    systemSid,
+		"userid":  userID,
+		reqMID:    mid,
 	})
 	if err != nil {
 		return c.wrapErr(err), nil
