@@ -146,7 +146,7 @@ func entryToggleFollowing(c *ctx) (any, error) {
 		return fail(fmt.Errorf("Missing host for followed user")), nil
 	}
 
-	readSid, err := c.api.MMOpen(authSid, userID, verLast)
+	readSid, err := c.openMimei(authSid, userID, verLast)
 	if err != nil {
 		return fail(err), nil
 	}
@@ -191,7 +191,7 @@ func (c *ctx) follow(authSid, systemSid, userID, followingID, hostOfOther, nodeI
 		pairs = pairs[:followSeedCount]
 	}
 
-	userSid, err := c.api.MMOpen(authSid, userID, verCur)
+	userSid, err := c.openMimei(authSid, userID, verCur)
 	if err != nil {
 		return fmt.Errorf("MMOpen(%s, cur): %v", userID, err)
 	}
@@ -203,7 +203,7 @@ func (c *ctx) follow(authSid, systemSid, userID, followingID, hostOfOther, nodeI
 	if len(pairs) > 0 {
 		// The tweets keep their original scores, so they interleave with the
 		// rest of the feed by post time rather than by follow time.
-		if _, err := c.api.Zadd(userSid, userFollowingsTweets, pairs...); err != nil {
+		if err := c.zaddMany(userSid, userFollowingsTweets, pairs...); err != nil {
 			return fmt.Errorf("Zadd(%s): %v", userFollowingsTweets, err)
 		}
 	}
@@ -248,7 +248,7 @@ func (c *ctx) unfollow(authSid, systemSid, userID, followingID, hostOfOther, nod
 		}
 	}
 
-	userSid, err := c.api.MMOpen(authSid, userID, verCur)
+	userSid, err := c.openMimei(authSid, userID, verCur)
 	if err != nil {
 		return fmt.Errorf("MMOpen(%s, cur): %v", userID, err)
 	}
@@ -432,7 +432,7 @@ func entryToggleFollower(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
-	userSid, err := c.api.MMOpen(authSid, userID, verCur)
+	userSid, err := c.openMimei(authSid, userID, verCur)
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
@@ -511,7 +511,7 @@ func (c *ctx) relationshipPage(listKey string) (any, error) {
 
 	var relationships []lapi.FVPair
 	err := c.readMimei("", userID, func(mmsid string) error {
-		got, err := c.api.Hgetall(mmsid, listKey)
+		got, err := c.hgetall(mmsid, listKey)
 		if err != nil {
 			return fmt.Errorf("Hgetall(%s): %v", listKey, err)
 		}
@@ -603,7 +603,7 @@ func entryGetFollowingsSorted(c *ctx) (any, error) {
 func (c *ctx) relationshipPairs(listKey string) (any, error) {
 	var pairs []lapi.FVPair
 	err := c.readMimei("", c.str("userid"), func(mmsid string) error {
-		got, err := c.api.Hgetall(mmsid, listKey)
+		got, err := c.hgetall(mmsid, listKey)
 		if err != nil {
 			return fmt.Errorf("Hgetall(%s): %v", listKey, err)
 		}
@@ -663,7 +663,7 @@ func entryBlockUser(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErrSuccess(err), nil
 	}
-	userSid, err := c.api.MMOpen(authSid, userID, verCur)
+	userSid, err := c.openMimei(authSid, userID, verCur)
 	if err != nil {
 		return c.wrapErrSuccess(err), nil
 	}

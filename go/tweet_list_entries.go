@@ -45,7 +45,7 @@ func entryUpdateTweet(c *ctx) (any, error) {
 	if err != nil {
 		return respErr(err), nil
 	}
-	tweetSid, err := c.api.MMOpen(authSid, tweetID, verCur)
+	tweetSid, err := c.openMimei(authSid, tweetID, verCur)
 	if err != nil {
 		return respErr(fmt.Errorf("MMOpen(%s, cur): %v", tweetID, err)), nil
 	}
@@ -190,7 +190,7 @@ func entryToggleTweetPrivacy(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
-	tweetSid, err := c.api.MMOpen(authSid, tweetID, verCur)
+	tweetSid, err := c.openMimei(authSid, tweetID, verCur)
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
@@ -290,7 +290,7 @@ func entryGetTweetsByUser(c *ctx) (any, error) {
 	pageNum := c.intParam("pn", 0)
 	pageSize := c.intParam("ps", 0)
 
-	readSid, err := c.api.MMOpen("", userID, verLast)
+	readSid, err := c.openMimei("", userID, verLast)
 	if err != nil {
 		return respErrField(c, err), nil
 	}
@@ -411,7 +411,7 @@ func entryGetTweetFeed(c *ctx) (any, error) {
 	pageNum := c.intParam("pn", 0)
 	pageSize := c.intParam("ps", 0)
 
-	readSid, err := c.api.MMOpen("", userID, verLast)
+	readSid, err := c.openMimei("", userID, verLast)
 	if err != nil {
 		return respErrField(c, err), nil
 	}
@@ -462,7 +462,7 @@ func entryGetPinnedTweets(c *ctx) (any, error) {
 	userID := c.str("userid")
 	appUserID := c.str("appuserid")
 
-	readSid, err := c.api.MMOpen("", userID, verLast)
+	readSid, err := c.openMimei("", userID, verLast)
 	if err != nil {
 		return c.wrapErrList(err), nil
 	}
@@ -547,7 +547,7 @@ func entryTogglePinnedTweet(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErrBool(err), nil
 	}
-	userSid, err := c.api.MMOpen(authSid, appUserID, verCur)
+	userSid, err := c.openMimei(authSid, appUserID, verCur)
 	if err != nil {
 		return c.wrapErrBool(err), nil
 	}
@@ -647,7 +647,7 @@ func (c *ctx) updateRetweetList(entry string, add bool) (any, error) {
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
-	tweetSid, err := c.api.MMOpen(authSid, tweetID, verCur)
+	tweetSid, err := c.openMimei(authSid, tweetID, verCur)
 	if err != nil {
 		return c.wrapErr(err), nil
 	}

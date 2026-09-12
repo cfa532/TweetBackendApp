@@ -4,7 +4,7 @@ A Go rewrite of the JavaScript backend in the parent directory, as a Leither
 MApp. It serves Tweet-iOS, Tweet for Android and TweetWeb.
 
 All 68 entries are ported. Entry names, request parameters and response shapes
-are unchanged, so clients need no modification.
+remain compatible. Updated clients negotiate storage support when selecting servers.
 
 ## Layout
 
@@ -19,7 +19,8 @@ format promises.
 | `main.go` | `RunMApp` and the entry dispatch table |
 | `runtime.go` | per-call context, request parameters, logging, local entry calls |
 | `routing.go` | the account check every write entry makes |
-| `store.go` | Mimei database access (open/close/backup, hashes, sorted sets, refs) |
+| `store.go` | Per-object storage dispatch and the legacy database adapter |
+| `file_store.go` | File snapshot core records, membership directories and CID commits |
 | `model.go` | user and tweet objects |
 | `keys.go` | request parameter names and database keys |
 | `caps.go` | node operations the Go API does not expose — **read this first** |
@@ -28,6 +29,44 @@ format promises.
 | `response.go` | the `""` / `v2` / `v3` response envelopes |
 | `*_entries.go` | the entries, grouped by area |
 | `codec_test.go` | tests for the hand-written codecs (see *Tests* below) |
+
+## Storage formats
+
+Existing users/tweets retain their MIDs and database storage. New users, tweets
+and comments use `tweet-file-v1`. A File MiMei contains `core.json` plus one JSON
+file per collection member (`bookmarks/<user-id>.json`, `comments/<tweet-id>.json`,
+etc.). Engagement counts come from those directories; an engagement does not
+rewrite the tweet core. Native MiMei references are still maintained separately.
+
+The immutable creation extension `us.fireshare.tweet/file-v1/<kind>` selects the
+File adapter, and the core envelope validates its schema, kind and MID. Reads
+resolve one committed `mm://<mid>:<version>` root. Writes copy that root into
+request staging, replace changed entries, flush it, and commit with `MFSetCid`.
+Do not follow this with `MMBackup`: that overwrites the root CID on the
+LifeAlbum runtime. Explicit backup calls still commit reference-only changes.
+Each MiMei also retains one stable node-Files tree so Leither keeps the committed
+DAG locally; request scratch trees are removed and never used as read sources.
+
+Username lookup checks both legacy and File identities; discovery failures and
+identity conflicts fail the request. Password IDs use the unchanged legacy
+algorithm. Existing message stores remain databases; new stores use File MiMeis.
+Existing node score entries remain in node application data; newly tracked
+entries use a node-scoped File index. No existing record is migrated.
+
+`health` adds `storageFormats: ["database", "tweet-file-v1"]` and
+`creationFormat: "tweet-file-v1"`. File user/tweet payloads add optional
+`storageFormat`; the legacy v2/v3 envelopes and social entry names stay intact.
+Old server binaries cannot read File objects. Upgrade roots and their serving
+nodes together; retain a dual-format server when rolling back other changes.
+
+This branch has compiler/static validation and a live minipc/simulator exercise
+covering a new File tweet, favorite, bookmark, File comment, and restart readback.
+Before broader deployment, verify the installed interpreter's File commit
+visibility, and native references through a one-level cross-node sync. The
+LifeAlbum commit behavior is recorded on Leither V0.24.12; the older backend
+runtime notes below do not validate this new storage path. Write serialization,
+concurrent lost updates, cross-node atomicity and durable retries remain outside
+this change. No tests or live probes were run for this refactor.
 
 ## Build
 

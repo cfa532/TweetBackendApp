@@ -68,12 +68,12 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 	}
 	// "{{auto}}" asks Leither for a fresh id rather than deriving one from the
 	// mark, so two tweets with identical text remain distinct objects.
-	tweetID, err := c.api.MMCreate(authSid, c.appID(), appExt, "{{auto}}", mimeiTypeDatabase, rightUserObject)
+	tweetID, err := c.createFileObject(authSid, "tweet", "{{auto}}")
 	if err != nil {
 		return respErr(fmt.Errorf("MMCreate(tweet): %v", err)), nil
 	}
 
-	tweetSid, err := c.api.MMOpen(authSid, tweetID, verCur)
+	tweetSid, err := c.openMimei(authSid, tweetID, verCur)
 	if err != nil {
 		return respErr(fmt.Errorf("MMOpen(%s, cur): %v", tweetID, err)), nil
 	}
@@ -103,7 +103,7 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 	}
 
 	authorID := tweet.authorID()
-	userSid, err := c.api.MMOpen(authSid, authorID, verCur)
+	userSid, err := c.openMimei(authSid, authorID, verCur)
 	if err != nil {
 		return respErr(fmt.Errorf("MMOpen(%s, cur): %v", authorID, err)), nil
 	}
@@ -217,7 +217,7 @@ func entryGetTweet(c *ctx) (any, error) {
 	tweetID := c.str("tweetid")
 	appUserID := c.str("appuserid")
 
-	mmsid, err := c.api.MMOpen("", tweetID, verLast)
+	mmsid, err := c.openMimei("", tweetID, verLast)
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
@@ -295,6 +295,9 @@ func entryGetTweet(c *ctx) (any, error) {
 
 		// [isFavorite, isBookmarked, hasRetweeted] for the requesting user.
 		"favorites": []any{isFavorite, isBookmarked, hasRetweeted},
+	}
+	if format := mapStr(tweet, "storageFormat"); format != "" {
+		ret["storageFormat"] = format
 	}
 	// Only set when present, so an absent content field does not become "".
 	if content := tweet.content(); content != "" {
@@ -381,7 +384,7 @@ func (c *ctx) syncForDetailView(tweetID string, tweet tweetObj, mmsid string) (t
 		c.warnf("provide %s failed: %v", tweetID, err)
 	}
 
-	newSid, err := c.api.MMOpen("", tweetID, verLast)
+	newSid, err := c.openMimei("", tweetID, verLast)
 	if err != nil {
 		c.errorf("fromdetailview sync failed for %s: %v", tweetID, err)
 		return nil, ""
@@ -494,7 +497,7 @@ func entryDeleteTweet(c *ctx) (any, error) {
 	if err != nil {
 		return respErr(err), nil
 	}
-	userSid, err := c.api.MMOpen(authSid, userID, verCur)
+	userSid, err := c.openMimei(authSid, userID, verCur)
 	if err != nil {
 		return respErr(fmt.Errorf("MMOpen(%s, cur): %v", userID, err)), nil
 	}
@@ -519,10 +522,10 @@ func entryDeleteTweet(c *ctx) (any, error) {
 	if err := c.hdel(userSid, userPinnedTweets, tweetID); err != nil {
 		return respErr(err), nil
 	}
-	if err := c.zrem(userSid, userBookmarkList, tweetID); err != nil {
+	if err := c.hdel(userSid, userBookmarkList, tweetID); err != nil {
 		return respErr(err), nil
 	}
-	if err := c.zrem(userSid, tweetLikeList, tweetID); err != nil {
+	if err := c.hdel(userSid, userFavoriteList, tweetID); err != nil {
 		return respErr(err), nil
 	}
 
@@ -549,7 +552,7 @@ func entryDeleteTweet(c *ctx) (any, error) {
 
 // destroyTweet permanently removes a tweet the requesting user authored.
 func (c *ctx) destroyTweet(authSid, userSid, userID, tweetID string) (tweetObj, error) {
-	tweetSid, err := c.api.MMOpen(authSid, tweetID, verCur)
+	tweetSid, err := c.openMimei(authSid, tweetID, verCur)
 	if err != nil {
 		return nil, fmt.Errorf("MMOpen(%s, cur): %v", tweetID, err)
 	}

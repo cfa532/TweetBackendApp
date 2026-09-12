@@ -44,11 +44,50 @@ func validUsername(name string) bool {
 	return true
 }
 
-// userIDForName derives a user's id from their username. MMCreate is
-// deterministic in its mark, so this both creates the account database and, for
-// an existing name, returns the id already in use.
-func (c *ctx) userIDForName(authSid, username string) (string, error) {
-	return c.createDatabase(authSid, username)
+// Check both deterministic identities before selecting storage. Only an actual
+// committed version or an announced provider claims a name; failed discovery
+// must not create an account with a second identity.
+func (c *ctx) identityExists(auth, mid string) (bool, error) {
+	exists, err := c.hasCommittedVersion(auth, mid)
+	if err != nil || exists {
+		return exists, err
+	}
+	providers, err := c.providerAddresses(mid)
+	if err != nil {
+		return false, err
+	}
+	return len(providers) > 0, nil
+}
+
+func (c *ctx) resolveUserName(auth, username string) (string, bool, error) {
+	legacy, err := c.createDatabase(auth, username)
+	if err != nil {
+		return "", false, err
+	}
+	current, err := c.createFileObject(auth, "user", username)
+	if err != nil {
+		return "", false, err
+	}
+	oldExists, err := c.identityExists(auth, legacy)
+	if err != nil {
+		return "", false, err
+	}
+	newExists, err := c.identityExists(auth, current)
+	if err != nil {
+		return "", false, err
+	}
+	if oldExists && newExists {
+		return "", false, fmt.Errorf("Conflicting account identities for username %s", username)
+	}
+	if oldExists {
+		return legacy, true, nil
+	}
+	return current, newExists, nil
+}
+
+func (c *ctx) userIDForName(auth, username string) (string, error) {
+	mid, _, err := c.resolveUserName(auth, username)
+	return mid, err
 }
 
 // cleanHostIDs drops empty and blank entries from a hostIds array.
@@ -110,29 +149,18 @@ func entryRegister(c *ctx) (any, error) {
 	if err != nil {
 		return fail(err), nil
 	}
-	userMid, err := c.userIDForName(authSid, user.username())
+	userMid, exists, err := c.resolveUserName(authSid, user.username())
 	if err != nil {
 		c.errorf("Failed to create user MID for %s: %v", user.username(), err)
 		return fail(fmt.Errorf("Failed to create user account")), nil
 	}
 
-	// An existing provider for the derived id means the name is already in use
-	// somewhere on the network.
-	providerIP, err := c.callEntry("get_provider_ip", map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		reqMID:    userMid,
-	})
-	if err != nil {
-		c.errorf("Failed to check provider for user %s: %v", user.username(), err)
-		return fail(fmt.Errorf("Failed to validate username uniqueness")), nil
-	}
-	if ip := toString(providerIP); ip != "" {
-		c.errorf("User register failed. Existing %s at %s", user.username(), ip)
+	if exists {
 		return fail(fmt.Errorf("Username is taken")), nil
 	}
 
 	user["mid"] = userMid
+	user["storageFormat"] = fileSchema
 
 	// The password is not stored. A content-addressed Mimei id derived from it
 	// is, and login re-derives that id to compare.
@@ -156,7 +184,7 @@ func entryRegister(c *ctx) (any, error) {
 		user["hostIds"] = strSlice(hosts)
 	}
 
-	userSid, err := c.api.MMOpen(authSid, userMid, verCur)
+	userSid, err := c.openMimei(authSid, userMid, verCur)
 	if err != nil {
 		c.errorf("Failed to open user storage for %s: %v", user.username(), err)
 		return fail(fmt.Errorf("Failed to create user storage")), nil
@@ -244,7 +272,7 @@ func entryLogin(c *ctx) (any, error) {
 		return c.wrapErrStatus(err), nil
 	}
 
-	readSid, err := c.api.MMOpen(authSid, userID, verLast)
+	readSid, err := c.openMimei(authSid, userID, verLast)
 	if err != nil {
 		return c.wrapErrStatus(err), nil
 	}
@@ -315,7 +343,7 @@ func (c *ctx) recordLogin(authSid, userID string, user userObj) error {
 	if mid == "" {
 		mid = userID
 	}
-	userSid, err := c.api.MMOpen(authSid, userID, verCur)
+	userSid, err := c.openMimei(authSid, userID, verCur)
 	if err != nil {
 		return fmt.Errorf("MMOpen(%s, cur): %v", userID, err)
 	}
@@ -639,7 +667,7 @@ func entrySetUserAvatar(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
-	userSid, err := c.api.MMOpen(authSid, userID, verCur)
+	userSid, err := c.openMimei(authSid, userID, verCur)
 	if err != nil {
 		return c.wrapErr(err), nil
 	}

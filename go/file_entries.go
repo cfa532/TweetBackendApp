@@ -69,7 +69,7 @@ func entryUploadIpfs(c *ctx) (any, error) {
 // attachToParent references an uploaded object from an existing object so it is
 // retained.
 func (c *ctx) attachToParent(authSid, parentID, cid string) error {
-	sid, err := c.api.MMOpen(authSid, parentID, verCur)
+	sid, err := c.openMimei(authSid, parentID, verCur)
 	if err != nil {
 		return fmt.Errorf("MMOpen(%s, cur): %v", parentID, err)
 	}
@@ -180,7 +180,7 @@ func entryUploadFile(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
-	sid, err := c.api.MMOpen(authSid, userID, verCur)
+	sid, err := c.openMimei(authSid, userID, verCur)
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
@@ -268,7 +268,7 @@ func entryShareFile(c *ctx) (any, error) {
 		return c.wrapErr(err), nil
 	}
 
-	userSid, err := c.api.MMOpen(authSid, userID, verCur)
+	userSid, err := c.openMimei(authSid, userID, verCur)
 	if err != nil {
 		return c.wrapErr(err), nil
 	}

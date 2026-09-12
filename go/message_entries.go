@@ -26,15 +26,33 @@ import "fmt"
 // messageScanLimit bounds how many messages one fetch returns.
 const messageScanLimit = 1000
 
-// messageMimeiID derives a user's message Mimei. MMCreate is deterministic in
-// its mark, so this returns the same id every time and creates it on first use.
+// Preserve an existing message database. A new message store has its own File
+// identity, including when its owner is a legacy database-backed user.
 func (c *ctx) messageMimeiID(authSid, userID string) (string, error) {
-	mid, err := c.api.MMCreate(authSid, c.appID(), appExtMessage,
-		userID+"_"+userMessageMimei, mimeiTypeDatabase, rightUserObject)
+	mark := userID + "_" + userMessageMimei
+	legacy, err := c.api.MMCreate(authSid, c.appID(), appExtMessage, mark, mimeiTypeDatabase, rightUserObject)
 	if err != nil {
-		return "", fmt.Errorf("MMCreate(message mimei): %v", err)
+		return "", err
 	}
-	return mid, nil
+	current, err := c.createFileObject(authSid, "messages", mark)
+	if err != nil {
+		return "", err
+	}
+	oldExists, err := c.identityExists(authSid, legacy)
+	if err != nil {
+		return "", err
+	}
+	newExists, err := c.identityExists(authSid, current)
+	if err != nil {
+		return "", err
+	}
+	if oldExists && newExists {
+		return "", fmt.Errorf("Conflicting message store identities for %s", userID)
+	}
+	if oldExists {
+		return legacy, nil
+	}
+	return current, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -66,7 +84,7 @@ func entryMessageOutgoing(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErrBool(err), nil
 	}
-	msgSid, err := c.api.MMOpen(authSid, msgMid, verCur)
+	msgSid, err := c.openMimei(authSid, msgMid, verCur)
 	if err != nil {
 		return c.wrapErrBool(err), nil
 	}
@@ -134,7 +152,7 @@ func entryMessageIncoming(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErrString(err), nil
 	}
-	msgSid, err := c.api.MMOpen(authSid, msgMid, verCur)
+	msgSid, err := c.openMimei(authSid, msgMid, verCur)
 	if err != nil {
 		return c.wrapErrString(err), nil
 	}
@@ -185,7 +203,22 @@ func entryMessageCheck(c *ctx) (any, error) {
 		return c.wrapErrList(fmt.Errorf("User host not found")), nil
 	}
 
-	msgSid, err := c.api.MMOpen("", msgMid, verLast)
+	exists, err := c.hasCommittedVersion(authSid, msgMid)
+	if err != nil {
+		return c.wrapErrList(err), nil
+	}
+	if !exists {
+		remote, err := c.identityExists(authSid, msgMid)
+		if err != nil {
+			return c.wrapErrList(err), nil
+		}
+		if remote {
+			return c.wrapErrList(fmt.Errorf("Message history is not available on this node")), nil
+		}
+		return c.wrapPassthrough([]any{}), nil
+	}
+
+	msgSid, err := c.openMimei("", msgMid, verLast)
 	if err != nil {
 		return c.wrapErrList(err), nil
 	}
@@ -257,7 +290,7 @@ func entryMessageFetch(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErrList(err), nil
 	}
-	msgSid, err := c.api.MMOpen(authSid, msgMid, verCur)
+	msgSid, err := c.openMimei(authSid, msgMid, verCur)
 	if err != nil {
 		return c.wrapErrList(err), nil
 	}

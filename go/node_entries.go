@@ -32,11 +32,15 @@ func entryNodeUpdateScore(c *ctx) (any, error) {
 	userID := c.str("userid")
 	mid := c.str(reqMID)
 
-	mmsid, err := c.nodeDataSid(verCur)
+	systemSid, mmsid, err := c.nodeScoreStore(userID, mid)
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
+	defer c.closeScoreStore(systemSid, mmsid)
 	if err := c.zaddSeq(mmsid, userID, mid); err != nil {
+		return c.wrapErr(err), nil
+	}
+	if err := c.commitScoreStore(mmsid); err != nil {
 		return c.wrapErr(err), nil
 	}
 	return c.wrap(map[string]any{"success": true}), nil
@@ -48,10 +52,11 @@ func entryNodeGetScore(c *ctx) (any, error) {
 	userID := c.str("userid")
 	mid := c.str(reqMID)
 
-	mmsid, err := c.nodeDataSid(verCur)
+	systemSid, mmsid, err := c.nodeScoreStore(userID, mid)
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
+	defer c.closeScoreStore(systemSid, mmsid)
 	rank, err := c.zrank(mmsid, userID, mid)
 	if err != nil {
 		return c.wrapErr(err), nil
@@ -63,6 +68,9 @@ func entryNodeGetScore(c *ctx) (any, error) {
 	}
 	score, err := c.zscore(mmsid, userID, mid)
 	if err != nil {
+		return c.wrapErr(err), nil
+	}
+	if err := c.commitScoreStore(mmsid); err != nil {
 		return c.wrapErr(err), nil
 	}
 	return c.wrapNotNull(score, "Score not found"), nil
@@ -83,18 +91,19 @@ func entryNodeUpdateMidByScore(c *ctx) (any, error) {
 		return c.wrap(map[string]any{"success": true, "message": "Already on target host"}), nil
 	}
 
-	systemSid, err := c.nodeDataSid(verCur)
+	systemSid, scoreSid, err := c.nodeScoreStore(userID, mid)
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
 
-	rank, err := c.zrank(systemSid, userID, mid)
+	defer c.closeScoreStore(systemSid, scoreSid)
+	rank, err := c.zrank(scoreSid, userID, mid)
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
 	if rank == -1 {
 		// Never seen here: take a copy rather than comparing scores.
-		if err := c.initialiseMid(systemSid, userID, mid); err != nil {
+		if err := c.initialiseMid(systemSid, scoreSid, userID, mid); err != nil {
 			c.errorf("Failed to add new mid %s: %v", mid, err)
 			return c.wrapErr(fmt.Errorf("Failed to initialize new mid: %v", err)), nil
 		}
@@ -113,7 +122,7 @@ func entryNodeUpdateMidByScore(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
-	localScore, err := c.zscore(systemSid, userID, mid)
+	localScore, err := c.zscore(scoreSid, userID, mid)
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
@@ -129,22 +138,28 @@ func entryNodeUpdateMidByScore(c *ctx) (any, error) {
 		}
 		// The home node's score is adopted verbatim, so this node records how
 		// far it has caught up rather than inventing a sequence of its own.
-		if err := c.zadd(systemSid, userID, remote, mid); err != nil {
+		if err := c.zadd(scoreSid, userID, remote, mid); err != nil {
 			return c.wrapErr(err), nil
 		}
+	}
+	if err := c.commitScoreStore(scoreSid); err != nil {
+		return c.wrapErr(err), nil
 	}
 	return c.wrap(map[string]any{"success": true}), nil
 }
 
 // initialiseMid records and fetches an object this node has not held before.
-func (c *ctx) initialiseMid(systemSid, userID, mid string) error {
-	if err := c.zaddSeq(systemSid, userID, mid); err != nil {
+func (c *ctx) initialiseMid(systemSid, scoreSid, userID, mid string) error {
+	if err := c.zaddSeq(scoreSid, userID, mid); err != nil {
 		return err
 	}
 	if err := c.mimeiSync(systemSid, mid, nil); err != nil {
 		return err
 	}
-	return c.mimeiProvide(systemSid, mid)
+	if err := c.mimeiProvide(systemSid, mid); err != nil {
+		return err
+	}
+	return c.commitScoreStore(scoreSid)
 }
 
 // ---------------------------------------------------------------------------
@@ -354,25 +369,28 @@ func (c *ctx) providerAddresses(mid string) ([]providerAddr, error) {
 			return nil, fmt.Errorf("invalid provider data: %v", err)
 		}
 	}
+	if decoded == nil {
+		return nil, nil
+	}
 	groups, ok := toSlice(decoded)
 	if !ok {
-		return nil, nil
+		return nil, fmt.Errorf("invalid provider groups for %s", mid)
 	}
 
 	out := []providerAddr{}
 	for _, group := range groups {
 		entries, ok := toSlice(group)
 		if !ok {
-			continue
+			return nil, fmt.Errorf("invalid provider group for %s", mid)
 		}
 		for _, entry := range entries {
 			pair, ok := toSlice(entry)
 			if !ok || len(pair) < 2 {
-				continue
+				return nil, fmt.Errorf("invalid provider address for %s", mid)
 			}
 			addr := toString(pair[0])
 			if addr == "" {
-				continue
+				return nil, fmt.Errorf("empty provider address for %s", mid)
 			}
 			score, _ := toInt64(pair[1])
 			out = append(out, providerAddr{addr: addr, score: score})
@@ -398,4 +416,46 @@ func splitAndTrim(s, sep string) []string {
 		parts[i] = strings.TrimSpace(p)
 	}
 	return parts
+}
+
+// Existing node score entries stay in their node database. New entries go to a
+// node-scoped File index. The system session remains separate: it is also used
+// for node-to-node RPC and must never be replaced by a File resource handle.
+func (c *ctx) nodeScoreStore(userID, mid string) (string, string, error) {
+	systemSid, err := c.nodeDataSid(verCur)
+	if err != nil {
+		return "", "", err
+	}
+	rank, err := c.zrank(systemSid, userID, mid)
+	if err != nil {
+		return "", "", err
+	}
+	if rank != -1 {
+		return systemSid, systemSid, nil
+	}
+	auth, err := c.authSid()
+	if err != nil {
+		return "", "", err
+	}
+	nodeID := c.nodeID()
+	if nodeID == "" {
+		return "", "", fmt.Errorf("Missing node identity")
+	}
+	indexMID, err := c.createFileObject(auth, "node-index", nodeID)
+	if err != nil {
+		return "", "", err
+	}
+	handle, err := c.openMimei(auth, indexMID, verCur)
+	return systemSid, handle, err
+}
+func (c *ctx) closeScoreStore(systemSid, scoreSid string) {
+	if scoreSid != systemSid {
+		c.closeMimei(scoreSid)
+	}
+}
+func (c *ctx) commitScoreStore(scoreSid string) error {
+	if f := c.files[scoreSid]; f != nil && len(f.changes) > 0 {
+		return c.commitFile(f)
+	}
+	return nil // BEOpenAppDataNode keeps its existing immediate-write behavior.
 }

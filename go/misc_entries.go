@@ -5,8 +5,10 @@ package lapp
 // it to decide whether a node is reachable before sending real work.
 func entryHealth(c *ctx) (any, error) {
 	return map[string]any{
-		"success": true,
-		"message": "Server is running",
+		"success":        true,
+		"message":        "Server is running",
+		"storageFormats": []string{"database", fileSchema},
+		"creationFormat": fileSchema,
 	}, nil
 }
 

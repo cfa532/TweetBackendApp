@@ -59,14 +59,14 @@ func entryAddComment(c *ctx) (any, error) {
 	if err != nil {
 		return respErr(err), nil
 	}
-	commentID, err := c.api.MMCreate(authSid, c.appID(), appExt, "{{auto}}", mimeiTypeDatabase, rightUserObject)
+	commentID, err := c.createFileObject(authSid, "tweet", "{{auto}}")
 	if err != nil {
 		return respErr(fmt.Errorf("MMCreate(comment): %v", err)), nil
 	}
 	comment["mid"] = commentID
 	comment["timestamp"] = nowMillis()
 
-	commentSid, err := c.api.MMOpen(authSid, commentID, verCur)
+	commentSid, err := c.openMimei(authSid, commentID, verCur)
 	if err != nil {
 		return respErr(fmt.Errorf("MMOpen(%s, cur): %v", commentID, err)), nil
 	}
@@ -92,7 +92,7 @@ func entryAddComment(c *ctx) (any, error) {
 	// The parent gains both a list entry, for paging, and a reference, which is
 	// what carries the comment when the parent is synchronised. Both are
 	// required; neither replaces the other.
-	tweetSid, err := c.api.MMOpen(authSid, tweetID, verCur)
+	tweetSid, err := c.openMimei(authSid, tweetID, verCur)
 	if err != nil {
 		return respErr(fmt.Errorf("MMOpen(%s, cur): %v", tweetID, err)), nil
 	}
@@ -217,7 +217,7 @@ func entryGetComments(c *ctx) (any, error) {
 	startRank := int(pageNumber * pageSize)
 	endRank := startRank + int(pageSize) - 1
 
-	readSid, err := c.api.MMOpen("", tweetID, verLast)
+	readSid, err := c.openMimei("", tweetID, verLast)
 	if err != nil {
 		return c.wrapErrList(err), nil
 	}
@@ -276,7 +276,7 @@ func (c *ctx) pruneComments(tweetID string, commentIDs []string, page int64) err
 	if err != nil {
 		return err
 	}
-	writeSid, err := c.api.MMOpen(authSid, tweetID, verCur)
+	writeSid, err := c.openMimei(authSid, tweetID, verCur)
 	if err != nil {
 		return fmt.Errorf("MMOpen(%s, cur): %v", tweetID, err)
 	}
@@ -363,7 +363,7 @@ func entryDeleteComment(c *ctx) (any, error) {
 
 // destroyComment removes the comment object itself.
 func (c *ctx) destroyComment(authSid, commentID string) error {
-	commentSid, err := c.api.MMOpen(authSid, commentID, verCur)
+	commentSid, err := c.openMimei(authSid, commentID, verCur)
 	if err != nil {
 		return fmt.Errorf("MMOpen(%s, cur): %v", commentID, err)
 	}
@@ -374,7 +374,7 @@ func (c *ctx) destroyComment(authSid, commentID string) error {
 // detachComment removes the parent's reference and list entry, then republishes
 // the parent so other nodes stop offering the comment.
 func (c *ctx) detachComment(authSid, tweetID, commentID string) error {
-	tweetSid, err := c.api.MMOpen(authSid, tweetID, verCur)
+	tweetSid, err := c.openMimei(authSid, tweetID, verCur)
 	if err != nil {
 		return fmt.Errorf("MMOpen(%s, cur): %v", tweetID, err)
 	}
@@ -398,16 +398,16 @@ func (c *ctx) detachComment(authSid, tweetID, commentID string) error {
 // forgetSavedComment drops a deleted comment from the requesting user's saved
 // lists, so it does not linger as a dangling bookmark or favorite.
 func (c *ctx) forgetSavedComment(authSid, appUserID, commentID string) error {
-	userSid, err := c.api.MMOpen(authSid, appUserID, verCur)
+	userSid, err := c.openMimei(authSid, appUserID, verCur)
 	if err != nil {
 		return fmt.Errorf("MMOpen(%s, cur): %v", appUserID, err)
 	}
 	defer c.closeMimei(userSid)
 
-	if err := c.zrem(userSid, userBookmarkList, commentID); err != nil {
+	if err := c.hdel(userSid, userBookmarkList, commentID); err != nil {
 		return err
 	}
-	if err := c.zrem(userSid, tweetLikeList, commentID); err != nil {
+	if err := c.hdel(userSid, userFavoriteList, commentID); err != nil {
 		return err
 	}
 	return c.backupDelRef(userSid, appUserID, "")

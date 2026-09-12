@@ -25,7 +25,9 @@ type ctx struct {
 
 	// nodeIDCache memoises GetVar("", "hostid"); entries ask for it repeatedly
 	// while routing, and it cannot change during a call.
-	nodeIDCache string
+	nodeIDCache  string
+	files        map[string]*fileStore
+	createdFiles map[string]string
 }
 
 func newCtx(api lapi.LApi, entry string, req map[string]string, args []any, wr io.Writer) *ctx {

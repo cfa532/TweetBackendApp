@@ -40,7 +40,7 @@ func entrySetAuthorCoreData(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErrUpdate(err), nil
 	}
-	userSid, err := c.api.MMOpen(authSid, user.mid(), verCur)
+	userSid, err := c.openMimei(authSid, user.mid(), verCur)
 	if err != nil {
 		return c.wrapErrUpdate(err), nil
 	}
@@ -207,7 +207,7 @@ func entryGetUserMeta(c *ctx) (any, error) {
 	case userCommentList:
 		var pairs []lapi.FVPair
 		err := c.readMimei("", c.str("userid"), func(mmsid string) error {
-			got, err := c.api.Hgetall(mmsid, userCommentList)
+			got, err := c.hgetall(mmsid, userCommentList)
 			if err != nil {
 				return fmt.Errorf("Hgetall(%s): %v", userCommentList, err)
 			}
@@ -260,7 +260,7 @@ func (c *ctx) savedTweets(listType string) ([]any, error) {
 	startRank := int(pageNumber * pageSize)
 	nodeID := c.nodeID()
 
-	readSid, err := c.api.MMOpen("", userID, verLast)
+	readSid, err := c.openMimei("", userID, verLast)
 	if err != nil {
 		return nil, fmt.Errorf("MMOpen(%s, last): %v", userID, err)
 	}
@@ -275,7 +275,7 @@ func (c *ctx) savedTweets(listType string) ([]any, error) {
 		isRootNode = true
 	}
 
-	items, err := c.api.Hgetall(readSid, listType)
+	items, err := c.hgetall(readSid, listType)
 	if err != nil {
 		return nil, fmt.Errorf("Hgetall(%s): %v", listType, err)
 	}
@@ -315,7 +315,7 @@ func (c *ctx) savedTweets(listType string) ([]any, error) {
 			isRootNode = false
 			return ""
 		}
-		mmsid, err := c.api.MMOpen(sid, userID, verCur)
+		mmsid, err := c.openMimei(sid, userID, verCur)
 		if err != nil {
 			c.errorf("failed to open write session for userId=%s: %v", userID, err)
 			isRootNode = false

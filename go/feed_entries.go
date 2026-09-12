@@ -49,7 +49,7 @@ func entryUpdateFollowingTweets(c *ctx) (any, error) {
 	// committed inside refreshFeedLocally, while its handle is still open.
 	tracker := &followingAccessTracker{c: c, userID: userID}
 
-	readSid, err := c.api.MMOpen(authSid, userID, verLast)
+	readSid, err := c.openMimei(authSid, userID, verLast)
 	if err != nil {
 		return respErrField(c, err), nil
 	}
@@ -145,7 +145,7 @@ func (c *ctx) pullFeedFromRoot(userID, rootHost string, lastScore int64) (any, e
 // picked up was tried and made every other request to this node wait on a
 // MiMeiProvide per tweet. The node advertises what it holds on its own.
 func (c *ctx) refreshFeedLocally(authSid, userID string, lastScore int64, tracker *followingAccessTracker) (any, error) {
-	mmsid, err := c.api.MMOpen(authSid, userID, verCur)
+	mmsid, err := c.openMimei(authSid, userID, verCur)
 	if err != nil {
 		return respErrField(c, err), nil
 	}
@@ -239,7 +239,7 @@ func (c *ctx) collectFollowingTweets(uid, userID string, lastScore int64, userSi
 
 	if len(newTweets) > 0 {
 		// The tweets keep their own scores so the feed stays in post order.
-		if _, err := c.api.Zadd(userSid, userFollowingsTweets, newTweets...); err != nil {
+		if err := c.zaddMany(userSid, userFollowingsTweets, newTweets...); err != nil {
 			c.errorf("updateUser error: %v, uid=%s", err, uid)
 			return nil, nil
 		}
@@ -436,7 +436,7 @@ func entryRemoveBlacklistedRelationship(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
-	readSid, err := c.api.MMOpen(authSid, ownerID, verLast)
+	readSid, err := c.openMimei(authSid, ownerID, verLast)
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
@@ -463,7 +463,7 @@ func entryRemoveBlacklistedRelationship(c *ctx) (any, error) {
 		return c.wrapPassthrough(map[string]any{"removed": false, "reason": "relationship_is_newer"}), nil
 	}
 
-	writeSid, err := c.api.MMOpen(authSid, ownerID, verCur)
+	writeSid, err := c.openMimei(authSid, ownerID, verCur)
 	if err != nil {
 		return c.wrapErr(err), nil
 	}

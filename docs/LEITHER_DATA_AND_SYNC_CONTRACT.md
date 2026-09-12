@@ -91,6 +91,28 @@ After adding or deleting a reference, back up and publish the parent object so o
 
 If comment creation is delegated to the parent author's remote root node, that node owns creation of the comment and the parent-to-comment reference. Synchronizing the updated parent back to the initiating node should then carry its direct comment children.
 
+## Dual storage formats
+
+Existing users, tweets and comments retain their database format and MID.
+New users/tweets/comments created by the File-capable Go backend use File MiMeis
+with a core JSON file and per-member collection directories. Format dispatch is
+per object: a legacy user can reference a File tweet and either format can
+reference a comment of the other format. Directory entries never substitute for
+native MiMei references.
+
+In the reference invariants above, committing the parent means `MMBackup` for a
+database parent or `FilesFlush` followed by `MFSetCid` for a File parent. Never
+call `MMBackup` after `MFSetCid`. Publication and one-level synchronization remain
+required separately. The target Leither runtime must be checked for visibility
+of native references committed with the File root before deployment.
+
+The v2/v3 response envelopes are unchanged. File User/Tweet payloads optionally
+report `storageFormat: "tweet-file-v1"`; `health` advertises the formats the server
+supports. Old backends remain usable for database data but cannot serve File
+objects. Upgrade roots and their serving/discovery nodes before enabling File
+creation. This refactor does not migrate existing records or add serialization
+or cross-node transactions.
+
 ## Read and Recovery APIs
 
 Normal reads trust the access node:

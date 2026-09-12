@@ -135,6 +135,14 @@ func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 		return c.wrapErrString(err), nil
 	}
 
+	user, ok := toMap(updatedUser)
+	if !ok || user == nil {
+		return c.wrapErrString(fmt.Errorf("Failed to update user's saved items")), nil
+	}
+	if has(user, "success") && !mapBool(user, "success") {
+		return c.wrapErrString(fmt.Errorf("Failed to update user's saved items: %s", firstNonEmpty(mapStr(user, "message"), mapStr(user, "error")))), nil
+	}
+
 	c.debugf("local tweet=%s, user=%s", jsonStringify(updatedTweet), jsonStringify(updatedUser))
 	return c.wrapPassthrough(map[string]any{
 		"success": true,
@@ -155,7 +163,7 @@ func (c *ctx) applyEngagementToTweet(kind engagementKind, userID, authorID, twee
 		c.errorf("Error toggle %s of tweet: %v, request=%s", kind.tweetKey, err, c.requestJSON())
 		return nil
 	}
-	tweetSid, err := c.api.MMOpen(authSid, tweetID, verCur)
+	tweetSid, err := c.openMimei(authSid, tweetID, verCur)
 	if err != nil {
 		c.errorf("Error toggle %s of tweet: %v, request=%s", kind.tweetKey, err, c.requestJSON())
 		return nil
@@ -232,23 +240,15 @@ func (c *ctx) toggleEngagementByUser(kind engagementKind) (any, error) {
 	wanted := c.boolParam(kind.stateParam)
 	skipContentSync := c.boolParam("skipcontentsync")
 
-	// A failure after this point still returns the user's data, because the
-	// client uses the reply to refresh its own view of the account.
 	result, err := c.applyEngagementToUser(kind, userID, tweetID, wanted, skipContentSync)
-	if err == nil {
-		return result, nil
+	if err != nil {
+		c.failf(err)
+		return respErr(err), nil
 	}
-	c.failf(err)
-	userData, fallbackErr := c.callEntry("get_user_core_data", map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"userid":  userID,
-	})
-	if fallbackErr != nil {
-		c.errorf("Failed to get user data after error: %v", fallbackErr)
-		return c.wrapErr(fallbackErr), nil
+	if result == nil {
+		return respFail("User not found after updating saved items"), nil
 	}
-	return c.wrapNotNull(userData, "User not found"), nil
+	return result, nil
 }
 
 func (c *ctx) applyEngagementToUser(kind engagementKind, userID, tweetID string, wanted, skipContentSync bool) (any, error) {
@@ -263,7 +263,7 @@ func (c *ctx) applyEngagementToUser(kind engagementKind, userID, tweetID string,
 		return nil, err
 	}
 
-	userSid, err := c.api.MMOpen(authSid, userID, verCur)
+	userSid, err := c.openMimei(authSid, userID, verCur)
 	if err != nil {
 		return nil, fmt.Errorf("MMOpen(%s, cur): %v", userID, err)
 	}

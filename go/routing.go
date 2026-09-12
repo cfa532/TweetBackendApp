@@ -105,7 +105,7 @@ func (c *ctx) openWriterFor(userID string) (authSid, mmsid string) {
 		c.errorf("failed to open write session for userId=%s: %v", userID, err)
 		return "", ""
 	}
-	handle, err := c.api.MMOpen(sid, userID, verCur)
+	handle, err := c.openMimei(sid, userID, verCur)
 	if err != nil {
 		c.errorf("failed to open write session for userId=%s: %v", userID, err)
 		return "", ""
