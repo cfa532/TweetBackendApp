@@ -111,7 +111,7 @@
             lapi.Hdel(userSid, FOLLOWINGS_LIST, blockedUserId)
             
             // Backup user data and publish changes
-            lapi.MMBackup(userSid, userId, "", "delref=true")
+            lapi.MMBackup(userSid, userId, "", "delref=false")
             lapi.MiMeiPublish(userSid, "", userId)
             return wrapResponse({success: true})
         }

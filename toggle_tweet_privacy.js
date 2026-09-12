@@ -146,7 +146,7 @@
             
             // Update the tweet in storage and publish changes
             lapi.Set(tweetSid, TWT_CONTENT_KEY, tweet)
-            lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
+            lapi.MMBackup(tweetSid, tweetId, "", "delref=false")
             lapi.MiMeiPublish(authSid, "", tweetId)
             
             lapi.Debug("Tweed toggle_tweet_privacy: local tweet=%s", JSON.stringify(tweet))

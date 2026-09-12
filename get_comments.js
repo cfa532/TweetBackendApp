@@ -128,7 +128,7 @@
                 })
                 lapi.Warn("Tweed get_comments: removed %d stale commentId(s) from tweetId=%s, page=%d",
                     staleCommentIds.length, tweetId, pageNumber)
-                lapi.MMBackup(writeSid, tweetId, "", "delref=true")
+                lapi.MMBackup(writeSid, tweetId, "", "delref=false")
                 lapi.MiMeiPublish(authSid, "", tweetId)
             } catch (e) {
                 lapi.Error("Tweed get_comments: failed to remove stale commentIds for tweetId=%s: %s", tweetId, e)

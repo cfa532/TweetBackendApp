@@ -88,8 +88,8 @@ func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 
 	requested, stateGiven := c.requestedState(kind.stateParam)
 
-	// Resolved to reject a request naming an author this node does not know.
-	if err := c.requireKnownUser(authorID); err != nil {
+	// The tweet lives on its author's root node, so this must be that node.
+	if err := c.requireRootNode(authorID); err != nil {
 		return c.wrapErrString(fmt.Errorf("Author host not found")), nil
 	}
 	systemSid, err := c.nodeDataSid(verCur)
@@ -98,6 +98,14 @@ func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 	}
 
 	updatedTweet := c.applyEngagementToTweet(kind, userID, authorID, tweetID, requested, stateGiven)
+	if updatedTweet == nil {
+		// The user's half is mirrored from the tweet's own record below. Without
+		// that record there is nothing to mirror, and reading the missing flag as
+		// false would tell the user's node to drop a save the user still has.
+		// The JavaScript entry failed here too, by dereferencing the absent
+		// tweet.
+		return c.wrapErrString(fmt.Errorf("Failed to read tweet %s after updating it", tweetID)), nil
+	}
 
 	// The user's own list is updated from the state the tweet ended up in, not
 	// from what was requested, so a no-op toggle stays a no-op on both sides.
@@ -138,9 +146,9 @@ func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 // applyEngagementToTweet flips or sets the tweet's record of this user, and
 // returns the tweet as it now stands.
 //
-// A failure here yields a nil tweet rather than an error: the caller still
-// updates the user's list, matching the previous behaviour where this step was
-// self-contained.
+// Every failure inside is logged and yields a nil tweet, so the individual steps
+// stay self-contained; the caller decides what an absent tweet means, and it
+// abandons the toggle rather than mirroring a state it never read.
 func (c *ctx) applyEngagementToTweet(kind engagementKind, userID, authorID, tweetID string, requested, stateGiven bool) any {
 	authSid, err := c.authSid()
 	if err != nil {
@@ -230,7 +238,7 @@ func (c *ctx) toggleEngagementByUser(kind engagementKind) (any, error) {
 	if err == nil {
 		return result, nil
 	}
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	userData, fallbackErr := c.callEntry("get_user_core_data", map[string]string{
 		reqAppID:  c.appID(),
 		reqAppVer: verLast,
@@ -248,10 +256,10 @@ func (c *ctx) applyEngagementToUser(kind engagementKind, userID, tweetID string,
 	if err != nil {
 		return nil, err
 	}
-	// Resolved to reject a request for a user this node does not know. The
-	// caller side of this pair still addresses the user's own node directly,
-	// because the tweet's list and the user's list live on different nodes.
-	if err := c.requireKnownUser(userID); err != nil {
+	// The list written here is the user's own, so this must be their root
+	// node. The caller side of this pair addresses it directly, because the
+	// tweet's list and the user's list live on different nodes.
+	if err := c.requireRootNode(userID); err != nil {
 		return nil, err
 	}
 
@@ -297,12 +305,10 @@ func (c *ctx) applyEngagementToUser(kind engagementKind, userID, tweetID string,
 	}
 
 	if changed && wanted && !skipContentSync {
-		if err := c.mimeiSync(tweetID, nil); err != nil {
-			c.errorf("Failed to sync tweet %s: %v", tweetID, err)
-		}
-		if err := c.mimeiProvide(authSid, tweetID); err != nil {
-			c.errorf("Failed to provide tweet %s: %v", tweetID, err)
-		}
+		// Saving a tweet means this node should hold it; ensureProvided skips
+		// the pull when it already does. skipcontentsync is the caller's hint
+		// that the tweet is on this node, which the provider table confirms.
+		c.ensureProvided(authSid, tweetID)
 	}
 	// Un-saving deliberately does not unprovide or delete the local copy: this
 	// node may hold the only reachable copy of the tweet.
@@ -344,7 +350,7 @@ func boolParam(v bool) string {
 // wrapErrString reports an engagement failure. Legacy callers read the message
 // under "error".
 func (c *ctx) wrapErrString(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		out := respErr(err)
 		out["error"] = err.Error()

@@ -41,45 +41,68 @@ cd go && go build ./...
 `go.mod` exists only for that check. It maps the import path the interpreter
 provides, `Leither/lapi`, onto the published module `github.com/3and4/Leither/lapi`.
 Leither generates its own manifest at upload time and does not read `go.mod`.
+The same rule applies to the other interpreter-provided packages listed below:
+local tooling may need ordinary module requirements, but the deployed MApp must
+import the exact paths registered by Leither.
 
 ## Deploying
 
-The debug app (`twbe`, AppID `d4lRyhABgqOnqY4bURSm_T-4FZ4`) deploys with the
-existing `~/demo/twbe.sh` on gen8, unchanged — the Go sources go in `~/demo/twbe`
-exactly where the `.js` files used to, and the script's `uploadapp` / `backup` /
-`mimei publish` sequence works as-is. App name comes from the directory name, so
-the directory must stay `twbe` to keep the same AppID.
+gen8 is always the publication target for the debug app (`twbe`, AppID
+`d4lRyhABgqOnqY4bURSm_T-4FZ4`). Its public IP is volatile, so resolve it only
+through the Cloudflare-managed `gen8.leither.uk` hostname. Do not publish TWBE
+from minipc or ksbox and do not pin a resolved gen8 IP in a command or document.
+
+Copy the production Go sources into `/home/pi/demo/twbe/` on gen8. The target
+directory must stay named `twbe` because its name determines the AppID. Exclude
+tests, local module files, and documentation from the MApp package:
 
 ```bash
-cd ~/demo && ./twbe.sh
+rsync -av -e 'ssh -p 220' \
+  --exclude='*_test.go' \
+  --include='*.go' \
+  --exclude='*' \
+  go/ pi@gen8.leither.uk:/home/pi/demo/twbe/
 ```
 
-Verified working on Leither **V0.23.95**. Five things about this platform are not
-in the published docs and were each found the hard way:
-
-**1. The app directory must contain no `.js` files.** Leither builds the app's
-entry list from the `.js` basenames it finds, *recursively* — including a
-`mmroot/` subdirectory. With any present, the router rejects every request with
-`unknown entry` before `RunMApp` is ever called, even though `--dry-run` reports
-`type=go`. Confirm with:
+Compare at least one changed file hash before publishing, then run the existing
+gen8 script. Its `uploadapp` / `backup` / `mimei publish` sequence remains the
+authoritative publisher:
 
 ```bash
-./Leither lpki runapp --local ./twbe health --dry-run -a gen8.key
+shasum -a 256 go/file_entries.go
+ssh -p 220 pi@gen8.leither.uk \
+  'shasum -a 256 /home/pi/demo/twbe/file_entries.go'
+ssh -p 220 pi@gen8.leither.uk 'cd /home/pi/demo && ./twbe.sh'
 ```
 
-`Available entries: []` is what a Go MApp should show. The static assets that
-used to live alongside the JS (`index.html`, `bootstrap.min.js`, …) are parked in
-`~/demo/deploy-backups/twbe-static-assets/`; they cannot be served from this app
-directory any more.
+The final command must report a new numbered version and successful MiMei
+publication. Address verification calls by numbered version first, then confirm
+that `last` returns the same result.
+
+Verified on Leither **V0.23.95** and re-verified on **V0.24.02**.
+
+V0.24.02 renamed CLI flags. `runapp` lost the `-v` shorthand (use `--app-ver`),
+`mimei publish` documents `--mid <mid>` (the positional form still works, so
+`twbe.sh` is unaffected), and `lapp release` uses `--app-ver`. Six things about
+this platform are not in the published docs and were each found the hard way:
+
+**1. `.js` files alongside the Go sources — fixed in V0.24.02.** On V0.23.95,
+Leither built the entry list from `.js` basenames found recursively (including
+`mmroot/`) and rejected every request with `unknown entry` before `RunMApp` ran.
+On V0.24.02 the Go dispatcher answers correctly even while `--dry-run` still
+lists the JS basenames, so the web assets (`index.html`, `bootstrap.min.js`, …)
+now live in `twbe/` beside the Go sources, which is what the site needs.
 
 **2. `ver=cur` serves a stale compile.** After an upload, `cur` kept running the
 previous build while the source on disk was current. Numbered versions and `last`
 pick up the new code, so run `lapp backup` (which twbe.sh does) and address
 `last`. Clients already use `ver=last`.
 
-**3. `twbe.sh`'s `-n ReyCUFHHZmk...` is gen8 itself**, not a separate service
-node — `Leither getvar nodeid` on gen8 returns exactly that id. So `./twbe.sh`
-alone publishes everything; a second local `uploadapp` is redundant.
+**3. `twbe.sh` targets gen8 itself.** gen8's node ID is
+`ReyCUFHHZmk0N5w_wxUeEuoY5Xr`; it is not a separate service node. Run
+`./twbe.sh` on gen8 after copying the sources into `/home/pi/demo/twbe/`. A
+second upload from minipc or ksbox is redundant and is no longer part of the
+publication procedure.
 
 **4. `-r` takes one string, separated by semicolons** — not repeated flags, not
 `&`, not commas. Repeated `-r` silently keeps only the last, which looks exactly
@@ -97,8 +120,25 @@ result to legacy callers, so an error otherwise arrives as a bare `<nil>`.
 local-mode limit only — it works in container mode. Test those with `--id`:
 
 ```bash
-./Leither lpki runapp --id d4lRyhABgqOnqY4bURSm_T-4FZ4 check_upgrade -v last -a gen8.key
+./Leither lpki runapp --id d4lRyhABgqOnqY4bURSm_T-4FZ4 check_upgrade --app-ver last -a gen8.key
 ```
+
+**6. A request with no entry is the web root, not an error.** When a browser
+opens the domain, Leither renders `~/demo/temp.html` (a Go template filled with
+`{{.MID}}` and the provider `{{.Addrs}}`), and the page then fetches
+`/mm/<mid>:last/` from the fastest provider. Alongside that, the application is
+called with **no entry at all** — the request carries `mid`, `ver`, `author` and
+browser headers only. The JavaScript app satisfied this implicitly; a Go MApp
+dispatching from a table must handle it, or the browser gets
+`unknown entry ""` instead of the site. `serveWebRoot` in `main.go` answers it.
+
+**7. Request parameters must not be logged verbatim.** The JavaScript entries
+logged `JSON.stringify(request)` on every failure, which wrote the plaintext
+password to the node log on a failed login and a failed profile update (it
+travels as its own parameter and inside the `user` blob). `requestJSON` in
+`runtime.go` redacts `password`, the password inside `user`, and the `signature`
+inside `agentAuth` before logging. Note the node itself still logs stored records
+through `[p2p] SyncMDBKVData`, which is outside this app's control.
 
 ### Verified on the live node
 
@@ -115,45 +155,77 @@ restoring it is a `cp` back into `~/demo/twbe` followed by `./twbe.sh`.
 
 ## Which node handles a request
 
-Clients choose the node they write to. An entry writes to whichever node it was
-called on, and refuses only when the account it names is unknown there.
+Every account has one root node, `user.hostIds[0]`, and every write to that
+account — or to anything it owns — belongs there. Choosing that node is the
+client's job: it knows which node owns the account and calls it directly.
 
-The previous implementation did this differently: each write entry began by
-comparing `user.hostIds[0]` against the current node and, if they differed,
-forwarded the whole request onwards. That forwarding was legacy and has been
-removed from all 21 entries that carried it. What remains at the top of those
-entries is the account existence check that accompanied it, in `routing.go` as
-`requireKnownUser` — the error text is unchanged, since clients match on it.
+A write that arrives anywhere else is **refused**, by `requireRootNode` in
+`routing.go`. Performing it instead would write a copy the root never learns
+about and the next synchronisation from the root would discard it, losing the
+write silently; refusing says so at once. The accompanying existence check,
+`requireKnownUser`, still rejects an account this node has never seen, and its
+error text is unchanged since clients match on it.
 
-The consequence worth knowing: nothing now stops a write landing on a node that
-does not own the account, so a client calling the wrong node will produce a
-change that synchronisation later discards. Choosing correctly is the client's
-responsibility.
+The previous implementation did this differently: each write entry compared
+`user.hostIds[0]` against the current node and, if they differed, forwarded the
+whole request onwards. That forwarding is gone from all 21 entries that carried
+it — the backend does not bounce a misdirected request, because the client is
+better placed to address the right node than the wrong node is to relay.
+
+Entries outside that rule, each for a stated reason:
+
+- **`login`** authenticates with reads, so it answers on any node holding a copy
+  of the account — a client cannot know the root node before this reply tells it.
+  Only the `lastLogin` write that follows is confined to the root.
+- **`register`** creates the account, so there is no root node to consult yet.
+  The node handling the request becomes it.
+- **`set_author_core_data`** writes the profile wherever it was called, which is
+  what lets an account move off a node that has since disappeared.
+- **`upload_file`** and **`upload_ipfs`** attach a reference to whichever object
+  they were given, on the node they were called on. Neither the JavaScript
+  version nor this one checks where that object is rooted, so a misdirected
+  attachment is still possible here.
+
+What the forwarding left behind is five `RunMApp` calls that genuinely span two
+owners on two nodes; they are listed under *caps.go* below.
 
 ## Limitations to resolve before production
 
-### 1. Node operations with no Go API — `caps.go`
+### 1. Node operations missing from the published interface — `caps.go`
 
-The JavaScript runtime exposed a `lapi` global that is richer than the Go
-`lapi.LApi` interface a MApp receives from `GetLApi()`. Seven operations have
-**no method on that interface**. This was verified by compiling against
-`github.com/3and4/Leither/lapi`:
+The JavaScript runtime exposed a `lapi` global richer than the Go `lapi.LApi`
+interface a MApp receives from `GetLApi()`. The methods are not actually
+missing from the node: at runtime the handle is a `*frame.LApi`, and that
+concrete type carries them. They are simply absent from the interface the value
+is typed as, and from `github.com/3and4/Leither/lapi` at every published
+version.
 
-| Operation | Status in Go |
-|-----------|--------------|
-| `RunMApp` (another node) | declared on `ILApp`, which is not part of `LApi` |
-| `MiMeiSync` | replaced by `BEMMSync`, which **is** on the interface |
-| `MiMeiPublish` | absent |
-| `MiMeiProvide` | absent |
-| `MiMeiUnprovide` | absent |
-| `MiMeiUnpublish` | absent |
-| `MiMeiIsProvider` | absent |
-| `Ed25519Verify` | absent |
+`caps.go` therefore asserts the handle to a small locally declared interface,
+one per operation. Signatures were read off a live node with
+`fmt.Sprintf("%T", ...)` and match the JavaScript call sites exactly, including
+the `""` second argument meaning "all DHTs".
+
+| Operation | Status on V0.24.02 | JS call it mirrors |
+|-----------|--------------------|--------------------|
+| `MiMeiSync` | works | `MiMeiSync(sid, "", mid, {})` |
+| `MiMeiPublish` | works | `MiMeiPublish(sid, "", mid)` |
+| `MiMeiProvide` | works | `MiMeiProvide(sid, "", mid)` |
+| `MiMeiUnprovide` | works | — |
+| `MiMeiUnpublish` | works | — |
+| `MiMeiIsProvider` | works | `MiMeiIsProvider(sid, mid)` |
+| `RunMApp` (another node) | works | — |
+| `Ed25519Verify` | **absent under every spelling tried** | — |
+
+Why an assertion rather than importing the package that declares them:
+`Leither/api` does expose them, but hands back the internal `*frame.LApi`.
+Depending on a node's internal type buys nothing the assertion does not, and an
+assertion degrades — on a build lacking a method the caller gets
+`capUnsupportedError` instead of a compile error or a panic.
 
 `RunMApp` was by far the biggest of these in the original — 97 call sites. Most
 were intra-app and are now direct Go calls through `callEntry`, needing no node
-API at all. The rest were request forwarding, which has since been removed (see
-*Which node handles a request* above).
+API at all. The rest were request forwarding, which misdirected writes no longer
+receive (see *Which node handles a request* above).
 
 What is left is five calls that genuinely span two owners on two nodes and
 cannot be split by the caller:
@@ -165,13 +237,7 @@ cannot be split by the caller:
 - `node_update_mid_by_score` → `node_get_score` on the object's owner
 - `toggle_following` → `get_tweet_id_list`, reading the followed user's tweets
 
-Every one of these funnels through `caps.go`. They are attempted through
-`Act(sid, name, args...)`, the interface's generic escape hatch, using the
-action names at the top of that file. **If the node does not register those
-actions, `Act` returns an error and the operation reports
-`errCapUnsupported`.**
-
-Callers already distinguish the two cases:
+Callers distinguish best-effort work from work that changes the answer:
 
 - Publishing and providing are best-effort replication; those callers log and
   continue, so writes still succeed locally.
@@ -182,8 +248,12 @@ Callers already distinguish the two cases:
   `lapi.Ed25519Verify` was missing. Agent posting should be treated as
   unauthenticated until real verification is wired up.
 
-To resolve: confirm what the deployed node exposes and edit `caps.go` only. No
-entry code depends on how these are implemented.
+One node-side bug remains relevant here. `SyncMiMei` panics with a bounds error
+when an object's only announced providers are the calling node itself — there is
+nothing to pull from, and it indexes an empty slice rather than returning an
+error. Both `MiMeiSync` and `BEMMSync` reach it, so the choice of API does not
+avoid it. `syncIfRemote` skips the call when this node already owns the object,
+which is both correct and what dodges the panic.
 
 ### 2. `upload_compressed_hls` — extraction step not portable
 
@@ -213,17 +283,44 @@ layer consumes it, so `RunMApp`'s `Entry` argument is empty and the real name is
 in `Request["entry"]`; `--local` passes it positionally. `main.go` reads both.
 This was the single blocking bug for HTTP serving.
 
-### 4. Standard library assumptions
+### 4. Interpreter-provided packages
 
-The interpreter provides only part of the standard library. `unicode/utf16` is
-**absent** — confirmed by a failed compile on the node — so `json.go` spells out
-surrogate-pair handling itself. The code uses only `fmt`, `io`, `errors`,
-`strings`, `strconv`, `sort` and `time`. JSON and base64 are hand-written
-(`json.go`, `base64.go`) rather than taken from `encoding/json` and
-`encoding/base64`, and no `net/http` or `crypto/*` is used anywhere. If the
-deployed interpreter does provide the full standard library, `json.go` and
-`base64.go` can be swapped for the stdlib versions with no change elsewhere —
-`jsonParse`, `jsonStringify` and `base64Decode` are the only entry points.
+Leither does not expose an unrestricted Go module environment. Its ixgo runtime
+registers an allowlist of packages that MApp source may import. In addition to
+the small standard-library set already exercised by this port (`errors`, `fmt`,
+`io`, `sort`, `strconv`, `strings`, and `time`), the following imports are
+confirmed available:
+
+| Import path | Conventional alias | Purpose |
+|-------------|--------------------|---------|
+| `bytes` | `bytes` | Byte buffers and readers |
+| `encoding/gob` | `gob` | Go value encoding used by typed Leither results |
+| `fmt` | `fmt` | Formatting and errors |
+| `io` | `io` | Stream interfaces and helpers |
+| `net/http` | `http` | HTTP clients, requests, responses, and handlers exposed by the runtime |
+| `os` | `os` | Runtime-exposed operating-system types and operations |
+| `strings` | `strings` | String processing |
+| `time` | `time` | Time values and durations |
+| `Leither/lapi` | `lapi` | Leither's in-container API surface |
+| `github.com/hprose/hprose-golang/v3/rpc/core` | `core` | Hprose RPC core types |
+| `github.com/hprose/hprose-golang/v3/rpc/websocket` | `websocket` | Hprose WebSocket transport |
+| `github.com/shirou/gopsutil/disk` | `disk` | Disk statistics exposed to the interpreter |
+| `github.com/shirou/gopsutil/mem` | `mem` | Memory statistics exposed to the interpreter |
+
+Package availability means that Leither registers the import; it does not make
+the MApp equivalent to a native Go process. The interpreter restrictions above
+still apply, especially the absence of package-level variable initialisation and
+`init()` execution. Libraries that depend on those mechanisms can import and
+compile yet behave incorrectly, so every required library operation must be
+probed on the deployed Leither version.
+
+Earlier V0.23.95 probes found several common packages missing, including
+`unicode/utf8`, `unicode/utf16`, `encoding/base64`, `crypto/*`, and `regexp`.
+Those results are version-specific. In particular, the earlier conclusion that
+`bytes` and `net/http` were unavailable is superseded by the current confirmed
+allowlist. This backend still keeps its hand-written JSON and base64 adapters to
+avoid changing established behavior; their existence should not be read as the
+current runtime's complete package inventory.
 
 ## Behaviour preserved deliberately
 

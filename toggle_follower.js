@@ -122,7 +122,7 @@
             }
             
             // Update user data and publish changes
-            lapi.MMBackup(userSid, userId, "", "delref=true")
+            lapi.MMBackup(userSid, userId, "", "delref=false")
             lapi.MiMeiPublish(authSid, "", userId)
     
             // Update the user's score in application data

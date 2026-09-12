@@ -222,7 +222,7 @@
                 return wrapError(new Error("Failed to save user data"))
             }
 
-            lapi.MMBackup(userSid, userMid, "", "delref=true")
+            lapi.MMBackup(userSid, userMid, "", "delref=false")
             lapi.MiMeiPublish(authSid, "", userMid)  // Publish user data so toggle_following can find the new user
             lapi.RunMApp("node_update_score", {aid: APP_ID, ver: "last", userid: userMid, mid: userMid}, [])
             

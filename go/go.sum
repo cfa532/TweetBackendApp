@@ -1,5 +1,5 @@
-github.com/3and4/Leither/lapi v0.1.1 h1:Gmzj9G2eKHnjq2mGTIEyhynfuOEI27miK0sU77dA2E0=
-github.com/3and4/Leither/lapi v0.1.1/go.mod h1:c9TeEr7ZudmwT++4M6Z+20tVjD2XoKw12VDynxSgBf0=
+github.com/3and4/Leither/lapi v0.1.2-0.20260809182914-6f6d213c1ab3 h1:EYhIf0AeSJTXHJo6oM7ud8ASOMDsLfgfOHgSlmvojjM=
+github.com/3and4/Leither/lapi v0.1.2-0.20260809182914-6f6d213c1ab3/go.mod h1:c9TeEr7ZudmwT++4M6Z+20tVjD2XoKw12VDynxSgBf0=
 github.com/andot/complexconv v1.0.0 h1:qf8jmr+vaqM2ll7LzzOXqzNn1oVa4+DuyBVKs4DWS5c=
 github.com/andot/complexconv v1.0.0/go.mod h1:JGf7t92n2pKxZNdOe/1n+vJqyi4WPSop/fRIp1de6LE=
 github.com/andybalholm/brotli v1.0.4 h1:V7DdXeJtZscaqfNuAdSRuRFzuiKlHSC/Zh3zl9qY3JY=

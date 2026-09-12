@@ -102,7 +102,7 @@
       lapi.Hdel(tweetSid, RETWEET_LIST, retweetId)
       
       // Update tweet data and publish changes
-      lapi.MMBackup(authSid, tweetId, "", "delref=true")
+      lapi.MMBackup(authSid, tweetId, "", "delref=false")
       lapi.MiMeiPublish(authSid, "", tweetId)
   
       // ================================================================

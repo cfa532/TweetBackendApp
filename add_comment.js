@@ -141,7 +141,7 @@
             });
             
             // Backup comment data and publish it
-            lapi.MMBackup(commentSid, commentId, "", "delref=true")
+            lapi.MMBackup(commentSid, commentId, "", "delref=false")
             lapi.MiMeiPublish(commentSid, "", commentId)  // Make comment available to other nodes
     
             // Add comment to the parent tweet's comment list
@@ -150,7 +150,7 @@
     
             // Create reference from tweet to comment and update tweet
             lapi.MMAddRef(tweetSid, tweetId, commentId)
-            lapi.MMBackup(tweetSid, tweetId, "", "delref=true")
+            lapi.MMBackup(tweetSid, tweetId, "", "delref=false")
             lapi.MiMeiPublish(authSid, "", tweetId)  // Publish updated tweet
     
             // Update the parent tweet's score in application data

@@ -199,7 +199,7 @@
                 lapi.Hdel(userSid, FOLLOWINGS_LIST, followingId)
                 
                 // Backup user data and publish changes
-                lapi.MMBackup(userSid, userId, "", "delref=true")
+                lapi.MMBackup(userSid, userId, "", "delref=false")
                 lapi.MiMeiPublish(authSid, "", userId)
                 // Update follower count on the target user's node
                 try {
@@ -266,16 +266,21 @@
                 
                 // Backup user data and publish changes
                 stage = "backup actor user"
-                lapi.MMBackup(userSid, userId, "", "delref=true")
+                lapi.MMBackup(userSid, userId, "", "delref=false")
                 stage = "publish actor user"
                 lapi.MiMeiPublish(authSid, "", userId)
                 lapi.Debug("Tweed toggle_following: relationship persisted actor=%s target=%s tweetCount=%s",
                     userId, followingId, String(scorepairs.length))
 
-                // Sync and provide the target user's content locally
+                // Hold a local copy of the followed account so their profile
+                // renders without a network round trip. An account this node
+                // already provides is kept current by Leither, so only a
+                // missing one is pulled.
                 try {
-                    lapi.MiMeiSync(authSid, "", followingId, {})
-                    lapi.MiMeiProvide(authSid, "", followingId)
+                    if (!lapi.MiMeiIsProvider(authSid, followingId)) {
+                        lapi.MiMeiSync(authSid, "", followingId, {})
+                        lapi.MiMeiProvide(authSid, "", followingId)
+                    }
                 } catch(e) {
                     lapi.Error("Tweed toggle_following: Failed to sync followed user %s: %s", followingId, e)
                 }

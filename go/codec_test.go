@@ -1,6 +1,9 @@
 package lapp
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestJSONRoundTrip(t *testing.T) {
 	cases := []string{
@@ -230,5 +233,33 @@ func TestEveryEntryIsRegistered(t *testing.T) {
 		if fn == nil {
 			t.Fatalf("entry %s has no implementation", name)
 		}
+	}
+}
+
+func TestRedactParam(t *testing.T) {
+	if got := redactParam("password", "hunter2"); got != redactedMark {
+		t.Fatalf("password not redacted: %q", got)
+	}
+	// The user blob keeps its other fields so the log stays useful.
+	got := redactParam("user", `{"username":"bob","password":"hunter2","name":"Bob"}`)
+	if strings.Contains(got, "hunter2") {
+		t.Fatalf("password leaked through user blob: %s", got)
+	}
+	if !strings.Contains(got, "bob") || !strings.Contains(got, redactedMark) {
+		t.Fatalf("user blob over-redacted: %s", got)
+	}
+	// An unparseable blob is redacted whole rather than logged blind.
+	if got := redactParam("user", "not json but password=hunter2"); got != redactedMark {
+		t.Fatalf("unparseable blob not redacted: %q", got)
+	}
+	if got := redactParam("agentAuth", `{"mimeiId":"m1","signature":"AAAA"}`); strings.Contains(got, "AAAA") {
+		t.Fatalf("signature leaked: %s", got)
+	}
+	// Non-secret parameters pass through untouched.
+	if got := redactParam("tweetid", "abc"); got != "abc" {
+		t.Fatalf("non-secret altered: %q", got)
+	}
+	if got := redactParam("password", ""); got != "" {
+		t.Fatalf("empty value should stay empty: %q", got)
 	}
 }

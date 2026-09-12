@@ -51,9 +51,10 @@ func entryMessageOutgoing(c *ctx) (any, error) {
 		return c.wrapErrBool(err), nil
 	}
 
-	// Resolved to reject a message from a user this node does not know. The
-	// legacy reply to a missing host is a bare false.
-	if err := c.requireKnownUser(senderID); err != nil {
+	// The sender's message store lives on their root node, so this must be that
+	// node. The legacy reply to either rejection is a bare false; the log names
+	// which one it was.
+	if err := c.requireRootNode(senderID); err != nil {
 		return false, nil
 	}
 
@@ -119,8 +120,9 @@ func entryMessageIncoming(c *ctx) (any, error) {
 		return c.wrapErrString(err), nil
 	}
 
-	// Resolved to reject a message for a user this node does not know.
-	if err := c.requireKnownUser(receiptID); err != nil {
+	// The recipient's message store lives on their root node, so this must be
+	// that node.
+	if err := c.requireRootNode(receiptID); err != nil {
 		return map[string]any{"success": false, "error": "User host not found"}, nil
 	}
 
@@ -241,8 +243,9 @@ func entryMessageFetch(c *ctx) (any, error) {
 	userID := c.str("userid")
 	senderID := c.str("senderid")
 
-	// Resolved to reject a request for a user this node does not know.
-	if err := c.requireKnownUser(userID); err != nil {
+	// Marking the conversation read writes to the user's message store, so this
+	// must be their root node.
+	if err := c.requireRootNode(userID); err != nil {
 		return c.wrapErrList(fmt.Errorf("User not found or missing host")), nil
 	}
 

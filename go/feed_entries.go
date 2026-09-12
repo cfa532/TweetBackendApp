@@ -32,9 +32,9 @@ const feedScanLimit = 1000
 // whatever it added.
 //
 // hostid must name the user's own node, which owns both the following list and
-// the feed, and this must be that node. The request is still checked against
-// the account's recorded host so a call aimed at the wrong node is refused
-// rather than half-applied to a replica.
+// the feed. Which node the request reaches decides what it does: the root node
+// walks the followings, and any other node only pulls the result the root has
+// already produced. Clients call both, in that order.
 func entryUpdateFollowingTweets(c *ctx) (any, error) {
 	userID := c.str("appuserid")
 	hostID := c.str("hostid")
@@ -81,10 +81,69 @@ func entryUpdateFollowingTweets(c *ctx) (any, error) {
 		lastScore = last[0].Score + 1
 	}
 
+	// Walking the followings writes the account, so only its root node may do
+	// it. Anywhere else that walk would publish a copy the root never sees, and
+	// would run a cross-node synchronisation per following on a node that is
+	// only meant to serve reads.
+	if authoritativeHost != c.nodeID() {
+		return c.pullFeedFromRoot(userID, authoritativeHost, lastScore)
+	}
 	return c.refreshFeedLocally(authSid, userID, lastScore, tracker)
 }
 
+// pullFeedFromRoot brings this node's copy of the account up to date from its
+// root and returns what that added to the feed.
+//
+// This is the second half of the client's pair of calls: it has already asked
+// the root node to refresh the feed, and asks this node to catch up so the
+// timeline read here is not stale. Nothing is written to the account —
+// node_update_mid_by_score pulls it, and the score it records afterwards is
+// this node's own bookkeeping.
+func (c *ctx) pullFeedFromRoot(userID, rootHost string, lastScore int64) (any, error) {
+	if _, err := c.callEntry("node_update_mid_by_score", map[string]string{
+		reqAppID:  c.appID(),
+		reqAppVer: verLast,
+		"hostid":  rootHost,
+		"userid":  userID,
+		reqMID:    userID,
+	}); err != nil {
+		return respErrField(c, err), nil
+	}
+
+	// Opened after the pull, so the freshly synchronised feed is what gets read.
+	var newTweets []lapi.ScorePair
+	if err := c.readMimei("", userID, func(mmsid string) error {
+		got, err := c.zrangebyscore(mmsid, userFollowingsTweets, lastScore, nowMillis(), 0, feedScanLimit)
+		if err != nil {
+			return err
+		}
+		newTweets = got
+		return nil
+	}); err != nil {
+		return respErrField(c, err), nil
+	}
+	c.debugf("pulled %d feed entries from root %s, lastScore=%d", len(newTweets), rootHost, lastScore)
+
+	tweets := []any{}
+	for _, pair := range newTweets {
+		if tweet := c.fetchTweetV2(pair.Member, userID); tweet != nil {
+			tweets = append(tweets, tweet)
+		}
+	}
+	return c.wrapPassthrough(map[string]any{
+		"success":        true,
+		"tweets":         tweets,
+		"originalTweets": []any{},
+	}), nil
+}
+
 // refreshFeedLocally walks the user's followings and collects their new tweets.
+//
+// The account is held open for writing for the whole walk, and anything else
+// that reads it queues behind that. Nothing belongs in here beyond the
+// synchronisation each following needs: announcing the tweets this refresh
+// picked up was tried and made every other request to this node wait on a
+// MiMeiProvide per tweet. The node advertises what it holds on its own.
 func (c *ctx) refreshFeedLocally(authSid, userID string, lastScore int64, tracker *followingAccessTracker) (any, error) {
 	mmsid, err := c.api.MMOpen(authSid, userID, verCur)
 	if err != nil {

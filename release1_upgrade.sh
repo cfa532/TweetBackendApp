@@ -17,5 +17,5 @@ LeitherPath="$PARENT_DIR/Leither"
 # to a new node. The upgrade APK will be synced too, and provided.
 # It is not working. Reference has to be added on "cur" before backup and publish.
 # The following script is not adding it to cur.
-"$LeitherPath" mimei setdata "$FileId" "$1" -k "$KeyFile"
-"$LeitherPath" mimei publish "$FileId" -k "$KeyFile"
+"$LeitherPath" mimei setdata --mid "$FileId" "$1" -k "$KeyFile"
+"$LeitherPath" mimei publish --mid "$FileId" -k "$KeyFile"

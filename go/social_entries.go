@@ -45,7 +45,7 @@ func entryToggleFollowing(c *ctx) (any, error) {
 	// toggle_following predates the version parameter and defaults to v2.
 	enveloped := c.version() == "" || c.isV2()
 	fail := func(err error) any {
-		c.errorf("%v, request=%s", err, c.requestJSON())
+		c.failf(err)
 		if enveloped {
 			return respErr(err)
 		}
@@ -101,6 +101,18 @@ func entryToggleFollowing(c *ctx) (any, error) {
 		c.errorf("missing host for user %s", jsonStringify(map[string]any{"userId": userID, "nodeId": nodeID}))
 		return fail(fmt.Errorf("User host not found for user %s on %s", userID, nodeID)), nil
 	}
+	// The follow is written into the actor's own account — the relationship and
+	// the seeded feed entries — so only its root node may perform it. Doing it
+	// on a replica publishes a copy the root never learns about, which the next
+	// synchronisation from the root discards. requireRootNodeFor is not used
+	// here because the host may have come from the caller's hint above, which is
+	// what makes a follow work right after registration.
+	if userHostID != nodeID {
+		c.errorf("write aimed at the wrong node %s", jsonStringify(map[string]any{
+			"userId": userID, "rootNode": userHostID, "nodeId": nodeID,
+		}))
+		return fail(fmt.Errorf("Node %s is not the root node for user %s", nodeID, userID)), nil
+	}
 
 	authSid, err := c.authSid()
 	if err != nil {
@@ -115,7 +127,7 @@ func entryToggleFollowing(c *ctx) (any, error) {
 	}
 	c.debugf("followed user=%s with id=%s", jsonStringify(redactUser(followed)), followingID)
 	if followed == nil {
-		if err := c.mimeiSync(followingID, nil); err != nil {
+		if err := c.mimeiSync(authSid, followingID, nil); err != nil {
 			c.errorf("Failed to sync followed user %s from nid=%s: %v", followingID, followingHostID, err)
 		} else if err := c.mimeiProvide(authSid, followingID); err != nil {
 			c.errorf("Failed to sync followed user %s from nid=%s: %v", followingID, followingHostID, err)
@@ -204,12 +216,11 @@ func (c *ctx) follow(authSid, systemSid, userID, followingID, hostOfOther, nodeI
 	c.debugf("relationship persisted actor=%s target=%s tweetCount=%d", userID, followingID, len(pairs))
 
 	// Hold a local copy of the followed account so their profile renders
-	// without a network round trip.
-	if err := c.mimeiSync(followingID, nil); err != nil {
-		c.errorf("Failed to sync followed user %s: %v", followingID, err)
-	} else if err := c.mimeiProvide(authSid, followingID); err != nil {
-		c.errorf("Failed to sync followed user %s: %v", followingID, err)
-	}
+	// without a network round trip — but only when another node owns it and
+	// this node is not already serving it. Following someone hosted here needs
+	// no copy, and attempting it blocks the whole request for seconds before
+	// failing.
+	c.syncIfRemote(authSid, followingID, hostOfOther)
 
 	if err := c.updateFollowerSide(systemSid, followingID, userID, hostOfOther, true); err != nil {
 		c.errorf("toggle_follower failed: %v, %s", err, c.requestJSON())
@@ -288,11 +299,15 @@ func (c *ctx) updateFollowerSide(systemSid, targetID, actorID, targetHost string
 // targetTweetList reads a user's public tweet list, from their own node when
 // that is not this one.
 func (c *ctx) targetTweetList(systemSid, followingID, hostOfOther string) ([]lapi.ScorePair, error) {
+	// v2 is asked for so a failure on the answering node arrives as a message.
+	// Without it that node reports an error as an empty list, which is
+	// indistinguishable from a user who has posted nothing.
 	params := map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		reqSid:    systemSid,
-		"userid":  followingID,
+		reqAppID:   c.appID(),
+		reqAppVer:  verLast,
+		reqSid:     systemSid,
+		reqVersion: versionV2,
+		"userid":   followingID,
 	}
 	var result any
 	var err error
@@ -320,6 +335,11 @@ func (c *ctx) targetTweetList(systemSid, followingID, hostOfOther string) ([]lap
 			return nil, fmt.Errorf("%s", msg)
 		}
 	}
+	// The response is unusable and says nothing about why. Logging it is the
+	// only way to tell an unreachable node from one answering in a shape this
+	// does not know; a follow is refused either way.
+	c.errorf("unusable tweet list response from %s for user %s: %s",
+		hostOfOther, followingID, jsonStringify(result))
 	return nil, fmt.Errorf("Invalid tweet list response")
 }
 
@@ -401,10 +421,10 @@ func entryToggleFollower(c *ctx) (any, error) {
 		return c.wrapErr(fmt.Errorf("Cannot follow yourself")), nil
 	}
 
-	// Resolved to reject a request for a user this node does not know. The
-	// caller side still addresses this user's own node directly, because a
-	// follow writes to two accounts that live on two different nodes.
-	if err := c.requireKnownUser(userID); err != nil {
+	// The follower list written here is this user's own, so this must be their
+	// root node. The caller side addresses it directly, because a follow writes
+	// to two accounts that live on two different nodes.
+	if err := c.requireRootNode(userID); err != nil {
 		return c.wrapErr(fmt.Errorf("User host not found")), nil
 	}
 
@@ -543,7 +563,7 @@ func (c *ctx) recoverUser(userID string) any {
 
 	if authSid, err := c.authSid(); err != nil {
 		c.errorf("failed to sync/provide userId=%s: %v", userID, err)
-	} else if err := c.mimeiSync(userID, nil); err != nil {
+	} else if err := c.mimeiSync(authSid, userID, nil); err != nil {
 		c.errorf("failed to sync/provide userId=%s: %v", userID, err)
 	} else if err := c.mimeiProvide(authSid, userID); err != nil {
 		c.errorf("failed to sync/provide userId=%s: %v", userID, err)
@@ -559,7 +579,7 @@ func (c *ctx) recoverUser(userID string) any {
 // wrapErrUsers reports a listing failure with an empty user list, so a client
 // can render it without a nil check.
 func (c *ctx) wrapErrUsers(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		out := respErr(err)
 		out["data"] = map[string]any{"users": []any{}}
@@ -598,7 +618,7 @@ func (c *ctx) relationshipPairs(listKey string) (any, error) {
 
 // wrapErrMap reports a listing failure whose empty value is an object.
 func (c *ctx) wrapErrMap(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		out := respErr(err)
 		out["data"] = map[string]any{}
@@ -634,8 +654,8 @@ func entryBlockUser(c *ctx) (any, error) {
 	blockedUserID := c.str("blocked")
 	userID := c.str("userid")
 
-	// Resolved to reject a request for a user this node does not know.
-	if err := c.requireKnownUser(userID); err != nil {
+	// The block list and the unfollow both write this user's own account.
+	if err := c.requireRootNode(userID); err != nil {
 		return c.wrapErrSuccess(err), nil
 	}
 
@@ -680,7 +700,7 @@ func entryBlockUser(c *ctx) (any, error) {
 
 // wrapErrSuccess reports a failure whose legacy shape is a bare success flag.
 func (c *ctx) wrapErrSuccess(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		return respErr(err)
 	}

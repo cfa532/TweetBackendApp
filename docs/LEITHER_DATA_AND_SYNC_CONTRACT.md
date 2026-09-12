@@ -122,6 +122,29 @@ TweetWeb currently has no pull-to-refresh interaction. Any Web recovery synchron
 
 Do not remove the explicit recovery APIs merely because Leither is expected to perform synchronization. They remain necessary until Leither's behavior is verified to be reliable in production. Conversely, do not run these heavier recovery operations on every routine screen opening without a documented need.
 
+## Backend Synchronization Policy
+
+The backend mirrors the client policy above. A node that already provides a
+Mimei is kept current by Leither's own replication, so `MiMeiIsProvider` — a
+local table lookup, not a network call — decides whether a pull is needed:
+
+- **Explicit user recovery forces the sync.** Feed, Tweet Detail and Profile
+  pull-to-refresh reach `update_following_tweets`, `refresh_tweet`,
+  `resync_user` and `sync_user`, and the user is waiting on the newest data.
+  Being a provider promises the copy will catch up, not that it already has.
+- **Taking or keeping a copy checks `MiMeiIsProvider` first.** Following an
+  account, saving a tweet, quoting a tweet and `mimei_provide` want possession,
+  not freshness; replication supplies the rest. A node holding no copy at all is
+  not a provider, so the check costs nothing there.
+
+Pulling an object back after a write is not a case the backend has. Clients send
+every mutation to the account's root node themselves, so no node forwards a
+write and then synchronizes the result back. The delegated-write branches still
+present in the legacy `.js` entries are dead paths, not a pattern to copy.
+
+Routine reads still force nothing: `get_tweet` with `fromdetailview` announces
+the tweet only when this node is not already a provider.
+
 ## Review Checklist
 
 Before changing creation, loading, or synchronization code, verify:
@@ -135,3 +158,5 @@ Before changing creation, loading, or synchronization code, verify:
 7. Does the recovery call synchronize the correct parent level for the missing data?
 8. Are normal reads and explicit recovery operations kept distinct?
 9. Have impacts been checked across iOS, Android, Web, and backend callers?
+10. Does a forced synchronization serve explicit user recovery, rather than work
+    `MiMeiIsProvider` shows is unnecessary?

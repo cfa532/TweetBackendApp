@@ -34,24 +34,6 @@ func (c *ctx) readMimei(sid, mid string, fn func(mmsid string) error) error {
 	return fn(mmsid)
 }
 
-// writeMimei opens mid for writing and runs fn against the handle. When fn
-// succeeds the object is backed up, which is what makes the change visible to
-// readers and to other nodes.
-func (c *ctx) writeMimei(sid, mid, memo string, fn func(mmsid string) error) error {
-	if mid == "" {
-		return fmt.Errorf("writeMimei: empty mid")
-	}
-	mmsid, err := c.api.MMOpen(sid, mid, verCur)
-	if err != nil {
-		return fmt.Errorf("MMOpen(%s, cur): %v", mid, err)
-	}
-	defer c.closeMimei(mmsid)
-	if err := fn(mmsid); err != nil {
-		return err
-	}
-	return c.backup(sid, mid, memo)
-}
-
 // closeMimei releases a handle. A failure here cannot be acted on by the caller
 // and must not mask the operation's own result, so it is logged.
 func (c *ctx) closeMimei(mmsid string) {
@@ -71,10 +53,23 @@ func (c *ctx) backup(sid, mid, memo string, opts ...string) error {
 	return nil
 }
 
-// backupDelRef commits with delref=true, which drops references that were
-// removed in this revision. Used after deleting a child object.
+// backupDelRef commits a revision, passing the "delref=false" option that the
+// JavaScript version passes on all 39 of its MMBackup calls.
+//
+// What that option does is unverified, and on V0.24.02 it appears to do nothing.
+// MMBackup's fourth parameter is a variadic ...string that the published
+// api/MiMei.md does not document at all. Probed on a live node against the
+// reference list read back with MMGetRef, these four are indistinguishable:
+// no option, "delref=false", "delref=true", and the nonsense option
+// "zzz=nonsense" — which is accepted without error. Both a plain re-backup and
+// an MMAddRef/MMDelRef cycle produced identical reference maps in every arm.
+//
+// It is kept because the JavaScript passes it everywhere, because an unknown
+// option is ignored rather than rejected, and because a later node build may
+// give it meaning. Do not read the name as a description of behaviour: nothing
+// here has been shown to delete a reference.
 func (c *ctx) backupDelRef(sid, mid, memo string) error {
-	return c.backup(sid, mid, memo, "delref=true")
+	return c.backup(sid, mid, memo, "delref=false")
 }
 
 // ---------------------------------------------------------------------------
@@ -287,6 +282,21 @@ func (c *ctx) zrangebyscore(mmsid, key string, min, max int64, offset, count int
 }
 
 // members extracts the member ids from score pairs.
+// scorePairValues renders score pairs for a reply.
+//
+// A []lapi.ScorePair does not survive a cross-node RunMApp: the far side
+// receives Go's default formatting of each element — "&{1787586723343 iBa3sq…}"
+// — instead of a structure, and cannot read a score or a member out of it.
+// Plain maps carry the same field names the JavaScript entry produced, so the
+// local caller and the remote one decode the identical shape.
+func scorePairValues(pairs []lapi.ScorePair) []any {
+	out := make([]any, 0, len(pairs))
+	for _, pair := range pairs {
+		out = append(out, map[string]any{"Score": pair.Score, "Member": pair.Member})
+	}
+	return out
+}
+
 func members(pairs []lapi.ScorePair) []string {
 	out := make([]string, 0, len(pairs))
 	for _, p := range pairs {

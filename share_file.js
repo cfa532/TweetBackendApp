@@ -124,7 +124,7 @@
             })
             
             // Update file data and publish changes
-            lapi.MMBackup(fsid, mid, "", "delref=true")
+            lapi.MMBackup(fsid, mid, "", "delref=false")
             lapi.MiMeiPublish(authSid, "", mid)
             lapi.Debug("Tweed share_file: shared file mid=%s, file=%s", mid, JSON.stringify(file))
     
@@ -141,7 +141,7 @@
             })
             
             // Update user data and publish changes
-            lapi.MMBackup(userSid, userId, "", "delref=true")
+            lapi.MMBackup(userSid, userId, "", "delref=false")
             lapi.MiMeiPublish(authSid, "", userId)
     
             return wrapResponse(mid)  // Return the Mimei ID of the shared file

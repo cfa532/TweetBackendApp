@@ -29,7 +29,6 @@
     const version = request.version || ""  // Version identifier for API compatibility
     const v4Only = request["v4only"] === "true" ? true : false;  // IPv4-only filter flag
     const mid = request["mid"];  // Mimei ID to get provider IP for
-    let rawData = lapi.GetVar("", "mmprovsips", mid);  // Get provider IP data
     
     // Helper function to wrap response in v2 format if needed
     function wrapResponse(result) {
@@ -50,17 +49,22 @@
         return ""
     }
     
-    // Handle double-encoded JSON (some data may be encoded twice)
-    let providers = JSON.parse(rawData);
-    if (typeof providers === 'string') {
-        providers = JSON.parse(providers);
-    }
-
     // ============================================================================
     // MAIN EXECUTION
     // ============================================================================
     
     try {
+        // Read and decode inside the try: malformed provider data must be
+        // reported through wrapError like any other failure. Parsing it at the
+        // top level threw past the catch and failed the whole request.
+        const rawData = lapi.GetVar("", "mmprovsips", mid);  // Get provider IP data
+        if (!rawData) return null
+
+        // Handle double-encoded JSON (some data may be encoded twice)
+        let providers = JSON.parse(rawData);
+        if (typeof providers === 'string') {
+            providers = JSON.parse(providers);
+        }
         if (!providers || !Array.isArray(providers)) return null
         
         let ip = "", mini = null;  // Track best IP and its score

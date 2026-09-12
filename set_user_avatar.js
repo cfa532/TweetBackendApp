@@ -97,7 +97,7 @@
             // Update user data and publish changes
             try {
                 lapi.Set(userSid, OWNER_DATA_KEY, userInDB)
-                lapi.MMBackup(userSid, userInDB.mid, "", "delref=true")
+                lapi.MMBackup(userSid, userInDB.mid, "", "delref=false")
                 lapi.MiMeiPublish(userSid, "", userInDB.mid)
             } catch(e) {
                 lapi.Error("Tweed set_user_avatar: Failed to save/publish user %s: %s", userId, e)

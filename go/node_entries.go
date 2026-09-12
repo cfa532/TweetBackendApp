@@ -101,13 +101,14 @@ func entryNodeUpdateMidByScore(c *ctx) (any, error) {
 		return c.wrap(map[string]any{"success": true}), nil
 	}
 
+	// This internal read needs the bare numeric score. Forwarding the caller's
+	// v2 version wraps it in an envelope that toInt64 cannot decode.
 	remoteScore, err := c.callRemote(hostID, "node_get_score", map[string]string{
-		reqAppID:   c.appID(),
-		reqAppVer:  c.ver(),
-		reqSid:     systemSid,
-		reqVersion: c.version(),
-		"userid":   userID,
-		reqMID:     mid,
+		reqAppID:  c.appID(),
+		reqAppVer: c.ver(),
+		reqSid:    systemSid,
+		"userid":  userID,
+		reqMID:    mid,
 	})
 	if err != nil {
 		return c.wrapErr(err), nil
@@ -123,7 +124,7 @@ func entryNodeUpdateMidByScore(c *ctx) (any, error) {
 	}
 	if remote != localScore {
 		c.debugf("mid=%s, new score=%d, old score=%d, userId=%s", mid, remote, localScore, userID)
-		if err := c.mimeiSync(mid, nil); err != nil {
+		if err := c.mimeiSync(systemSid, mid, nil); err != nil {
 			return c.wrapErr(err), nil
 		}
 		// The home node's score is adopted verbatim, so this node records how
@@ -140,7 +141,7 @@ func (c *ctx) initialiseMid(systemSid, userID, mid string) error {
 	if err := c.zaddSeq(systemSid, userID, mid); err != nil {
 		return err
 	}
-	if err := c.mimeiSync(mid, nil); err != nil {
+	if err := c.mimeiSync(systemSid, mid, nil); err != nil {
 		return err
 	}
 	return c.mimeiProvide(systemSid, mid)
@@ -153,7 +154,8 @@ func (c *ctx) initialiseMid(systemSid, userID, mid string) error {
 // entryMimeiProvide starts or stops serving an object from this node.
 //
 // Providing pulls a current copy first, so the node does not advertise content
-// it cannot serve. Withdrawing also drops the stored versions, since nothing on
+// it cannot serve — unless the node already serves it, which makes the whole
+// request a no-op. Withdrawing also drops the stored versions, since nothing on
 // this node refers to them any more.
 func entryMimeiProvide(c *ctx) (any, error) {
 	targetID := c.str(reqMID)
@@ -165,7 +167,11 @@ func entryMimeiProvide(c *ctx) (any, error) {
 	}
 
 	if provide {
-		if err := c.mimeiSync(targetID, nil); err != nil {
+		if c.alreadyProviding(authSid, targetID) {
+			c.debugf("already providing targetId=%s", targetID)
+			return c.wrap(map[string]any{"success": true}), nil
+		}
+		if err := c.mimeiSync(authSid, targetID, nil); err != nil {
 			return c.wrapErr(err), nil
 		}
 		if err := c.mimeiProvide(authSid, targetID); err != nil {
@@ -294,7 +300,7 @@ func entryGetProviderIP(c *ctx) (any, error) {
 func entryGetProviderIPs(c *ctx) (any, error) {
 	providers, err := c.providerAddresses(c.str(reqMID))
 	if err != nil {
-		c.errorf("%v, request=%s", err, c.requestJSON())
+		c.failf(err)
 		return respErr(err), nil
 	}
 	if providers == nil {
@@ -378,7 +384,7 @@ func (c *ctx) providerAddresses(mid string) ([]providerAddr, error) {
 // wrapErrProvider reports a provider lookup failure; legacy callers read the
 // result as a string and receive an empty one.
 func (c *ctx) wrapErrProvider(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		return respErr(err)
 	}

@@ -111,7 +111,7 @@
             
             // Update user data and publish changes
             try {
-                lapi.MMBackup(authSid, appUserId, "", "delref=true")
+                lapi.MMBackup(authSid, appUserId, "", "delref=false")
                 lapi.MiMeiPublish(authSid, "", appUserId)
             } catch(e) {
                 lapi.Error("Tweed toggle_pinned_tweet: Failed to backup/publish user %s: %s", appUserId, e)

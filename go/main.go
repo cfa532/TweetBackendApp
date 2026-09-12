@@ -95,6 +95,13 @@ func RunMApp(Entry string, Request map[string]string, args []any, wr io.Writer) 
 
 	c := newCtx(api, entry, Request, args, wr)
 
+	// A request with no entry at all is a browser loading the site root through
+	// the domain template, not an API call. It arrives with mid/ver/author and
+	// browser headers but no entry name, and wants the web page.
+	if entry == "" {
+		return c.serveWebRoot()
+	}
+
 	handler, ok := lookupEntry(entry)
 	if !ok {
 		// The request keys are named because the usual cause is not a typo but
@@ -226,4 +233,37 @@ func entryTable() map[string]entryFunc {
 func lookupEntry(name string) (entryFunc, bool) {
 	handler, ok := entryTable()[name]
 	return handler, ok
+}
+
+// webRootFile is the page served when a request carries no entry.
+const webRootFile = "index.html"
+
+// serveWebRoot answers a request that names no entry.
+//
+// The JavaScript application satisfied this implicitly — every file was an
+// entry, and the node fell back to the static page. A Go MApp dispatches from an
+// explicit table, so without this the browser gets "unknown entry" instead of
+// the site.
+//
+// BEReadFile renders the page from the application's mmroot; the "web" operation
+// applies the node's page pipeline (css inlining and link rewriting) so relative
+// links resolve under the domain. It is not wired on every build, and there the
+// node still serves mmroot itself — so an unwired call defers rather than fails.
+func (c *ctx) serveWebRoot() (any, error) {
+	data, err := c.api.BEReadFile(webRootFile, "web")
+	if err != nil {
+		c.debugf("BEReadFile(%s) unavailable (%v); deferring to node static serving", webRootFile, err)
+		return nil, nil
+	}
+	// Writing to wr and returning nil is the documented way to supply a body
+	// without the framework writing a second one.
+	if c.wr != nil {
+		if _, werr := c.wr.Write(data); werr != nil {
+			c.warnf("writing web root failed: %v", werr)
+			return string(data), nil
+		}
+		c.debugf("served %s (%d bytes)", webRootFile, len(data))
+		return nil, nil
+	}
+	return string(data), nil
 }

@@ -14,13 +14,15 @@ import "fmt"
 
 // entryAddTweet creates a tweet.
 //
-// The tweet is written here, on the node the client chose to call. The caller
-// must be authorised either as a peer node holding a valid app code or as an
-// agent with a signature over the request.
+// The tweet is written on its author's root node, which the client addresses
+// directly; a request that reached any other node is refused below. The caller
+// must also be authorised, either as a peer node holding a valid app code or as
+// an agent with a signature over the request.
 //
-// The author's account is still loaded, both to reject a tweet whose author
-// this node does not know and to supply the host used when attributing a
-// front-end request in authorizePost.
+// The author's account is loaded once and serves three purposes: rejecting a
+// tweet whose author this node does not know, deciding the routing check, and
+// supplying the host used when attributing a front-end request in
+// authorizePost.
 func entryAddTweet(c *ctx) (any, error) {
 	raw, err := c.obj("tweet")
 	if err != nil {
@@ -43,6 +45,13 @@ func entryAddTweet(c *ctx) (any, error) {
 			"authorId": tweet.authorID(), "nodeId": c.nodeID(),
 		}))
 		return respErr(fmt.Errorf("User host not found")), nil
+	}
+	// The tweet is stored on its author's root node and referenced by their
+	// account, so creating it anywhere else writes a copy the root never learns
+	// about. Clients address that node; add_comment reaches it through
+	// createQuotedRetweet.
+	if err := c.requireRootNodeFor(user, tweet.authorID()); err != nil {
+		return respErr(err), nil
 	}
 	return c.addTweetLocal(tweet, user, agentAuth)
 }
@@ -113,11 +122,23 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 	// A retweet points at the quoted tweet. Pulling that tweet here is
 	// best-effort: it may have been deleted, or live on an unreachable node, and
 	// the retweet is still valid without it.
+	//
+	// The quoted tweet is often on this very node — quoting someone whose posts
+	// you are already reading is the common case — and syncing it then is what
+	// the JavaScript version described as "if original tweet is on the same
+	// node, MimeiSync will throw an error". Resolving the original author's host
+	// first costs one local read and avoids seconds of blocked request.
 	if originalID := tweet.originalTweetID(); originalID != "" {
 		if err := c.addRef(authSid, authorID, originalID); err != nil {
 			c.errorf("Error sync original tweet: %v, tweet=%s", err, jsonStringify(map[string]any(tweet)))
 		} else {
-			c.syncBestEffort(authSid, originalID)
+			originalHost := ""
+			if origAuthor := tweet.originalAuthorID(); origAuthor != "" {
+				if u, err := c.loadUser(origAuthor); err == nil {
+					originalHost = u.hostID()
+				}
+			}
+			c.syncIfRemote(authSid, originalID, originalHost)
 		}
 	}
 
@@ -149,10 +170,13 @@ func (c *ctx) authorizePost(tweet tweetObj, user userObj, agentAuth map[string]a
 	if agentAuth != nil {
 		// The signature covers the author and content, so an agent cannot take a
 		// signature issued for one user and post as another.
+		//
+		// A well-formed but unverifiable signature is accepted here, as
+		// add_tweet.js did; verify_agent_token refuses the same signature.
 		result := c.verifyAgentAuth(agentAuth, map[string]any{
 			"authorId": tweet.authorID(),
 			"content":  tweet.content(),
-		})
+		}, true)
 		if !result.valid {
 			c.warnf("Agent authentication failed: %s", result.reason)
 			return fmt.Errorf("Agent authentication failed: %s", result.reason)
@@ -349,7 +373,7 @@ func (c *ctx) syncForDetailView(tweetID string, tweet tweetObj, mmsid string) (t
 
 	c.debugf("fromdetailview syncing tweetId=%s, not yet a provider on nodeId=%s (writeHostId=%s)",
 		tweetID, nodeID, writeHostID)
-	if err := c.mimeiSync(tweetID, nil); err != nil {
+	if err := c.mimeiSync(systemSid, tweetID, nil); err != nil {
 		c.errorf("fromdetailview sync failed for %s: %v", tweetID, err)
 		return nil, ""
 	}
@@ -459,6 +483,11 @@ func entryDeleteTweet(c *ctx) (any, error) {
 			"userId": userID, "nodeId": c.nodeID(),
 		}))
 		return respErr(fmt.Errorf("User host not found")), nil
+	}
+	// Both paths write the requester's own account: the author's deletes the
+	// tweet, anyone else's removes it from their lists.
+	if err := c.requireRootNodeFor(user, userID); err != nil {
+		return respErr(err), nil
 	}
 
 	authSid, err := c.authSid()

@@ -35,9 +35,9 @@ func entryUpdateTweet(c *ctx) (any, error) {
 	tweetID := c.str("tweetid")
 	content := c.str("content")
 
-	// Resolved to reject an edit for a user this node does not know; the reply
-	// shape for that case is part of the client contract.
-	if err := c.requireKnownUser(appUserID); err != nil {
+	// Only the author edits, and the tweet lives on their root node; the reply
+	// shape for a rejection is part of the client contract.
+	if err := c.requireRootNode(appUserID); err != nil {
 		return respErr(err), nil
 	}
 
@@ -181,8 +181,8 @@ func entryToggleTweetPrivacy(c *ctx) (any, error) {
 	appUserID := c.str("appuserid")
 	tweetID := c.str("tweetid")
 
-	// Resolved to reject a request for a user this node does not know.
-	if err := c.requireKnownUser(appUserID); err != nil {
+	// Only the author flips this, and the tweet lives on their root node.
+	if err := c.requireRootNode(appUserID); err != nil {
 		return c.wrapErr(err), nil
 	}
 
@@ -271,11 +271,8 @@ func entryGetTweetIDList(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErrList(err), nil
 	}
-	if public == nil {
-		public = []lapi.ScorePair{}
-	}
 	c.debugf("user=%s publicTweetCount=%d", userID, len(public))
-	return c.wrap(public), nil
+	return c.wrap(scorePairValues(public)), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -357,17 +354,22 @@ func entryGetTweetsByUser(c *ctx) (any, error) {
 	// Cleanup is best-effort: the page was assembled successfully and must be
 	// returned even if pruning fails.
 	if isHome && len(stale) > 0 {
-		removed := 0
+		// A prune that failed part way is left uncommitted, as get_pinned_tweets
+		// and get_user_meta do: the removals live only in the open handle until
+		// the backup, so abandoning them costs nothing and the next page retries
+		// the whole set. Publishing half of them would advertise a list that no
+		// single scan ever produced.
+		failed := false
 		for _, tweetID := range stale {
 			c.warnf("removing stale tweetId=%s from user lists, userId=%s", tweetID, userID)
 			if err := c.zrem(writeSid, userTweetList, tweetID); err != nil {
 				c.errorf("failed to remove stale tweetIds for userId=%s: %v", userID, err)
+				failed = true
 				break
 			}
-			removed++
 		}
-		if removed > 0 {
-			c.warnf("removed %d stale tweetId(s) from user lists, userId=%s, page=%d", removed, userID, pageNum)
+		if !failed {
+			c.warnf("removed %d stale tweetId(s) from user lists, userId=%s, page=%d", len(stale), userID, pageNum)
 			if err := c.backupDelRef(writeSid, userID, ""); err != nil {
 				c.errorf("failed to persist/publish cleanup for userId=%s: %v", userID, err)
 			} else if err := c.mimeiPublish(authSid, userID); err != nil {
@@ -387,7 +389,7 @@ func entryGetTweetsByUser(c *ctx) (any, error) {
 // respErrField reports a timeline failure. Legacy callers received the message
 // under "error" rather than "message".
 func respErrField(c *ctx, err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		return respErr(err)
 	}
@@ -536,8 +538,8 @@ func entryTogglePinnedTweet(c *ctx) (any, error) {
 	tweetID := c.str("tweetid")
 	appUserID := c.str("appuserid")
 
-	// Resolved to reject a request for a user this node does not know.
-	if err := c.requireKnownUser(appUserID); err != nil {
+	// The pinned list is part of the profile, which lives on its root node.
+	if err := c.requireRootNode(appUserID); err != nil {
 		return c.wrapErrBool(err), nil
 	}
 
@@ -601,7 +603,7 @@ func (c *ctx) wrapPinned(result any) any {
 // wrapErrBool reports a toggle failure. Legacy callers read the result as a
 // boolean, so a failure is reported as false.
 func (c *ctx) wrapErrBool(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		return respErr(err)
 	}
@@ -633,9 +635,12 @@ func (c *ctx) updateRetweetList(entry string, add bool) (any, error) {
 	appUserID := c.str("appuserid")
 	authorID := c.str("authorid")
 
-	// Resolved to reject a request naming an author this node does not know.
-	if err := c.requireKnownUser(authorID); err != nil {
-		return c.wrapErr(fmt.Errorf("Author not found or missing host")), nil
+	// The list lives inside the author's tweet, so this must be their node.
+	// The failure is reported as it happened: a wrong-node call and an unknown
+	// author are different problems, and collapsing both into one message sent
+	// whoever had to debug it looking for the wrong thing.
+	if err := c.requireRootNode(authorID); err != nil {
+		return c.wrapErr(err), nil
 	}
 
 	authSid, err := c.authSid()

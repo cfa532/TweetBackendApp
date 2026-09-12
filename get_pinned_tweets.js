@@ -111,7 +111,7 @@
                     lapi.Warn("Tweed get_pinned_tweets: removing stale tweetId=%s from PINNED_TWEETS, userId=%s", tweetId, userId)
                     lapi.Hdel(userSid, PINNED_TWEETS, tweetId)
                 })
-                lapi.MMBackup(userSid, userId, "", "delref=true")
+                lapi.MMBackup(userSid, userId, "", "delref=false")
                 lapi.MiMeiPublish(authSid, "", userId)
                 lapi.Warn("Tweed get_pinned_tweets: removed %d stale tweetId(s) from PINNED_TWEETS, userId=%s",
                     staleTweetIds.length, userId)

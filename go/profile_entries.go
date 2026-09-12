@@ -185,7 +185,7 @@ func applyProfileUpdate(c *ctx, authSid string, user, userInDB userObj) {
 // wrapErrUpdate reports a profile update failure. Legacy callers get a fixed
 // reason rather than the underlying message.
 func (c *ctx) wrapErrUpdate(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		return respErr(err)
 	}
@@ -232,7 +232,7 @@ func entryGetUserMeta(c *ctx) (any, error) {
 // wrapErrList reports a listing failure. The data field is an empty list so a
 // v2 client can render the failure without a nil check.
 func (c *ctx) wrapErrList(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	if c.isV2() {
 		out := respErr(err)
 		out["data"] = []any{}
@@ -418,6 +418,12 @@ func entryDeleteAccount(c *ctx) (any, error) {
 		}))
 		return c.wrapErrDelete(fmt.Errorf("User not found or missing host")), nil
 	}
+	// Deleting anywhere else would drop a replica while the root kept serving
+	// the account, so the deletion would appear to succeed and then undo itself
+	// on the next synchronisation.
+	if err := c.requireRootNodeFor(user, userID); err != nil {
+		return c.wrapErrDelete(err), nil
+	}
 
 	// A failure to delete the tweets must not stop the account itself from
 	// being removed; the user asked for the account to go.
@@ -468,6 +474,6 @@ func (c *ctx) deleteUserTweets(userID string) error {
 
 // wrapErrDelete reports a deletion failure in the envelope to every caller.
 func (c *ctx) wrapErrDelete(err error) any {
-	c.errorf("%v, request=%s", err, c.requestJSON())
+	c.failf(err)
 	return respErr(err)
 }
