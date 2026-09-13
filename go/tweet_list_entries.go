@@ -10,8 +10,8 @@
 //
 // That only holds if the response describes precisely the range that was asked
 // for. An earlier implementation instead kept scanning until it had a full page
-// of usable tweets, dropping the rest. Combined with the stale-entry cleanup
-// below, which permanently shifts every later item's rank down, a client's
+// of usable tweets, dropping the rest. Combined with the former read-time stale-entry cleanup,
+// which permanently shifted every later item's rank down, a client's
 // offset could drift past live content and report the end of a timeline while
 // tweets remained. One bounded read plus null placeholders removes the
 // dependency on rank stability between requests.
@@ -281,9 +281,9 @@ func entryGetTweetIDList(c *ctx) (any, error) {
 
 // entryGetTweetsByUser returns one page of a user's own tweets.
 //
-// On the user's root node this also prunes ids whose tweet no longer exists.
-// The pruning happens after the page is built, because it renumbers the sorted
-// set and the response must describe the range as it was read.
+// A failed read is not proof of deletion: unsupported storage or an unavailable
+// object can also return nil. Keep membership intact here; explicit deletion
+// removes the list entry on the author's root node.
 func entryGetTweetsByUser(c *ctx) (any, error) {
 	userID := c.str("userid")
 	appUserID := c.str("appuserid")
@@ -296,19 +296,6 @@ func entryGetTweetsByUser(c *ctx) (any, error) {
 	}
 	defer c.closeMimei(readSid)
 
-	// Pruning is only authoritative on the root node; doing it on a replica
-	// would delete from a copy that synchronisation will overwrite anyway.
-	isHome := c.isHomeNode(userID)
-	var authSid, writeSid string
-	if isHome {
-		authSid, writeSid = c.openWriterFor(userID)
-		if writeSid == "" {
-			isHome = false
-		} else {
-			defer c.closeMimei(writeSid)
-		}
-	}
-
 	offset := int(pageNum * pageSize)
 	batch, err := c.zrevrange(readSid, userTweetList, offset, offset+int(pageSize)-1)
 	if err != nil {
@@ -318,7 +305,6 @@ func entryGetTweetsByUser(c *ctx) (any, error) {
 	tweets := make([]any, 0, len(batch))
 	originalTweets := []any{}
 	validIDs := []any{}
-	var stale []string
 
 	for _, pair := range batch {
 		tweetID := pair.Member
@@ -328,11 +314,7 @@ func entryGetTweetsByUser(c *ctx) (any, error) {
 		}
 		tweet, _ := toMap(c.fetchTweetV2(tweetID, appUserID))
 		if tweet == nil {
-			// Gone. Note it for pruning, but still occupy the slot so the page
-			// length reflects what was scanned.
-			if isHome {
-				stale = append(stale, tweetID)
-			}
+			// Preserve the scanned slot and its membership when the read fails.
 			tweets = append(tweets, nil)
 			continue
 		}
@@ -349,33 +331,6 @@ func entryGetTweetsByUser(c *ctx) (any, error) {
 			}
 		}
 		tweets = append(tweets, tweet)
-	}
-
-	// Cleanup is best-effort: the page was assembled successfully and must be
-	// returned even if pruning fails.
-	if isHome && len(stale) > 0 {
-		// A prune that failed part way is left uncommitted, as get_pinned_tweets
-		// and get_user_meta do: the removals live only in the open handle until
-		// the backup, so abandoning them costs nothing and the next page retries
-		// the whole set. Publishing half of them would advertise a list that no
-		// single scan ever produced.
-		failed := false
-		for _, tweetID := range stale {
-			c.warnf("removing stale tweetId=%s from user lists, userId=%s", tweetID, userID)
-			if err := c.zrem(writeSid, userTweetList, tweetID); err != nil {
-				c.errorf("failed to remove stale tweetIds for userId=%s: %v", userID, err)
-				failed = true
-				break
-			}
-		}
-		if !failed {
-			c.warnf("removed %d stale tweetId(s) from user lists, userId=%s, page=%d", len(stale), userID, pageNum)
-			if err := c.backupDelRef(writeSid, userID, ""); err != nil {
-				c.errorf("failed to persist/publish cleanup for userId=%s: %v", userID, err)
-			} else if err := c.mimeiPublish(authSid, userID); err != nil {
-				c.errorf("failed to persist/publish cleanup for userId=%s: %v", userID, err)
-			}
-		}
 	}
 
 	return c.wrapPassthrough(map[string]any{

@@ -86,10 +86,15 @@ import the exact paths registered by Leither.
 
 ## Deploying
 
-gen8 is always the publication target for the debug app (`twbe`, AppID
-`d4lRyhABgqOnqY4bURSm_T-4FZ4`). Its public IP is volatile, so resolve it only
+Both release (`tweet1`, AppID `heWgeGkeBX2gaENbIBS_Iy1mdTS`) and debug
+(`twbe`, AppID `d4lRyhABgqOnqY4bURSm_T-4FZ4`) must use this File-capable Go
+source. gen8 is always the publication target. Its public IP is volatile, so resolve it only
 through the Cloudflare-managed `gen8.leither.uk` hostname. Do not publish TWBE
 from minipc or ksbox and do not pin a resolved gen8 IP in a command or document.
+Use the same procedure below for release, replacing `twbe` with `tweet1` and
+`twbe.sh` with `tweet1.sh`. Preserve each environment's existing web/download
+assets and build the web bundle with its matching AppID. Do not ship tests,
+local tooling or signing keys. Keep backups outside the application directories.
 
 Copy the production Go sources into `/home/pi/demo/twbe/` on gen8. The target
 directory must stay named `twbe` because its name determines the AppID. Exclude
@@ -116,7 +121,10 @@ ssh -p 220 pi@gen8.leither.uk 'cd /home/pi/demo && ./twbe.sh'
 
 The final command must report a new numbered version and successful MiMei
 publication. Address verification calls by numbered version first, then confirm
-that `last` returns the same result.
+that `last` returns the same result. Both must advertise `database` and
+`tweet-file-v1` through `health`, with `creationFormat: "tweet-file-v1"`. Verify
+serving/root nodes as well; if needed, synchronize only the application MID
+from gen8 before checking File tweet and comment reads.
 
 Verified on Leither **V0.23.95** and re-verified on **V0.24.02**.
 
@@ -189,8 +197,9 @@ through `[p2p] SyncMDBKVData`, which is outside this app's control.
 | `node_update_score` / `node_get_score` | `BEOpenAppDataNode` + `Zaddwithseq` + `Zrank` + `Zscore` |
 | `get_provider_ip` | real reachable address via `GetVar` + private-range filtering |
 
-The previous JS app is backed up at `~/demo/deploy-backups/twbe-js-<timestamp>/`;
-restoring it is a `cp` back into `~/demo/twbe` followed by `./twbe.sh`.
+Historical JS backups remain at `~/demo/deploy-backups/twbe-js-<timestamp>/`.
+Do not restore a database-only backend now that File objects exist. Any rollback
+must retain support for both storage formats on roots and serving nodes.
 
 ## Which node handles a request
 
