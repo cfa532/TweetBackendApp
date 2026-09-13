@@ -213,6 +213,7 @@ func entryTable() map[string]entryFunc {
 		// Files and sharing
 		"upload_file":           entryUploadFile,
 		"upload_ipfs":           entryUploadIpfs,
+		"pin_ipfs":              entryPinIpfs,
 		"upload_package":        entryUploadPackage,
 		"upload_compressed_hls": entryUploadCompressedHLS,
 		"share_file":            entryShareFile,

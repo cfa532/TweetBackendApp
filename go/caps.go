@@ -58,6 +58,9 @@ import (
 // The second parameter of the MiMei calls selects which DHTs to act on; the
 // JavaScript passes "" everywhere, meaning all of them, and so does this app.
 type (
+	ipfsPinner interface {
+		IpfsPinAdd(sid string, recursive bool, path string) error
+	}
 	mimeiSyncer interface {
 		MiMeiSync(sid, dhts, mid string, param map[string]string) error
 	}

@@ -421,3 +421,19 @@ node.
 Go excludes `_test.go` files from ordinary builds. If the node's interpreter
 turns out to compile every `.go` file it finds, delete `codec_test.go` before
 uploading.
+
+## Imported CID attachments
+
+`pin_ipfs` accepts `userid` (the attachment owner's account), a bare `cid`, and
+`version=v2`. Call it on that account's root node before submitting a tweet or
+attachment edit. It waits for `IpfsPinAdd(authorSession, false, "/ipfs/" + cid)`
+and returns `{success: true, data: {cid, pinned: true}}` only after direct
+pinning succeeds. Errors, including an unavailable pin capability, return the
+v2 failure envelope. The pin has no expiry and is independent of tweet references. It matches
+`Leither ipfs pin add <cid>` without `-r`; it does not recursively retain linked
+blocks or HLS segments.
+
+Deploy this backend entry before the Web editor update. The editor blocks
+submission when pinning cannot be confirmed and keeps the draft for retry.
+Existing tweet attachments are not migrated or pinned retroactively. The
+existing upload, create and edit API contracts for sibling clients are unchanged.
