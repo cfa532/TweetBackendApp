@@ -75,10 +75,10 @@ func (c *ctx) attachToParent(authSid, parentID, cid string) error {
 	}
 	defer c.closeMimei(sid)
 
-	if err := c.addRef(sid, parentID, cid); err != nil {
+	if err := c.addRef(authSid, parentID, cid); err != nil {
 		return err
 	}
-	return c.backupDelRef(sid, parentID, "")
+	return c.backupDelRef(authSid, parentID, "")
 }
 
 // chunkArg reads the upload chunk from the call arguments.
@@ -186,10 +186,10 @@ func entryUploadFile(c *ctx) (any, error) {
 	}
 	defer c.closeMimei(sid)
 
-	if err := c.addRef(sid, userID, c.str("cid")); err != nil {
+	if err := c.addRef(authSid, userID, c.str("cid")); err != nil {
 		return c.wrapErr(err), nil
 	}
-	if err := c.backupDelRef(sid, userID, ""); err != nil {
+	if err := c.backupDelRef(authSid, userID, ""); err != nil {
 		return c.wrapErr(err), nil
 	}
 	if err := c.mimeiPublish(authSid, userID); err != nil {
@@ -301,7 +301,7 @@ func entryShareFile(c *ctx) (any, error) {
 	}); err != nil {
 		return c.wrapErr(fmt.Errorf("MFSetObject: %v", err)), nil
 	}
-	if err := c.backupDelRef(fsid, mid, ""); err != nil {
+	if err := c.backupDelRef(authSid, mid, ""); err != nil {
 		return c.wrapErr(err), nil
 	}
 	if err := c.mimeiPublish(authSid, mid); err != nil {
@@ -319,7 +319,7 @@ func entryShareFile(c *ctx) (any, error) {
 	}); err != nil {
 		return c.wrapErr(err), nil
 	}
-	if err := c.backupDelRef(userSid, userID, ""); err != nil {
+	if err := c.backupDelRef(authSid, userID, ""); err != nil {
 		return c.wrapErr(err), nil
 	}
 	if err := c.mimeiPublish(authSid, userID); err != nil {
@@ -429,7 +429,7 @@ func entryUploadPackage(c *ctx) (any, error) {
 const (
 	// upgradeVersion must exceed the version the clients report, or they will
 	// not offer the upgrade. It is kept in step with check_upgrade.js.
-	upgradeVersion = 73
+	upgradeVersion = 75
 	// upgradeMission is how insistent the prompt is: minor, major or critical.
 	upgradeMission = "minor"
 	// upgradeDomain is the base host used for deep links and sharing.

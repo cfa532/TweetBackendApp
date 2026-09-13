@@ -101,7 +101,7 @@ func entryMessageOutgoing(c *ctx) (any, error) {
 	if err := c.hset(msgSid, receiptID, member, msg); err != nil {
 		return c.wrapErrBool(err), nil
 	}
-	if err := c.backupDelRef(msgSid, msgMid, ""); err != nil {
+	if err := c.backupDelRef(authSid, msgMid, ""); err != nil {
 		return c.wrapErrBool(err), nil
 	}
 	return c.wrapSent(true), nil

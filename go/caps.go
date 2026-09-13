@@ -118,8 +118,9 @@ func isCapUnsupported(err error) bool {
 //	add_comment       -> add_tweet, creating a quote-comment's retweet half on
 //	                     the node of the writer who owns it
 //
-// params must already contain aid/ver/sid and the entry's own arguments; nid is
-// set here.
+// params must contain aid/ver, the entry arguments, and an author login sid
+// from authSid(). RunMApp rejects BEOpenAppDataNode and MMOpen data sessions.
+// The target nid is set here.
 func (c *ctx) callRemote(nodeID, entry string, params map[string]string) (any, error) {
 	if nodeID == "" {
 		return nil, fmt.Errorf("callRemote(%s): empty target node", entry)
@@ -152,6 +153,8 @@ func normalizeRemoteResult(ret any) any {
 
 // ---------------------------------------------------------------------------
 // Mimei replication
+// These APIs take login identities; MMOpen and BEOpenAppDataNode handles are
+// reserved for operations on the opened data, not network identity.
 // ---------------------------------------------------------------------------
 
 // mimeiSync pulls an object's current data from the network onto this node.

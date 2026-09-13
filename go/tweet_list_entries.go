@@ -70,7 +70,7 @@ func entryUpdateTweet(c *ctx) (any, error) {
 		if err != nil {
 			return respErr(err), nil
 		}
-		if err := c.reconcileAttachments(tweetSid, tweetID, tweet, next); err != nil {
+		if err := c.reconcileAttachments(authSid, tweetID, tweet, next); err != nil {
 			return respErr(err), nil
 		}
 		tweet["attachments"] = next
@@ -139,7 +139,7 @@ func parseAttachments(raw string) ([]any, error) {
 // reconcileAttachments moves the tweet's references from the old attachment set
 // to the new one, so removed media stops being referenced and becomes
 // collectable while added media is kept alive.
-func (c *ctx) reconcileAttachments(tweetSid, tweetID string, tweet tweetObj, next []any) error {
+func (c *ctx) reconcileAttachments(authSid, tweetID string, tweet tweetObj, next []any) error {
 	previous := map[string]bool{}
 	for _, attachment := range tweet.attachments() {
 		if mid := mapStr(attachment, "mid"); mid != "" {
@@ -156,14 +156,14 @@ func (c *ctx) reconcileAttachments(tweetSid, tweetID string, tweet tweetObj, nex
 	}
 	for mid := range previous {
 		if !wanted[mid] {
-			if err := c.delRef(tweetSid, tweetID, mid); err != nil {
+			if err := c.delRef(authSid, tweetID, mid); err != nil {
 				return err
 			}
 		}
 	}
 	for mid := range wanted {
 		if !previous[mid] {
-			if err := c.addRef(tweetSid, tweetID, mid); err != nil {
+			if err := c.addRef(authSid, tweetID, mid); err != nil {
 				return err
 			}
 		}
@@ -214,7 +214,7 @@ func entryToggleTweetPrivacy(c *ctx) (any, error) {
 	if err := c.setValue(tweetSid, tweetContentKey, map[string]any(tweet)); err != nil {
 		return c.wrapErr(err), nil
 	}
-	if err := c.backupDelRef(tweetSid, tweetID, ""); err != nil {
+	if err := c.backupDelRef(authSid, tweetID, ""); err != nil {
 		return c.wrapErr(err), nil
 	}
 	if err := c.mimeiPublish(authSid, tweetID); err != nil {
@@ -470,7 +470,7 @@ func entryGetPinnedTweets(c *ctx) (any, error) {
 			}
 		}
 		if !failed {
-			if err := c.backupDelRef(writeSid, userID, ""); err != nil {
+			if err := c.backupDelRef(authSid, userID, ""); err != nil {
 				c.errorf("failed to remove stale tweetIds for userId=%s: %v", userID, err)
 			} else if err := c.mimeiPublish(authSid, userID); err != nil {
 				c.errorf("failed to remove stale tweetIds for userId=%s: %v", userID, err)

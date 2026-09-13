@@ -79,10 +79,6 @@ func entryToggleFollowing(c *ctx) (any, error) {
 		return fail(fmt.Errorf("Cannot follow yourself")), nil
 	}
 
-	systemSid, err := c.nodeDataSid(verCur)
-	if err != nil {
-		return fail(err), nil
-	}
 	nodeID := c.nodeID()
 
 	user, err := c.loadUser(userID)
@@ -157,9 +153,9 @@ func entryToggleFollowing(c *ctx) (any, error) {
 	}
 
 	if isFollowing {
-		err = c.unfollow(authSid, systemSid, userID, followingID, hostOfOther, nodeID)
+		err = c.unfollow(authSid, userID, followingID, hostOfOther, nodeID)
 	} else {
-		err = c.follow(authSid, systemSid, userID, followingID, hostOfOther, nodeID)
+		err = c.follow(authSid, userID, followingID, hostOfOther, nodeID)
 	}
 	if err != nil {
 		return fail(err), nil
@@ -180,10 +176,10 @@ func entryToggleFollowing(c *ctx) (any, error) {
 //
 // The target's tweet list is fetched before anything is written, so a failure
 // to reach the target's node leaves no half-made relationship behind.
-func (c *ctx) follow(authSid, systemSid, userID, followingID, hostOfOther, nodeID string) error {
+func (c *ctx) follow(authSid, userID, followingID, hostOfOther, nodeID string) error {
 	c.debugf("%s following %s, host: %s, node: %s", userID, followingID, hostOfOther, nodeID)
 
-	pairs, err := c.targetTweetList(systemSid, followingID, hostOfOther)
+	pairs, err := c.targetTweetList(authSid, followingID, hostOfOther)
 	if err != nil {
 		return err
 	}
@@ -207,7 +203,7 @@ func (c *ctx) follow(authSid, systemSid, userID, followingID, hostOfOther, nodeI
 			return fmt.Errorf("Zadd(%s): %v", userFollowingsTweets, err)
 		}
 	}
-	if err := c.backupDelRef(userSid, userID, ""); err != nil {
+	if err := c.backupDelRef(authSid, userID, ""); err != nil {
 		return err
 	}
 	if err := c.mimeiPublish(authSid, userID); err != nil {
@@ -222,14 +218,14 @@ func (c *ctx) follow(authSid, systemSid, userID, followingID, hostOfOther, nodeI
 	// failing.
 	c.syncIfRemote(authSid, followingID, hostOfOther)
 
-	if err := c.updateFollowerSide(systemSid, followingID, userID, hostOfOther, true); err != nil {
+	if err := c.updateFollowerSide(authSid, followingID, userID, hostOfOther, true); err != nil {
 		c.errorf("toggle_follower failed: %v, %s", err, c.requestJSON())
 	}
 	return nil
 }
 
 // unfollow removes the relationship and the seeded feed entries.
-func (c *ctx) unfollow(authSid, systemSid, userID, followingID, hostOfOther, nodeID string) error {
+func (c *ctx) unfollow(authSid, userID, followingID, hostOfOther, nodeID string) error {
 	c.debugf("%s unfollowing %s. Host: %s, Node: %s", userID, followingID, hostOfOther, nodeID)
 
 	// Only the same window that following seeded is removed; anything older was
@@ -262,7 +258,7 @@ func (c *ctx) unfollow(authSid, systemSid, userID, followingID, hostOfOther, nod
 	if err := c.hdel(userSid, userFollowingsList, followingID); err != nil {
 		return err
 	}
-	if err := c.backupDelRef(userSid, userID, ""); err != nil {
+	if err := c.backupDelRef(authSid, userID, ""); err != nil {
 		return err
 	}
 	if err := c.mimeiPublish(authSid, userID); err != nil {
@@ -271,18 +267,18 @@ func (c *ctx) unfollow(authSid, systemSid, userID, followingID, hostOfOther, nod
 
 	// The local copy of the unfollowed account is deliberately kept: another
 	// followed user may reference it, and it may be the only copy here.
-	if err := c.updateFollowerSide(systemSid, followingID, userID, hostOfOther, false); err != nil {
+	if err := c.updateFollowerSide(authSid, followingID, userID, hostOfOther, false); err != nil {
 		c.errorf("toggle_follower: %v, %s", err, c.requestJSON())
 	}
 	return nil
 }
 
 // updateFollowerSide records the relationship on the target's own node.
-func (c *ctx) updateFollowerSide(systemSid, targetID, actorID, targetHost string, isFollower bool) error {
+func (c *ctx) updateFollowerSide(authSid, targetID, actorID, targetHost string, isFollower bool) error {
 	params := map[string]string{
 		reqAppID:     c.appID(),
 		reqAppVer:    verLast,
-		reqSid:       systemSid,
+		reqSid:       authSid,
 		reqVersion:   c.version(),
 		"userid":     targetID,
 		"otherid":    actorID,
@@ -298,14 +294,14 @@ func (c *ctx) updateFollowerSide(systemSid, targetID, actorID, targetHost string
 
 // targetTweetList reads a user's public tweet list, from their own node when
 // that is not this one.
-func (c *ctx) targetTweetList(systemSid, followingID, hostOfOther string) ([]lapi.ScorePair, error) {
+func (c *ctx) targetTweetList(authSid, followingID, hostOfOther string) ([]lapi.ScorePair, error) {
 	// v2 is asked for so a failure on the answering node arrives as a message.
 	// Without it that node reports an error as an empty list, which is
 	// indistinguishable from a user who has posted nothing.
 	params := map[string]string{
 		reqAppID:   c.appID(),
 		reqAppVer:  verLast,
-		reqSid:     systemSid,
+		reqSid:     authSid,
 		reqVersion: versionV2,
 		"userid":   followingID,
 	}
@@ -446,7 +442,7 @@ func entryToggleFollower(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
-	if err := c.backupDelRef(userSid, userID, ""); err != nil {
+	if err := c.backupDelRef(authSid, userID, ""); err != nil {
 		return c.wrapErr(err), nil
 	}
 	if err := c.mimeiPublish(authSid, userID); err != nil {
@@ -689,10 +685,10 @@ func entryBlockUser(c *ctx) (any, error) {
 	if err := c.hdel(userSid, userFollowingsList, blockedUserID); err != nil {
 		return c.wrapErrSuccess(err), nil
 	}
-	if err := c.backupDelRef(userSid, userID, ""); err != nil {
+	if err := c.backupDelRef(authSid, userID, ""); err != nil {
 		return c.wrapErrSuccess(err), nil
 	}
-	if err := c.mimeiPublish(userSid, userID); err != nil {
+	if err := c.mimeiPublish(authSid, userID); err != nil {
 		c.warnf("publish %s failed: %v", userID, err)
 	}
 	return c.wrapPassthrough(map[string]any{"success": true}), nil

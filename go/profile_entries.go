@@ -56,10 +56,6 @@ func entrySetAuthorCoreData(c *ctx) (any, error) {
 	userInDB := userObj(stored)
 
 	nodeID := c.nodeID()
-	systemSid, err := c.nodeDataSid(verCur)
-	if err != nil {
-		return c.wrapErrUpdate(err), nil
-	}
 
 	// A changed primary host means the account is being moved. Warm the target
 	// node up first; if the old primary is already gone this is best-effort only.
@@ -69,7 +65,7 @@ func entrySetAuthorCoreData(c *ctx) (any, error) {
 		syncRet, err := c.callRemote(requestedHost, "sync_user", map[string]string{
 			reqAppID:   c.appID(),
 			reqAppVer:  verLast,
-			reqSid:     systemSid,
+			reqSid:     authSid,
 			reqVersion: c.version(),
 			reqMID:     user.mid(),
 		})
@@ -99,7 +95,7 @@ func entrySetAuthorCoreData(c *ctx) (any, error) {
 		c.errorf("Failed to save user data %s: %v", userInDB.mid(), err)
 		return c.wrapErrUpdate(err), nil
 	}
-	if err := c.backupDelRef(userSid, userInDB.mid(), ""); err != nil {
+	if err := c.backupDelRef(authSid, userInDB.mid(), ""); err != nil {
 		c.errorf("Failed to save user data %s: %v", userInDB.mid(), err)
 		return c.wrapErrUpdate(err), nil
 	}
@@ -386,7 +382,7 @@ func (c *ctx) savedTweets(listType string) ([]any, error) {
 	}
 
 	if didModify {
-		if err := c.backupDelRef(writeSid, userID, ""); err != nil {
+		if err := c.backupDelRef(authSid, userID, ""); err != nil {
 			c.errorf("failed to persist/publish cleanup for userId=%s: %v", userID, err)
 		} else if err := c.mimeiPublish(authSid, userID); err != nil {
 			c.errorf("failed to persist/publish cleanup for userId=%s: %v", userID, err)

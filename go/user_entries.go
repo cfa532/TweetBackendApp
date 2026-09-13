@@ -195,7 +195,7 @@ func entryRegister(c *ctx) (any, error) {
 		c.errorf("Failed to save user data for %s: %v", user.username(), err)
 		return fail(fmt.Errorf("Failed to save user data")), nil
 	}
-	if err := c.backupDelRef(userSid, userMid, ""); err != nil {
+	if err := c.backupDelRef(authSid, userMid, ""); err != nil {
 		return fail(err), nil
 	}
 	// Publishing is what lets toggle_following on another node find the account.
@@ -698,11 +698,11 @@ func entrySetUserAvatar(c *ctx) (any, error) {
 		c.errorf("Failed to save user %s: %v", userID, err)
 		return c.wrapErr(err), nil
 	}
-	if err := c.backupDelRef(userSid, mid, ""); err != nil {
+	if err := c.backupDelRef(authSid, mid, ""); err != nil {
 		c.errorf("Failed to save/publish user %s: %v", userID, err)
 		return c.wrapErr(err), nil
 	}
-	if err := c.mimeiPublish(userSid, mid); err != nil {
+	if err := c.mimeiPublish(authSid, mid); err != nil {
 		c.warnf("publish %s failed: %v", mid, err)
 	}
 	if _, err := c.callEntry("node_update_score", map[string]string{

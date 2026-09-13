@@ -101,9 +101,14 @@ func entryNodeUpdateMidByScore(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
+	authSid, err := c.authSid()
+	if err != nil {
+		return c.wrapErr(err), nil
+	}
+
 	if rank == -1 {
 		// Never seen here: take a copy rather than comparing scores.
-		if err := c.initialiseMid(systemSid, scoreSid, userID, mid); err != nil {
+		if err := c.initialiseMid(authSid, scoreSid, userID, mid); err != nil {
 			c.errorf("Failed to add new mid %s: %v", mid, err)
 			return c.wrapErr(fmt.Errorf("Failed to initialize new mid: %v", err)), nil
 		}
@@ -115,7 +120,7 @@ func entryNodeUpdateMidByScore(c *ctx) (any, error) {
 	remoteScore, err := c.callRemote(hostID, "node_get_score", map[string]string{
 		reqAppID:  c.appID(),
 		reqAppVer: c.ver(),
-		reqSid:    systemSid,
+		reqSid:    authSid,
 		"userid":  userID,
 		reqMID:    mid,
 	})
@@ -133,7 +138,7 @@ func entryNodeUpdateMidByScore(c *ctx) (any, error) {
 	}
 	if remote != localScore {
 		c.debugf("mid=%s, new score=%d, old score=%d, userId=%s", mid, remote, localScore, userID)
-		if err := c.mimeiSync(systemSid, mid, nil); err != nil {
+		if err := c.mimeiSync(authSid, mid, nil); err != nil {
 			return c.wrapErr(err), nil
 		}
 		// The home node's score is adopted verbatim, so this node records how
@@ -149,14 +154,14 @@ func entryNodeUpdateMidByScore(c *ctx) (any, error) {
 }
 
 // initialiseMid records and fetches an object this node has not held before.
-func (c *ctx) initialiseMid(systemSid, scoreSid, userID, mid string) error {
+func (c *ctx) initialiseMid(authSid, scoreSid, userID, mid string) error {
 	if err := c.zaddSeq(scoreSid, userID, mid); err != nil {
 		return err
 	}
-	if err := c.mimeiSync(systemSid, mid, nil); err != nil {
+	if err := c.mimeiSync(authSid, mid, nil); err != nil {
 		return err
 	}
-	if err := c.mimeiProvide(systemSid, mid); err != nil {
+	if err := c.mimeiProvide(authSid, mid); err != nil {
 		return err
 	}
 	return c.commitScoreStore(scoreSid)
@@ -419,8 +424,8 @@ func splitAndTrim(s, sep string) []string {
 }
 
 // Existing node score entries stay in their node database. New entries go to a
-// node-scoped File index. The system session remains separate: it is also used
-// for node-to-node RPC and must never be replaced by a File resource handle.
+// node-scoped File index. The system data session stays separate from the
+// File handle for storage lifetime management; remote RPC uses a login identity.
 func (c *ctx) nodeScoreStore(userID, mid string) (string, string, error) {
 	systemSid, err := c.nodeDataSid(verCur)
 	if err != nil {

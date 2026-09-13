@@ -359,12 +359,12 @@ func (c *ctx) syncForDetailView(tweetID string, tweet tweetObj, mmsid string) (t
 		return nil, ""
 	}
 
-	systemSid, err := c.nodeDataSid(verCur)
+	authSid, err := c.authSid()
 	if err != nil {
 		c.errorf("fromdetailview sync failed for %s: %v", tweetID, err)
 		return nil, ""
 	}
-	isProvider, err := c.mimeiIsProvider(systemSid, tweetID)
+	isProvider, err := c.mimeiIsProvider(authSid, tweetID)
 	if err != nil {
 		c.errorf("fromdetailview sync failed for %s: %v", tweetID, err)
 		return nil, ""
@@ -376,11 +376,11 @@ func (c *ctx) syncForDetailView(tweetID string, tweet tweetObj, mmsid string) (t
 
 	c.debugf("fromdetailview syncing tweetId=%s, not yet a provider on nodeId=%s (writeHostId=%s)",
 		tweetID, nodeID, writeHostID)
-	if err := c.mimeiSync(systemSid, tweetID, nil); err != nil {
+	if err := c.mimeiSync(authSid, tweetID, nil); err != nil {
 		c.errorf("fromdetailview sync failed for %s: %v", tweetID, err)
 		return nil, ""
 	}
-	if err := c.mimeiProvide(systemSid, tweetID); err != nil {
+	if err := c.mimeiProvide(authSid, tweetID); err != nil {
 		c.warnf("provide %s failed: %v", tweetID, err)
 	}
 
@@ -505,7 +505,7 @@ func entryDeleteTweet(c *ctx) (any, error) {
 
 	var deleted tweetObj
 	if tweetAuthorID == userID {
-		deleted, err = c.destroyTweet(authSid, userSid, userID, tweetID)
+		deleted, err = c.destroyTweet(authSid, userID, tweetID)
 		if err != nil {
 			return respErr(err), nil
 		}
@@ -529,7 +529,7 @@ func entryDeleteTweet(c *ctx) (any, error) {
 		return respErr(err), nil
 	}
 
-	if err := c.backupDelRef(userSid, userID, ""); err != nil {
+	if err := c.backupDelRef(authSid, userID, ""); err != nil {
 		return respErr(err), nil
 	}
 	if err := c.mimeiPublish(authSid, userID); err != nil {
@@ -551,7 +551,7 @@ func entryDeleteTweet(c *ctx) (any, error) {
 }
 
 // destroyTweet permanently removes a tweet the requesting user authored.
-func (c *ctx) destroyTweet(authSid, userSid, userID, tweetID string) (tweetObj, error) {
+func (c *ctx) destroyTweet(authSid, userID, tweetID string) (tweetObj, error) {
 	tweetSid, err := c.openMimei(authSid, tweetID, verCur)
 	if err != nil {
 		return nil, fmt.Errorf("MMOpen(%s, cur): %v", tweetID, err)
@@ -575,28 +575,28 @@ func (c *ctx) destroyTweet(authSid, userSid, userID, tweetID string) (tweetObj, 
 	// garbage collector reclaims them.
 	for _, attachment := range tweet.attachments() {
 		if mid := mapStr(attachment, "mid"); mid != "" {
-			if err := c.delRef(tweetSid, tweetID, mid); err != nil {
+			if err := c.delRef(authSid, tweetID, mid); err != nil {
 				c.warnf("attachment unref %s failed: %v", mid, err)
 			}
 		}
 	}
 
-	if err := c.backupDelRef(tweetSid, tweetID, ""); err != nil {
+	if err := c.backupDelRef(authSid, tweetID, ""); err != nil {
 		return tweet, err
 	}
-	if err := c.mimeiUnpublish(tweetSid, tweetID); err != nil {
+	if err := c.mimeiUnpublish(authSid, tweetID); err != nil {
 		c.warnf("unpublish %s failed: %v", tweetID, err)
 	}
-	if err := c.delVersions(tweetSid, tweetID); err != nil {
+	if err := c.delVersions(authSid, tweetID); err != nil {
 		return tweet, err
 	}
 
 	if originalID := tweet.originalTweetID(); originalID != "" {
-		if err := c.delRef(userSid, userID, originalID); err != nil {
+		if err := c.delRef(authSid, userID, originalID); err != nil {
 			c.warnf("original unref %s failed: %v", originalID, err)
 		}
 	}
-	if err := c.delRef(userSid, userID, tweetID); err != nil {
+	if err := c.delRef(authSid, userID, tweetID); err != nil {
 		return tweet, err
 	}
 	return tweet, nil

@@ -92,7 +92,7 @@ func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 	if err := c.requireRootNode(authorID); err != nil {
 		return c.wrapErrString(fmt.Errorf("Author host not found")), nil
 	}
-	systemSid, err := c.nodeDataSid(verCur)
+	authSid, err := c.authSid()
 	if err != nil {
 		return c.wrapErrString(err), nil
 	}
@@ -115,7 +115,7 @@ func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 	byUserParams := map[string]string{
 		reqAppID:          c.appID(),
 		reqAppVer:         verLast,
-		reqSid:            systemSid,
+		reqSid:            authSid,
 		"userid":          userID,
 		"tweetid":         tweetID,
 		kind.stateParam:   boolParam(engagementFlag(updatedTweet, kind.favoritesIndex)),
@@ -192,11 +192,11 @@ func (c *ctx) applyEngagementToTweet(kind engagementKind, userID, authorID, twee
 			c.errorf("Error toggle %s of tweet: %v, request=%s", kind.tweetKey, err, c.requestJSON())
 			return nil
 		}
-		if err := c.backupDelRef(tweetSid, tweetID, ""); err != nil {
+		if err := c.backupDelRef(authSid, tweetID, ""); err != nil {
 			c.errorf("Error toggle %s of tweet: %v, request=%s", kind.tweetKey, err, c.requestJSON())
 			return nil
 		}
-		if err := c.mimeiPublish(tweetSid, tweetID); err != nil {
+		if err := c.mimeiPublish(authSid, tweetID); err != nil {
 			c.warnf("publish %s failed: %v", tweetID, err)
 		}
 		if _, err := c.callEntry("node_update_score", map[string]string{
@@ -287,11 +287,11 @@ func (c *ctx) applyEngagementToUser(kind engagementKind, userID, tweetID string,
 			c.errorf("Failed to update %s list: %v, userId=%s, tweetId=%s", kind.userKey, err, userID, tweetID)
 			return nil, err
 		}
-		if err := c.backupDelRef(userSid, userID, ""); err != nil {
+		if err := c.backupDelRef(authSid, userID, ""); err != nil {
 			c.errorf("Failed to update %s list: %v, userId=%s, tweetId=%s", kind.userKey, err, userID, tweetID)
 			return nil, err
 		}
-		if err := c.mimeiPublish(userSid, userID); err != nil {
+		if err := c.mimeiPublish(authSid, userID); err != nil {
 			c.errorf("Failed to publish user %s: %v", userID, err)
 		}
 		if _, err := c.callEntry("node_update_score", map[string]string{

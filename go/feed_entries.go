@@ -154,7 +154,7 @@ func (c *ctx) refreshFeedLocally(authSid, userID string, lastScore int64, tracke
 	// Registered after the close so it runs before it: committing partial
 	// bookkeeping needs the handle still open. Deferred calls run in reverse
 	// order of registration.
-	defer tracker.persistOnFailure()
+	defer tracker.persistOnFailure(authSid)
 
 	followings, err := c.hkeys(mmsid, userFollowingsList)
 	if err != nil {
@@ -175,10 +175,10 @@ func (c *ctx) refreshFeedLocally(authSid, userID string, lastScore int64, tracke
 	c.debugf("root new tweets %s", jsonStringify(tweets))
 
 	if len(tweets) > 0 || tracker.changed {
-		if err := c.backupDelRef(mmsid, userID, ""); err != nil {
+		if err := c.backupDelRef(authSid, userID, ""); err != nil {
 			return respErrField(c, err), nil
 		}
-		if err := c.mimeiPublish(mmsid, userID); err != nil {
+		if err := c.mimeiPublish(authSid, userID); err != nil {
 			c.warnf("publish %s failed: %v", userID, err)
 		}
 		tracker.changed = false
@@ -343,15 +343,15 @@ func (t *followingAccessTracker) clearFailure(uid string) error {
 
 // persistOnFailure saves bookkeeping that was changed but never committed,
 // which happens when a later step fails and the entry returns early.
-func (t *followingAccessTracker) persistOnFailure() {
+func (t *followingAccessTracker) persistOnFailure(authSid string) {
 	if !t.changed || t.sid == "" {
 		return
 	}
-	if err := t.c.backupDelRef(t.sid, t.userID, ""); err != nil {
+	if err := t.c.backupDelRef(authSid, t.userID, ""); err != nil {
 		t.c.errorf("failed to persist partial following access state: %v, userId=%s", err, t.userID)
 		return
 	}
-	if err := t.c.mimeiPublish(t.sid, t.userID); err != nil {
+	if err := t.c.mimeiPublish(authSid, t.userID); err != nil {
 		t.c.errorf("failed to persist partial following access state: %v, userId=%s", err, t.userID)
 	}
 }
@@ -477,7 +477,7 @@ func entryRemoveBlacklistedRelationship(c *ctx) (any, error) {
 			return c.wrapErr(err), nil
 		}
 	}
-	if err := c.backupDelRef(writeSid, ownerID, ""); err != nil {
+	if err := c.backupDelRef(authSid, ownerID, ""); err != nil {
 		return c.wrapErr(err), nil
 	}
 	if err := c.mimeiPublish(authSid, ownerID); err != nil {

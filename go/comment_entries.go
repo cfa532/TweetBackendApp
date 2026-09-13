@@ -77,15 +77,15 @@ func entryAddComment(c *ctx) (any, error) {
 	}
 	for _, attachment := range tweetObj(comment).attachments() {
 		if mid := mapStr(attachment, "mid"); mid != "" {
-			if err := c.addRef(commentSid, commentID, mid); err != nil {
+			if err := c.addRef(authSid, commentID, mid); err != nil {
 				c.warnf("attachment ref %s failed: %v", mid, err)
 			}
 		}
 	}
-	if err := c.backupDelRef(commentSid, commentID, ""); err != nil {
+	if err := c.backupDelRef(authSid, commentID, ""); err != nil {
 		return respErr(err), nil
 	}
-	if err := c.mimeiPublish(commentSid, commentID); err != nil {
+	if err := c.mimeiPublish(authSid, commentID); err != nil {
 		c.warnf("publish %s failed: %v", commentID, err)
 	}
 
@@ -101,10 +101,10 @@ func entryAddComment(c *ctx) (any, error) {
 	if err := c.zadd(tweetSid, tweetCommentList, nowMillis(), commentID); err != nil {
 		return respErr(err), nil
 	}
-	if err := c.addRef(tweetSid, tweetID, commentID); err != nil {
+	if err := c.addRef(authSid, tweetID, commentID); err != nil {
 		return respErr(err), nil
 	}
-	if err := c.backupDelRef(tweetSid, tweetID, ""); err != nil {
+	if err := c.backupDelRef(authSid, tweetID, ""); err != nil {
 		return respErr(err), nil
 	}
 	if err := c.mimeiPublish(authSid, tweetID); err != nil {
@@ -164,12 +164,12 @@ func (c *ctx) createQuotedRetweet(writerID string) string {
 	if writerHost := writer.hostID(); writerHost == c.nodeID() {
 		ret, err = c.callEntryMap("add_tweet", params)
 	} else {
-		systemSid, sidErr := c.nodeDataSid(verCur)
+		authSid, sidErr := c.authSid()
 		if sidErr != nil {
 			c.warnf("quoted tweet creation failed: %v", sidErr)
 			return ""
 		}
-		params[reqSid] = systemSid
+		params[reqSid] = authSid
 		var raw any
 		raw, err = c.callRemote(writerHost, "add_tweet", params)
 		ret, _ = toMap(raw)
@@ -289,7 +289,7 @@ func (c *ctx) pruneComments(tweetID string, commentIDs []string, page int64) err
 		}
 	}
 	c.warnf("removed %d stale commentId(s) from tweetId=%s, page=%d", len(commentIDs), tweetID, page)
-	if err := c.backupDelRef(writeSid, tweetID, ""); err != nil {
+	if err := c.backupDelRef(authSid, tweetID, ""); err != nil {
 		return err
 	}
 	return c.mimeiPublish(authSid, tweetID)
@@ -363,12 +363,7 @@ func entryDeleteComment(c *ctx) (any, error) {
 
 // destroyComment removes the comment object itself.
 func (c *ctx) destroyComment(authSid, commentID string) error {
-	commentSid, err := c.openMimei(authSid, commentID, verCur)
-	if err != nil {
-		return fmt.Errorf("MMOpen(%s, cur): %v", commentID, err)
-	}
-	defer c.closeMimei(commentSid)
-	return c.delVersions(commentSid, commentID)
+	return c.delVersions(authSid, commentID)
 }
 
 // detachComment removes the parent's reference and list entry, then republishes
@@ -380,14 +375,14 @@ func (c *ctx) detachComment(authSid, tweetID, commentID string) error {
 	}
 	defer c.closeMimei(tweetSid)
 
-	detachErr := c.delRef(tweetSid, tweetID, commentID)
+	detachErr := c.delRef(authSid, tweetID, commentID)
 	if err := c.zrem(tweetSid, tweetCommentList, commentID); err != nil && detachErr == nil {
 		detachErr = err
 	}
 
 	// The parent is republished even if a removal failed: whatever did change
 	// must become visible.
-	if err := c.backupDelRef(tweetSid, tweetID, ""); err != nil {
+	if err := c.backupDelRef(authSid, tweetID, ""); err != nil {
 		c.errorf("Failed to backup/publish tweet %s: %v", tweetID, err)
 	} else if err := c.mimeiPublish(authSid, tweetID); err != nil {
 		c.errorf("Failed to backup/publish tweet %s: %v", tweetID, err)
@@ -410,5 +405,5 @@ func (c *ctx) forgetSavedComment(authSid, appUserID, commentID string) error {
 	if err := c.hdel(userSid, userFavoriteList, commentID); err != nil {
 		return err
 	}
-	return c.backupDelRef(userSid, appUserID, "")
+	return c.backupDelRef(authSid, appUserID, "")
 }

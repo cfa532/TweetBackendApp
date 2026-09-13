@@ -36,17 +36,15 @@ func (c *ctx) closeMimei(mmsid string) {
 	}
 }
 
-// backup commits the current version as a new "last".
-func (c *ctx) backup(sid, mid, memo string, opts ...string) error {
-	if f := c.files[sid]; f != nil && f.mid == mid {
-		return c.commitFile(f)
-	}
+// backup commits the current version as a new "last" using a login identity.
+// File objects commit their open staged state; database objects use MMBackup.
+func (c *ctx) backup(authSid, mid, memo string, opts ...string) error {
 	for _, f := range c.files {
 		if f.mid == mid && f.writable {
 			return c.commitFile(f)
 		}
 	}
-	if _, err := c.api.MMBackup(sid, mid, memo, opts...); err != nil {
+	if _, err := c.api.MMBackup(authSid, mid, memo, opts...); err != nil {
 		return fmt.Errorf("MMBackup(%s): %v", mid, err)
 	}
 	return nil
@@ -67,8 +65,8 @@ func (c *ctx) backup(sid, mid, memo string, opts ...string) error {
 // option is ignored rather than rejected, and because a later node build may
 // give it meaning. Do not read the name as a description of behaviour: nothing
 // here has been shown to delete a reference.
-func (c *ctx) backupDelRef(sid, mid, memo string) error {
-	return c.backup(sid, mid, memo, "delref=false")
+func (c *ctx) backupDelRef(authSid, mid, memo string) error {
+	return c.backup(authSid, mid, memo, "delref=false")
 }
 
 // ---------------------------------------------------------------------------
@@ -483,31 +481,31 @@ func members(pairs []lapi.ScorePair) []string {
 // user's tweets travel with the user. The sorted lists used for pagination do
 // not replace them; both must be maintained.
 
-// addRef records a parent -> child reference.
-func (c *ctx) addRef(sid, parentMid string, childMids ...string) error {
+// addRef records a parent -> child reference using a login identity.
+func (c *ctx) addRef(authSid, parentMid string, childMids ...string) error {
 	if len(childMids) == 0 {
 		return nil
 	}
-	if _, err := c.api.MMAddRef(sid, parentMid, childMids...); err != nil {
+	if _, err := c.api.MMAddRef(authSid, parentMid, childMids...); err != nil {
 		return fmt.Errorf("MMAddRef(%s -> %v): %v", parentMid, childMids, err)
 	}
 	return nil
 }
 
-// delRef drops a parent -> child reference.
-func (c *ctx) delRef(sid, parentMid string, childMids ...string) error {
+// delRef drops a parent -> child reference using a login identity.
+func (c *ctx) delRef(authSid, parentMid string, childMids ...string) error {
 	if len(childMids) == 0 {
 		return nil
 	}
-	if _, err := c.api.MMDelRef(sid, parentMid, childMids...); err != nil {
+	if _, err := c.api.MMDelRef(authSid, parentMid, childMids...); err != nil {
 		return fmt.Errorf("MMDelRef(%s -> %v): %v", parentMid, childMids, err)
 	}
 	return nil
 }
 
-// delVersions removes stored versions of an object, used when deleting content.
-func (c *ctx) delVersions(sid, mid string, vers ...string) error {
-	if _, err := c.api.MMDelVers(sid, mid, vers...); err != nil {
+// delVersions removes stored versions using a login identity, not an MMOpen data session.
+func (c *ctx) delVersions(authSid, mid string, vers ...string) error {
+	if _, err := c.api.MMDelVers(authSid, mid, vers...); err != nil {
 		return fmt.Errorf("MMDelVers(%s): %v", mid, err)
 	}
 	return nil
