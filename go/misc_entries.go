@@ -8,7 +8,7 @@ func entryHealth(c *ctx) (any, error) {
 		"success":        true,
 		"message":        "Server is running",
 		"storageFormats": []string{"database", fileSchema},
-		"creationFormat": fileSchema,
+		"creationFormat": "database",
 	}, nil
 }
 

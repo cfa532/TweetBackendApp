@@ -32,8 +32,10 @@ format promises.
 
 ## Storage formats
 
-Existing users/tweets retain their MIDs and database storage. New users, tweets
-and comments use `tweet-file-v1`. A File MiMei contains `core.json` plus one JSON
+New users, tweets, comments/replies and message stores use Database MiMeis.
+Existing records retain their MIDs and storage format. Existing File MiMeis
+remain readable and writable through `tweet-file-v1`. A File MiMei contains
+`core.json` plus one JSON
 file per collection member (`bookmarks/<user-id>.json`, `comments/<tweet-id>.json`,
 etc.). Engagement counts come from those directories; an engagement does not
 rewrite the tweet core. Native MiMei references are still maintained separately.
@@ -49,12 +51,14 @@ DAG locally; request scratch trees are removed and never used as read sources.
 
 Username lookup checks both legacy and File identities; discovery failures and
 identity conflicts fail the request. Password IDs use the unchanged legacy
-algorithm. Existing message stores remain databases; new stores use File MiMeis.
-Existing node score entries remain in node application data; newly tracked
-entries use a node-scoped File index. No existing record is migrated.
+algorithm, and binary package containers keep their File type. Existing message
+stores retain their format; new stores use Database MiMeis. Existing node File
+indexes remain usable; nodes without one use node application data. Deterministic
+File identity lookups may allocate uncommitted shells but do not select them for
+new records. No existing record is migrated or repaired by this policy.
 
 `health` adds `storageFormats: ["database", "tweet-file-v1"]` and
-`creationFormat: "tweet-file-v1"`. File user/tweet payloads add optional
+`creationFormat: "database"`. File user/tweet payloads add optional
 `storageFormat`; the legacy v2/v3 envelopes and social entry names stay intact.
 Old server binaries cannot read File objects. Upgrade roots and their serving
 nodes together; retain a dual-format server when rolling back other changes.
@@ -122,7 +126,7 @@ ssh -p 220 pi@gen8.leither.uk 'cd /home/pi/demo && ./twbe.sh'
 The final command must report a new numbered version and successful MiMei
 publication. Address verification calls by numbered version first, then confirm
 that `last` returns the same result. Both must advertise `database` and
-`tweet-file-v1` through `health`, with `creationFormat: "tweet-file-v1"`. Verify
+`tweet-file-v1` through `health`, with `creationFormat: "database"`. Verify
 serving/root nodes as well; if needed, synchronize only the application MID
 from gen8 before checking File tweet and comment reads.
 

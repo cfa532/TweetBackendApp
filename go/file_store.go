@@ -84,7 +84,10 @@ func (c *ctx) hasCommittedVersion(sid, mid string) (bool, error) {
 	return false, nil
 }
 
-func (c *ctx) createFileObject(auth, kind, mark string) (string, error) {
+// fileObjectID resolves the deterministic identity used by existing File records.
+// MMCreate may allocate an uncommitted shell for this lookup; callers must check
+// for existing data before selecting it. New records use Database storage.
+func (c *ctx) fileObjectID(auth, kind, mark string) (string, error) {
 	mid, err := c.api.MMCreate(auth, c.appID(), fileExtPrefix+kind, mark, mimeiTypeFile, rightUserObject)
 	if err != nil {
 		return "", err

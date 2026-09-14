@@ -26,15 +26,15 @@ import "fmt"
 // messageScanLimit bounds how many messages one fetch returns.
 const messageScanLimit = 1000
 
-// Preserve an existing message database. A new message store has its own File
-// identity, including when its owner is a legacy database-backed user.
+// Preserve existing Database and File message identities. New message stores
+// use the Database identity, regardless of the owner's storage format.
 func (c *ctx) messageMimeiID(authSid, userID string) (string, error) {
 	mark := userID + "_" + userMessageMimei
 	legacy, err := c.api.MMCreate(authSid, c.appID(), appExtMessage, mark, mimeiTypeDatabase, rightUserObject)
 	if err != nil {
 		return "", err
 	}
-	current, err := c.createFileObject(authSid, "messages", mark)
+	current, err := c.fileObjectID(authSid, "messages", mark)
 	if err != nil {
 		return "", err
 	}
@@ -49,10 +49,10 @@ func (c *ctx) messageMimeiID(authSid, userID string) (string, error) {
 	if oldExists && newExists {
 		return "", fmt.Errorf("Conflicting message store identities for %s", userID)
 	}
-	if oldExists {
-		return legacy, nil
+	if newExists {
+		return current, nil
 	}
-	return current, nil
+	return legacy, nil
 }
 
 // ---------------------------------------------------------------------------

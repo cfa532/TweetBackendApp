@@ -68,7 +68,7 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 	}
 	// "{{auto}}" asks Leither for a fresh id rather than deriving one from the
 	// mark, so two tweets with identical text remain distinct objects.
-	tweetID, err := c.createFileObject(authSid, "tweet", "{{auto}}")
+	tweetID, err := c.createDatabase(authSid, "{{auto}}")
 	if err != nil {
 		return respErr(fmt.Errorf("MMCreate(tweet): %v", err)), nil
 	}

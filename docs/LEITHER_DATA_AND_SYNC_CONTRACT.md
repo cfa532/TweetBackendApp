@@ -119,12 +119,18 @@ If comment creation is delegated to the parent author's remote root node, that n
 
 ## Dual storage formats
 
-Existing users, tweets and comments retain their database format and MID.
-New users/tweets/comments created by the File-capable Go backend use File MiMeis
-with a core JSON file and per-member collection directories. Format dispatch is
-per object: a legacy user can reference a File tweet and either format can
-reference a comment of the other format. Directory entries never substitute for
-native MiMei references.
+New users, tweets, comments/replies and message stores use Database MiMeis.
+Existing Database and File records retain their format and MID; existing File
+accounts and message histories remain addressable. Existing File node indexes
+remain usable, while nodes without one use their node application database.
+This creation policy avoids relying on File MiMei publication/discovery for new
+records; it does not repair or migrate previously published File records.
+
+Format dispatch remains per object. Existing File MiMeis use a core JSON file
+and per-member collection directories. Either format can reference tweets or
+comments of the other format. Directory entries never substitute for native
+MiMei references. Password-derived identities and binary package containers keep
+their existing File type; they are not new social-record storage.
 
 In the reference invariants above, committing the parent means `MMBackup` for a
 database parent or `FilesFlush` followed by `MFSetCid` for a File parent. Never
@@ -135,9 +141,10 @@ of native references committed with the File root before deployment.
 The v2/v3 response envelopes are unchanged. File User/Tweet payloads optionally
 report `storageFormat: "tweet-file-v1"`; `health` advertises the formats the server
 supports. Old backends remain usable for database data but cannot serve File
-objects. Upgrade roots and their serving/discovery nodes before enabling File
-creation. This refactor does not migrate existing records or add serialization
-or cross-node transactions.
+objects. Keep File-capable roots and serving/discovery nodes for existing File
+records. `health` reports `creationFormat: "database"` while advertising support
+for both formats. This policy does not migrate existing records or add
+serialization or cross-node transactions.
 
 ## Read and Recovery APIs
 

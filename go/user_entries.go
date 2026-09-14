@@ -64,7 +64,7 @@ func (c *ctx) resolveUserName(auth, username string) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
-	current, err := c.createFileObject(auth, "user", username)
+	current, err := c.fileObjectID(auth, "user", username)
 	if err != nil {
 		return "", false, err
 	}
@@ -79,10 +79,11 @@ func (c *ctx) resolveUserName(auth, username string) (string, bool, error) {
 	if oldExists && newExists {
 		return "", false, fmt.Errorf("Conflicting account identities for username %s", username)
 	}
-	if oldExists {
-		return legacy, true, nil
+	// Keep an existing File account; unclaimed names now use Database storage.
+	if newExists {
+		return current, true, nil
 	}
-	return current, newExists, nil
+	return legacy, oldExists, nil
 }
 
 func (c *ctx) userIDForName(auth, username string) (string, error) {

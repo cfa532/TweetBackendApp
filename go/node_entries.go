@@ -423,9 +423,9 @@ func splitAndTrim(s, sep string) []string {
 	return parts
 }
 
-// Existing node score entries stay in their node database. New entries go to a
-// node-scoped File index. The system data session stays separate from the
-// File handle for storage lifetime management; remote RPC uses a login identity.
+// Keep existing node-scoped File indexes. Nodes without a committed File index
+// use their node application database. The system data session stays separate
+// from a File handle; remote RPC uses a login identity.
 func (c *ctx) nodeScoreStore(userID, mid string) (string, string, error) {
 	systemSid, err := c.nodeDataSid(verCur)
 	if err != nil {
@@ -446,9 +446,16 @@ func (c *ctx) nodeScoreStore(userID, mid string) (string, string, error) {
 	if nodeID == "" {
 		return "", "", fmt.Errorf("Missing node identity")
 	}
-	indexMID, err := c.createFileObject(auth, "node-index", nodeID)
+	indexMID, err := c.fileObjectID(auth, "node-index", nodeID)
 	if err != nil {
 		return "", "", err
+	}
+	exists, err := c.hasCommittedVersion(auth, indexMID)
+	if err != nil {
+		return "", "", err
+	}
+	if !exists {
+		return systemSid, systemSid, nil
 	}
 	handle, err := c.openMimei(auth, indexMID, verCur)
 	return systemSid, handle, err
