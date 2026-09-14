@@ -15,6 +15,32 @@ An object's root node is its authoritative write location. An access node may ho
 
 Leither is intended to keep access-node copies synchronized with their root-node objects. That synchronization is still under development and is not yet reliable enough to be the clients' only recovery mechanism.
 
+## Publication and Provider Roles
+
+Anyone with the required publishing rights can publish or republish a MiMei,
+provided the publishing node holds the latest version of its data. Publishing
+is not restricted to the original author or the author's root node. This also
+applies to File MiMeis.
+
+TweetWeb can therefore be published from either gen8 or minipc. Before publishing,
+verify that the chosen node's MiMei data is up to date; a local `last` version
+label alone does not establish that it matches the latest version elsewhere.
+Bring a stale publishing copy up to date before republishing it.
+
+Publishing increases the MiMei version number. Verify the new version after
+publication; do not assume the pre-publication version remains current.
+
+Providers serve copies of MiMei data, like CDN nodes. `MiMeiProvide` announces
+that serving role; it does not itself grant publishing rights. A provider may
+also republish when it has the required rights and the latest data.
+
+Do not prescribe `publish -> provide` as a mandatory publication sequence, or
+treat an explicit `provide` call as the missing publication step merely because
+remote discovery fails. If one node can find the MiMei but another reports
+`no provider found`, investigate publication and cross-node discovery; that
+observation alone does not establish that the publisher omitted a required
+`MiMeiProvide` call.
+
 ## Object Ownership and Storage
 
 ### User
