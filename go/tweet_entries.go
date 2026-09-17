@@ -1,6 +1,6 @@
 // tweet_entries.go — creating, reading and deleting tweets.
 //
-// A tweet is its own Mimei database, stored on its author's root node. Creating
+// A new tweet is its own File MiMei, stored on its author's root node. Creating
 // one also records a reference from the author's account to the tweet: that
 // reference, not the tweet list, is what makes the tweet travel when the account
 // is synchronised to another node.
@@ -68,7 +68,7 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 	}
 	// "{{auto}}" asks Leither for a fresh id rather than deriving one from the
 	// mark, so two tweets with identical text remain distinct objects.
-	tweetID, err := c.createDatabase(authSid, "{{auto}}")
+	tweetID, err := c.fileObjectID(authSid, "tweet", "{{auto}}")
 	if err != nil {
 		return respErr(fmt.Errorf("MMCreate(tweet): %v", err)), nil
 	}
@@ -571,6 +571,12 @@ func (c *ctx) destroyTweet(authSid, userID, tweetID string) (tweetObj, error) {
 		return tweet, fmt.Errorf("User is not the tweet author")
 	}
 
+	// Withdraw the tweet before deleting its versions. Do not back up an object
+	// being deleted: File backups rewrite the retained tree and require FilesRm.
+	if err := c.mimeiUnpublish(authSid, tweetID); err != nil {
+		return tweet, fmt.Errorf("unpublish %s: %v", tweetID, err)
+	}
+
 	// Dropping the attachment references leaves them unreferenced, and the
 	// garbage collector reclaims them.
 	for _, attachment := range tweet.attachments() {
@@ -581,12 +587,6 @@ func (c *ctx) destroyTweet(authSid, userID, tweetID string) (tweetObj, error) {
 		}
 	}
 
-	if err := c.backupDelRef(authSid, tweetID, ""); err != nil {
-		return tweet, err
-	}
-	if err := c.mimeiUnpublish(authSid, tweetID); err != nil {
-		c.warnf("unpublish %s failed: %v", tweetID, err)
-	}
 	if err := c.delVersions(authSid, tweetID); err != nil {
 		return tweet, err
 	}

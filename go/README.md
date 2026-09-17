@@ -32,7 +32,8 @@ format promises.
 
 ## Storage formats
 
-New users, tweets, comments/replies and message stores use Database MiMeis.
+New tweets and comments/replies use File MiMeis. New users and message stores
+use Database MiMeis.
 Existing records retain their MIDs and storage format. Existing File MiMeis
 remain readable and writable through `tweet-file-v1`. A File MiMei contains
 `core.json` plus one JSON
@@ -46,8 +47,21 @@ resolve one committed `mm://<mid>:<version>` root. Writes copy that root into
 request staging, replace changed entries, flush it, and commit with `MFSetCid`.
 Do not follow this with `MMBackup`: that overwrites the root CID on the
 LifeAlbum runtime. Explicit backup calls still commit reference-only changes.
-Each MiMei also retains one stable node-Files tree so Leither keeps the committed
-DAG locally; request scratch trees are removed and never used as read sources.
+On Leither V0.24.23, `MFSetCid` recursively pins the committed DAG itself;
+no permanent node-Files copy is needed. Request scratch trees are removed and
+never used as read sources. Staging mutations and cleanup still use `FilesRm`
+and require its runtime permissions. Old `/tweet-file-work/<mid>` trees are
+not automatically removed by this change.
+
+Verified on minipc V0.24.23 (2026-09-17) with a disposable File MiMei:
+copy `ipfs/<cid>` into a scratch directory, flush, commit via `mimei setcid`,
+then remove the scratch directory. The `last` directory and its file remained
+readable, and `ipfs pin ls /ipfs/<root-cid>` still reported a recursive pin.
+`FilesStat` accepted `ipfs/<cid>` and rejected `/ipfs/<cid>`. Unpublishing and
+removing the fixture's versions then made `last` unavailable as expected.
+These CLI probes used node authority; they do not establish that the MApp
+author's session can remove staging files. Local regression tests cover File
+commit/update/removal failures and unpublish-before-delete ordering.
 
 Username lookup checks both legacy and File identities; discovery failures and
 identity conflicts fail the request. Password IDs use the unchanged legacy
@@ -58,7 +72,7 @@ File identity lookups may allocate uncommitted shells but do not select them for
 new records. No existing record is migrated or repaired by this policy.
 
 `health` adds `storageFormats: ["database", "tweet-file-v1"]` and
-`creationFormat: "database"`. File user/tweet payloads add optional
+`creationFormat: "mixed"` with per-object `creationFormats`. File user/tweet payloads add optional
 `storageFormat`; the legacy v2/v3 envelopes and social entry names stay intact.
 Old server binaries cannot read File objects. Upgrade roots and their serving
 nodes together; retain a dual-format server when rolling back other changes.
@@ -126,7 +140,7 @@ ssh -p 220 pi@gen8.leither.uk 'cd /home/pi/demo && ./twbe.sh'
 The final command must report a new numbered version and successful MiMei
 publication. Address verification calls by numbered version first, then confirm
 that `last` returns the same result. Both must advertise `database` and
-`tweet-file-v1` through `health`, with `creationFormat: "database"`. Verify
+`tweet-file-v1` through `health`, with `creationFormat: "mixed"` and per-object `creationFormats`. Verify
 serving/root nodes as well; if needed, synchronize only the application MID
 from gen8 before checking File tweet and comment reads.
 

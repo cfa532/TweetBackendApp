@@ -59,7 +59,7 @@ func entryAddComment(c *ctx) (any, error) {
 	if err != nil {
 		return respErr(err), nil
 	}
-	commentID, err := c.createDatabase(authSid, "{{auto}}")
+	commentID, err := c.fileObjectID(authSid, "tweet", "{{auto}}")
 	if err != nil {
 		return respErr(fmt.Errorf("MMCreate(comment): %v", err)), nil
 	}

@@ -84,9 +84,9 @@ func (c *ctx) hasCommittedVersion(sid, mid string) (bool, error) {
 	return false, nil
 }
 
-// fileObjectID resolves the deterministic identity used by existing File records.
-// MMCreate may allocate an uncommitted shell for this lookup; callers must check
-// for existing data before selecting it. New records use Database storage.
+// fileObjectID creates a File object. A deterministic mark resolves an existing
+// identity (and may allocate an uncommitted shell); callers doing lookups must
+// check for existing data. Tweets use {{auto}} to create distinct File objects.
 func (c *ctx) fileObjectID(auth, kind, mark string) (string, error) {
 	mid, err := c.api.MMCreate(auth, c.appID(), fileExtPrefix+kind, mark, mimeiTypeFile, rightUserObject)
 	if err != nil {
@@ -166,9 +166,8 @@ func (c *ctx) pinFileRoot(f *fileStore, ver string) error {
 	if stat == nil || !stat.IsDir() || stat.Hash == "" {
 		return fmt.Errorf("File object %s is not a directory", f.mid)
 	}
-	// Keep the versioned MiMei URL as the read source. The installed runtime
-	// resolves this tree locally, while its raw /ipfs/<hash> path is not a Files
-	// namespace path and fails even when the MiMei's retained tree is present.
+	// Read through the committed MiMei version. Files APIs resolve raw CIDs as
+	// ipfs/<hash>; /ipfs/<hash> instead names a path in the node Files tree.
 	f.root = root
 	return nil
 }
@@ -554,22 +553,6 @@ func (c *ctx) commitFile(f *fileStore) error {
 	if err := c.makeFileDirectory(f.auth, fileWorkRoot); err != nil {
 		return err
 	}
-	// Leither's Files tree is also what retains the flushed DAG locally. Keep
-	// one stable tree per MiMei; deleting the only staging tree after MFSetCid
-	// leaves "last" pointing at a CID whose files are no longer available.
-	pin := fileWorkRoot + "/" + fileSegment(f.mid)
-	if f.root == "" {
-		if _, err := c.api.FilesStat(f.auth, pin); err == nil {
-			return fmt.Errorf("unexpected Files tree for new File object %s", f.mid)
-		}
-	} else if _, err := c.api.FilesStat(f.auth, pin); err != nil {
-		// A previous commit may have advanced the MiMei before promoting its
-		// scratch tree. Reattach that committed root; if its DAG is unavailable,
-		// FilesCopy returns the real storage error rather than creating emptiness.
-		if err := c.api.FilesCopy(f.auth, f.root, pin, false); err != nil {
-			return fmt.Errorf("restore retained tree for %s: %v", f.mid, err)
-		}
-	}
 	// Native handles are unique per open. Encode them before using them as paths.
 	f.stage = fileWorkRoot + "/" + fileSegment(f.mid+"-"+f.handle+"-"+toString(time.Now().UnixNano()))
 	if f.root == "" {
@@ -579,12 +562,9 @@ func (c *ctx) commitFile(f *fileStore) error {
 	} else if err := c.api.FilesCopy(f.auth, f.root, f.stage, false); err != nil {
 		return err
 	}
-	removeScratch := true
 	defer func() {
-		if removeScratch {
-			if err := c.api.FilesRm(f.auth, f.stage, true, false); err != nil {
-				c.warnf("remove staging tree: %v", err)
-			}
+		if err := c.api.FilesRm(f.auth, f.stage, true, false); err != nil {
+			c.warnf("remove staging tree: %v", err)
 		}
 		f.stage = ""
 	}()
@@ -640,23 +620,11 @@ func (c *ctx) commitFile(f *fileStore) error {
 	if err != nil {
 		return err
 	}
-	// MFSetCid creates the committed version itself. MMBackup here would
-	// overwrite its directory CID with the MiMei's unrelated cur byte content.
+	// MFSetCid commits and recursively pins the directory DAG (verified on
+	// Leither V0.24.23), so no permanent Files copy is needed after staging
+	// cleanup. MMBackup would overwrite this root with cur byte content.
 	if _, err := c.api.MFSetCid(f.auth, f.mid, cid); err != nil {
 		return err
-	}
-	if _, err := c.api.FilesStat(f.auth, pin); err == nil {
-		if err := c.api.FilesRm(f.auth, pin, true, false); err != nil {
-			// The scratch tree still retains the newly committed DAG.
-			removeScratch = false
-			return fmt.Errorf("replace retained tree for %s: %v", f.mid, err)
-		}
-	}
-	if err := c.api.FilesCopy(f.auth, f.stage, pin, false); err != nil {
-		// Keep scratch on this rare partial failure: MFSetCid already committed
-		// its CID, so deleting scratch would make the new version unreadable.
-		removeScratch = false
-		return fmt.Errorf("retain committed tree for %s: %v", f.mid, err)
 	}
 	f.root, f.changes, f.dirs = "mm://"+f.mid+":"+verLast, map[string]map[string]any{}, map[string][]lapi.LsLink{}
 	return nil
