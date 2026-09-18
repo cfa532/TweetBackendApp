@@ -480,6 +480,41 @@ success.
 **Workaround:** restart the node after publishing, and confirm with an entry
 whose output differs between versions rather than trusting `showapp`.
 
+## P19 — `FilesRm` is refused to the MApp author session
+
+Observed on gen8, **V0.24.24**, 2026-09-18. A Go MApp that gets its session from
+`BELoginAsAuthor()` can `FilesMkdir`, `FilesCopy`, `MFTemp2Files`,
+`FilesFlush` and `MFSetCid` under its own scratch root, but every `FilesRm` on
+that same root fails:
+
+```
+[mapp][W] Tweed add_tweet: remove staging tree: 5006:Insufficient permissions Run as administrator
+[mapp][W] Tweed update_tweet: remove staging tree: 5006:Insufficient permissions Run as administrator
+[mapp][E] Tweed Error node_update_score: replace retained tree for B_xYF...: 5006:Insufficient permissions Run as administrator
+```
+
+The same session created the paths it is not allowed to remove, and the refusal
+happens for both recursive (`FilesRm(sid, dir, true, false)`) and single-file
+(`FilesRm(sid, file, false, false)`) calls.
+
+Why this blocks File MiMei writes: a File MiMei is updated by copying its
+committed root into a scratch directory, replacing the changed entries, then
+`FilesFlush` + `MFSetCid`. `MFTemp2Files` will not overwrite an existing path,
+so replacing an entry (for example `core.json` when a tweet is edited) requires
+`FilesRm` first. With `FilesRm` refused:
+
+- every edit of an existing File object fails — the client sees
+  `5006:Insufficient permissions Run as administrator` from `update_tweet`;
+- removing a collection member (un-like, un-bookmark, comment removal) fails;
+- scratch trees are never removed, so they accumulate under the app's work root
+  on every write, including writes that otherwise succeed.
+
+Creating a new object is unaffected, because its scratch tree starts empty.
+
+**Fix:** allow `FilesRm` for the author session on paths that session created
+(or on the app's own Files root), consistent with the Files calls it is
+already allowed to make there. **No application-side workaround is applied.**
+
 ## P11 — Documentation
 
 - Broken links on vzhan.cn (HTTP 500): `doc.html`, `capabilities.html`,
@@ -512,6 +547,8 @@ that changed nothing.
 
 ## Priority
 
+0. **P19** — `FilesRm` refused to the author session: no File MiMei can be
+   edited, and scratch trees leak on every write.
 1. **P17** — every Go MApp request leaks 8-20 MB of interpreter state. A node
    dies after a few hundred calls, and no application-side fix is possible.
    This blocks the Go port from production on its own.

@@ -59,8 +59,10 @@ then remove the scratch directory. The `last` directory and its file remained
 readable, and `ipfs pin ls /ipfs/<root-cid>` still reported a recursive pin.
 `FilesStat` accepted `ipfs/<cid>` and rejected `/ipfs/<cid>`. Unpublishing and
 removing the fixture's versions then made `last` unavailable as expected.
-These CLI probes used node authority; they do not establish that the MApp
-author's session can remove staging files. Local regression tests cover File
+These CLI probes used node authority. The MApp author's session cannot remove
+staging files: on gen8 V0.24.24 every `FilesRm` it makes returns
+`5006:Insufficient permissions Run as administrator`, so edits of existing File
+objects fail and staging trees are left behind (`LEITHER_ISSUES.md` P19). Local regression tests cover File
 commit/update/removal failures and unpublish-before-delete ordering.
 
 Username lookup checks both legacy and File identities; discovery failures and
