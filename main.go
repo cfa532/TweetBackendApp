@@ -55,7 +55,7 @@
 // The app is uploaded as source and compiled by the node's ixgo interpreter, so
 // it cannot be run directly. Use the compiler for a syntax check only:
 //
-//	cd go && go build .
+//	go build .
 //
 // See README.md for upload and release instructions.
 package lapp

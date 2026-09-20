@@ -1,6 +1,6 @@
 # Go File-type storage and iOS compatibility plan
 
-Status: implemented on the backend and iOS `codex/file-storage-refactor` branches on 2026-09-12. Compiler/static validation only; not deployed. See `go/README.md` for the implementation and remaining runtime checks.
+Status: implemented on the backend and iOS `codex/file-storage-refactor` branches on 2026-09-12. Compiler/static validation only; not deployed. See `README.md` for the implementation and remaining runtime checks.
 
 ## Governing principle
 
@@ -29,7 +29,7 @@ LifeAlbum demonstrates two different, valid File storage strategies:
 
 LifeAlbum's [data model](/Users/cfa532/Documents/GitHub/LifeAlbum/docs/LIFEDRIVE_DATA_MODEL.md) and [native identity service](/Users/cfa532/Documents/GitHub/LifeAlbum/apps/lifedrive-identity/main.go) also discuss or implement concurrency controls. Those controls are outside this refactor, per the user's direction.
 
-Tweet's current [storage helpers](/Users/cfa532/Documents/GitHub/TweetBackendApp/go/store.go) implement scalars, hashes, sorted sets and sequence numbers. Some entries bypass those helpers with direct hash/sorted-set calls. A type-constant replacement would leave all those calls incompatible with the new objects.
+Tweet's current [storage helpers](/Users/cfa532/Documents/GitHub/TweetBackendApp/store.go) implement scalars, hashes, sorted sets and sequence numbers. Some entries bypass those helpers with direct hash/sorted-set calls. A type-constant replacement would leave all those calls incompatible with the new objects.
 
 iOS accesses social data through backend entries, not directly through Leither database APIs. Its API response versions (`v2`/`v3`) are distinct from the proposed disk schema. This lets both storage formats produce the same existing User/Tweet records.
 

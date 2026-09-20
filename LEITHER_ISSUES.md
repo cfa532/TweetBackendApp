@@ -80,7 +80,7 @@ the Go type declaration hides it.
 the module. `Leither/api` does expose them, but by handing back the internal
 `*frame.LApi`, which is not something an app should be asked to depend on.
 
-**Workaround applied:** `go/caps.go` asserts the handle to one small interface
+**Workaround applied:** `caps.go` asserts the handle to one small interface
 per method, so a build lacking a method degrades to a typed error instead of a
 compile failure.
 
@@ -160,7 +160,7 @@ the boundary isn't "what json needs". Cost here: hand-written JSON and base64
 `bytes`, `encoding/gob`, `fmt`, `io`, `net/http`, `os`, `strings`, `time`,
 `Leither/lapi`, Hprose `rpc/core` and `rpc/websocket`, and gopsutil `disk` and
 `mem`. The original claims that `bytes` and `net/http` are missing are therefore
-superseded for the newer runtime. See `go/README.md` for exact import paths.
+superseded for the newer runtime. See `README.md` for exact import paths.
 
 Import resolution alone does not guarantee native-Go behavior. The interpreter
 still controls package initialization and runtime integration, so required
@@ -361,7 +361,7 @@ independent of any MApp. An app-side workaround cannot help those.
 Seven distinct panic events occurred in a 65-minute window, triggered from
 `toggle_following`, `sync_user`, and `CheckDBProvide`.
 
-**Workaround applied:** `syncIfRemote` in `go/caps.go` compares the owning host
+**Workaround applied:** `syncIfRemote` in `caps.go` compares the owning host
 against this node and skips the call entirely when they match. This covers the
 application's own calls only.
 
