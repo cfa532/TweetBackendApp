@@ -119,7 +119,7 @@ If comment creation is delegated to the parent author's remote root node, that n
 
 ## Dual storage formats
 
-New tweets and comments/replies use File MiMeis. New users and message stores
+New users, tweets and comments/replies use File MiMeis. New message stores
 use Database MiMeis.
 Existing Database and File records retain their format and MID; existing File
 accounts and message histories remain addressable. Existing File node indexes
@@ -144,7 +144,7 @@ report `storageFormat: "tweet-file-v1"`; `health` advertises the formats the ser
 supports. Old backends remain usable for database data but cannot serve File
 objects. Keep File-capable roots and serving/discovery nodes for existing File
 records. `health` reports `creationFormat: "mixed"` and a `creationFormats` map:
-`user` and `messages` are `database`; `tweet` and `comment` are `tweet-file-v1`.
+`user`, `tweet` and `comment` are `tweet-file-v1`; `messages` is `database`.
 It continues advertising support for both formats. This policy does not migrate
 existing records or add serialization or cross-node transactions.
 

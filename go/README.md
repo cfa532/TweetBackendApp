@@ -32,7 +32,7 @@ format promises.
 
 ## Storage formats
 
-New tweets and comments/replies use File MiMeis. New users and message stores
+New users, tweets and comments/replies use File MiMeis. New message stores
 use Database MiMeis.
 Existing records retain their MIDs and storage format. Existing File MiMeis
 remain readable and writable through `tweet-file-v1`. A File MiMei contains
@@ -70,8 +70,9 @@ identity conflicts fail the request. Password IDs use the unchanged legacy
 algorithm, and binary package containers keep their File type. Existing message
 stores retain their format; new stores use Database MiMeis. Existing node File
 indexes remain usable; nodes without one use node application data. Deterministic
-File identity lookups may allocate uncommitted shells but do not select them for
-new records. No existing record is migrated or repaired by this policy.
+File identity lookups may allocate uncommitted shells; unclaimed usernames
+select the File identity for registration. No existing record is migrated or
+repaired by this policy.
 
 `health` adds `storageFormats: ["database", "tweet-file-v1"]` and
 `creationFormat: "mixed"` with per-object `creationFormats`. File user/tweet payloads add optional

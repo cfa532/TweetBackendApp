@@ -10,7 +10,7 @@ func entryHealth(c *ctx) (any, error) {
 		"storageFormats": []string{"database", fileSchema},
 		"creationFormat": "mixed",
 		"creationFormats": map[string]string{
-			"user": "database", "tweet": fileSchema, "comment": fileSchema,
+			"user": fileSchema, "tweet": fileSchema, "comment": fileSchema,
 			"messages": "database",
 		},
 	}, nil

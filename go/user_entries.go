@@ -1,10 +1,10 @@
 // user_entries.go — account creation, authentication and profile reads.
 //
-// A user account is a Mimei database whose id is derived from the username, so
+// A user account is a Mimei object whose id is derived from the username, so
 // the same name always maps to the same id on every node and a name can be
-// claimed exactly once. The account object lives in that database under
-// ownerDataKey, and the database also holds the user's tweet list, social graph
-// and engagement lists.
+// claimed exactly once. New accounts use File storage; existing accounts keep
+// their format. The storage adapter exposes the account under ownerDataKey,
+// alongside the user's tweet list, social graph and engagement lists.
 //
 // Accounts are owned by one node. user.hostIds[0] names it, and every write to
 // the account belongs there; choosing that node is the client's job and
@@ -79,11 +79,11 @@ func (c *ctx) resolveUserName(auth, username string) (string, bool, error) {
 	if oldExists && newExists {
 		return "", false, fmt.Errorf("Conflicting account identities for username %s", username)
 	}
-	// Keep an existing File account; unclaimed names now use Database storage.
-	if newExists {
-		return current, true, nil
+	// Keep an existing Database account; unclaimed names use File storage.
+	if oldExists {
+		return legacy, true, nil
 	}
-	return legacy, oldExists, nil
+	return current, newExists, nil
 }
 
 func (c *ctx) userIDForName(auth, username string) (string, error) {
