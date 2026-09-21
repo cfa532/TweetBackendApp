@@ -429,7 +429,7 @@ func entryUploadPackage(c *ctx) (any, error) {
 const (
 	// upgradeVersion must exceed the version the clients report, or they will
 	// not offer the upgrade. It is kept in step with check_upgrade.js.
-	upgradeVersion = 75
+	upgradeVersion = 76
 	// upgradeMission is how insistent the prompt is: minor, major or critical.
 	upgradeMission = "minor"
 	// upgradeDomain is the base host used for deep links and sharing.
