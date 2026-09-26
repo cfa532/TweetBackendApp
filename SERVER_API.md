@@ -883,9 +883,15 @@ The iOS client uses a **smart retry strategy** for IP resolution:
 **Output Schema:**
 ```json
 {
-  "hasUpgrade": "boolean",
-  "version": "string",
-  "url": "string"
+  "enabled": "boolean",
+  "version": "number (legacy versionName comparison)",
+  "versionCode": "number",
+  "versionName": "string",
+  "packageId": "string",
+  "size": "number of bytes",
+  "sha256": "lowercase hexadecimal string",
+  "mission": "minor | major | critical",
+  "domain": "string"
 }
 ```
 

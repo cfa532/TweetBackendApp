@@ -10,7 +10,10 @@
 // being collected.
 package lapp
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // ---------------------------------------------------------------------------
 // upload_ipfs
@@ -427,9 +430,14 @@ func entryUploadPackage(c *ctx) (any, error) {
 // Upgrade advertisement. These describe the build clients should be running and
 // are edited by hand when a release ships.
 const (
-	// upgradeVersion must exceed the version the clients report, or they will
-	// not offer the upgrade. It is kept in step with check_upgrade.js.
-	upgradeVersion = 76
+	// Keep the advertisement disabled until all fields describe the exact
+	// signed full APK already published under the package MiMei.
+	upgradeEnabled     = true
+	upgradeVersion     = 76 // Legacy clients compare this with versionName.
+	upgradeVersionCode = 159
+	upgradeVersionName = "76"
+	upgradePackageSize = int64(23844762)
+	upgradePackageSHA  = "3533141952dd1e95eacc5495cf18d0aba78bfbd7def97af977572a8d714ab619"
 	// upgradeMission is how insistent the prompt is: minor, major or critical.
 	upgradeMission = "minor"
 	// upgradeDomain is the base host used for deep links and sharing.
@@ -439,6 +447,11 @@ const (
 // entryCheckUpgrade tells a client whether a newer build exists and where to
 // get it.
 func entryCheckUpgrade(c *ctx) (any, error) {
+	if upgradeEnabled && (upgradeVersionCode < 1 || upgradePackageSize < 1 ||
+		upgradePackageSize > 512*1024*1024 || !validUpgradeName(upgradeVersionName) ||
+		!validUpgradeSHA256(upgradePackageSHA)) {
+		return c.wrapErr(fmt.Errorf("invalid enabled upgrade metadata")), nil
+	}
 	authSid, err := c.authSid()
 	if err != nil {
 		return c.wrapErr(err), nil
@@ -448,13 +461,42 @@ func entryCheckUpgrade(c *ctx) (any, error) {
 		return c.wrapErr(err), nil
 	}
 	ret := map[string]any{
-		"version":   upgradeVersion,
-		"packageId": mid,
-		"mission":   upgradeMission,
-		"domain":    upgradeDomain,
+		"enabled":     upgradeEnabled,
+		"version":     upgradeVersion,
+		"versionCode": upgradeVersionCode,
+		"versionName": upgradeVersionName,
+		"packageId":   mid,
+		"size":        upgradePackageSize,
+		"sha256":      upgradePackageSHA,
+		"mission":     upgradeMission,
+		"domain":      upgradeDomain,
 	}
 	c.debugf("%s", jsonStringify(ret))
 	return c.wrapPassthrough(ret), nil
+}
+
+func validUpgradeName(value string) bool {
+	if value == "" || len(value) > 64 || strings.TrimSpace(value) != value {
+		return false
+	}
+	for i := 0; i < len(value); i++ {
+		if value[i] < 0x20 || value[i] > 0x7e {
+			return false
+		}
+	}
+	return true
+}
+
+func validUpgradeSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for i := 0; i < len(value); i++ {
+		if !((value[i] >= '0' && value[i] <= '9') || (value[i] >= 'a' && value[i] <= 'f')) {
+			return false
+		}
+	}
+	return true
 }
 
 // entryDownloadUpgrade returns the installer's Mimei id for the client to

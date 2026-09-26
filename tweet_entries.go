@@ -211,8 +211,8 @@ func (c *ctx) authorizePost(tweet tweetObj, user userObj, agentAuth map[string]a
 // copy is held here rather than forcing a synchronisation, which is what makes
 // timelines fast. refresh_tweet is the explicit recovery path for stale data.
 //
-// The exception is a detail view, which is the one place a user is looking
-// closely enough for stale counts to be visible; see fromdetailview below.
+// A detail-view read also lets a non-root access node announce itself as a
+// provider; see fromdetailview below.
 func entryGetTweet(c *ctx) (any, error) {
 	tweetID := c.str("tweetid")
 	appUserID := c.str("appuserid")
@@ -232,15 +232,15 @@ func entryGetTweet(c *ctx) (any, error) {
 	}
 	tweet := tweetObj(stored)
 
-	// Opening a tweet's detail view on a node that is not the author's is the
-	// one read worth a synchronisation, because the user is looking at the
-	// counts directly. Doing it only when this node is not already a provider
-	// keeps it to once per node per tweet.
+	// Opening a tweet's detail view lets a node that is not the author's root
+	// become a provider. MiMeiProvide handles synchronization inside Leither;
+	// the backend only needs to avoid repeating the announcement when this node
+	// already provides the tweet.
 	//
 	// The flag arrives as a string: request parameters are always strings, so a
 	// bare truthiness test would treat "false" as true.
 	if c.str("fromdetailview") == "true" && tweet.authorID() != "" {
-		if refreshed, newSid := c.syncForDetailView(tweetID, tweet, mmsid); refreshed != nil {
+		if refreshed, newSid := c.provideForDetailView(tweetID, tweet, mmsid); refreshed != nil {
 			tweet, mmsid = refreshed, newSid
 		}
 	}
@@ -331,13 +331,14 @@ func entryGetTweet(c *ctx) (any, error) {
 	return c.wrapNotNull(ret, "Tweet not found"), nil
 }
 
-// syncForDetailView pulls a tweet from its author's node when this node does
-// not already serve it, and returns the refreshed tweet and handle. It returns
-// (nil, "") when nothing changed, leaving the caller's handle in place.
+// provideForDetailView makes this node a provider when it is neither the author's
+// root host nor already serving the tweet. MiMeiProvide performs Leither's
+// synchronization internally, so this path must not call MiMeiSync itself.
+// It returns the refreshed tweet and handle, or (nil, "") when nothing changed.
 //
 // Every failure here is contained: a detail view that shows a slightly stale
 // tweet is better than one that shows an error.
-func (c *ctx) syncForDetailView(tweetID string, tweet tweetObj, mmsid string) (tweetObj, string) {
+func (c *ctx) provideForDetailView(tweetID string, tweet tweetObj, mmsid string) (tweetObj, string) {
 	// The caller usually knows the author's node already. Looking it up here
 	// would read the author's account, which this node is not guaranteed to
 	// hold.
@@ -349,7 +350,7 @@ func (c *ctx) syncForDetailView(tweetID string, tweet tweetObj, mmsid string) (t
 			"userid":  tweet.authorID(),
 		})
 		if err != nil {
-			c.errorf("fromdetailview sync failed for %s: %v", tweetID, err)
+			c.errorf("fromdetailview provider setup failed for %s: %v", tweetID, err)
 			return nil, ""
 		}
 		writeHostID = userObj(author).hostID()
@@ -361,12 +362,12 @@ func (c *ctx) syncForDetailView(tweetID string, tweet tweetObj, mmsid string) (t
 
 	authSid, err := c.authSid()
 	if err != nil {
-		c.errorf("fromdetailview sync failed for %s: %v", tweetID, err)
+		c.errorf("fromdetailview provider setup failed for %s: %v", tweetID, err)
 		return nil, ""
 	}
 	isProvider, err := c.mimeiIsProvider(authSid, tweetID)
 	if err != nil {
-		c.errorf("fromdetailview sync failed for %s: %v", tweetID, err)
+		c.errorf("fromdetailview provider setup failed for %s: %v", tweetID, err)
 		return nil, ""
 	}
 	c.debugf("tweetId=%s isProvider=%t on nodeId=%s (writeHostId=%s)", tweetID, isProvider, nodeID, writeHostID)
@@ -374,30 +375,26 @@ func (c *ctx) syncForDetailView(tweetID string, tweet tweetObj, mmsid string) (t
 		return nil, ""
 	}
 
-	c.debugf("fromdetailview syncing tweetId=%s, not yet a provider on nodeId=%s (writeHostId=%s)",
+	c.debugf("fromdetailview providing tweetId=%s on nodeId=%s (writeHostId=%s)",
 		tweetID, nodeID, writeHostID)
-	if err := c.mimeiSync(authSid, tweetID, nil); err != nil {
-		c.errorf("fromdetailview sync failed for %s: %v", tweetID, err)
-		return nil, ""
-	}
 	if err := c.mimeiProvide(authSid, tweetID); err != nil {
 		c.warnf("provide %s failed: %v", tweetID, err)
 	}
 
 	newSid, err := c.openMimei("", tweetID, verLast)
 	if err != nil {
-		c.errorf("fromdetailview sync failed for %s: %v", tweetID, err)
+		c.errorf("fromdetailview provider setup failed for %s: %v", tweetID, err)
 		return nil, ""
 	}
 	refreshed, err := c.getObject(newSid, tweetContentKey)
 	if err != nil {
-		c.errorf("fromdetailview sync failed for %s: %v", tweetID, err)
+		c.errorf("fromdetailview provider setup failed for %s: %v", tweetID, err)
 		c.closeMimei(newSid)
 		return nil, ""
 	}
 	c.closeMimei(mmsid)
 	if refreshed == nil {
-		// The synchronised copy has no content; keep the one already read.
+		// The provider copy has no content; keep the one already read.
 		return tweet, newSid
 	}
 	return tweetObj(refreshed), newSid
