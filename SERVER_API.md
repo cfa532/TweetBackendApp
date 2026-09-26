@@ -878,7 +878,10 @@ The iOS client uses a **smart retry strategy** for IP resolution:
 
 **Input Parameters:**
 - `aid` (string): App ID
-- `version` (string): Current version
+- `version` (string): Response protocol selector; current clients send `v2`
+
+The Android client's installed version is not sent to this endpoint. The client
+compares the returned `versionCode` with its own `BuildConfig.VERSION_CODE`.
 
 **Output Schema:**
 ```json
@@ -895,14 +898,30 @@ The iOS client uses a **smart retry strategy** for IP resolution:
 }
 ```
 
+Field semantics:
+
+- `enabled` is the server-side release gate.
+- `versionCode` is the only ordering key and must increase for every APK.
+- `versionName` is required display/compatibility metadata in the current
+  protocol; it is not used to order releases.
+- `version` is retained for legacy clients that compared numeric display
+  versions.
+- `size` and `sha256` describe the exact signed APK stored under `packageId`.
+- `mission` controls prompt severity, not version selection.
+
+Publish and verify the APK on all selectable MiMei providers before deploying
+an enabled response with its metadata. A client rejects an APK when its size,
+SHA-256, package name, or Android version code differs from this response.
+
 ### Download Upgrade
 **Endpoint:** `download_upgrade`
 
 **Input Parameters:**
 - `aid` (string): App ID
-- `version` (string): Version to download
+- `version` (string): Response protocol selector when supplied
 
-**Output Schema:** Upgrade package data
+**Output Schema:** The package MiMei ID as a string. Clients resolve a healthy
+provider and download it from `/mm/<packageId>`.
 
 ## Common Error Response
 

@@ -120,6 +120,38 @@ Use the same procedure below for release, replacing `twbe` with `tweet1` and
 assets and build the web bundle with its matching AppID. Do not ship tests,
 local tooling or signing keys. Keep backups outside the application directories.
 
+### Publishing an Android self-upgrade
+
+The signed APK and the backend advertisement are one release, but they are
+published in that order. `versionCode` is the authoritative ordering key;
+`versionName` and the numeric `version` field remain compatibility metadata.
+
+1. In the Android repository, increase the full APK's version code and name,
+   commit that source revision, and build `:app:assembleFullRelease` with the
+   production signing configuration.
+2. Record the final APK's byte count, SHA-256, package name, version code, and
+   signing-certificate digest.
+3. Upload it to `~/tweet/tweet1/release.apk` on minipc. Verify the remote hash,
+   then run `./release.sh release.apk` in that directory. This updates the
+   existing package MiMei; it does not create a version-specific package ID.
+4. Resolve the package MiMei's current providers and download
+   `/mm/<packageId>` through every route the Android health check can select.
+   Every complete download must match the recorded size and SHA-256. Do not
+   activate new metadata while a selectable provider serves the old APK.
+5. Update the `upgrade*` constants in `file_entries.go`, run `go build ./...`,
+   commit and push the backend, and publish `tweet1` from gen8 as described
+   below.
+6. Call `check_upgrade` against the new numbered application version and then
+   `last`. Both must return the same enabled metadata. The old installed client
+   should be offered the update; the new client should not be prompted again.
+
+The verified server/package side of the 76 to 77 transition used Android
+version code 160, package MiMei data version 229, and Tweet backend version
+1366. Its APK was 23,844,762 bytes with SHA-256
+`595107b5ec064e4fd0f7532b947440c71635d822ac61e0ae547c719a2a985ed3`.
+The Android repository's `docs/SERVER_UPGRADE_SYSTEM.md` is the detailed
+operator runbook.
+
 Copy the production Go sources into `/home/pi/demo/twbe/` on gen8. The target
 directory must stay named `twbe` because its name determines the AppID. Exclude
 tests, local module files, and documentation from the MApp package:
