@@ -433,11 +433,11 @@ const (
 	// Keep the advertisement disabled until all fields describe the exact
 	// signed full APK already published under the package MiMei.
 	upgradeEnabled     = true
-	upgradeVersion     = 77 // Legacy clients compare this with versionName.
-	upgradeVersionCode = 160
+	upgradeVersion     = 78 // Compatibility trigger for legacy versionName clients.
+	upgradeVersionCode = 161
 	upgradeVersionName = "77"
-	upgradePackageSize = int64(23844762)
-	upgradePackageSHA  = "595107b5ec064e4fd0f7532b947440c71635d822ac61e0ae547c719a2a985ed3"
+	upgradePackageSize = int64(23861730)
+	upgradePackageSHA  = "b2df75b3081301f35c160a1bd1fcfadfb700c04839902d61136c67833c7a14c3"
 	// upgradeMission is how insistent the prompt is: minor, major or critical.
 	upgradeMission = "minor"
 	// upgradeDomain is the base host used for deep links and sharing.

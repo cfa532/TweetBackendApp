@@ -126,8 +126,9 @@ The signed APK and the backend advertisement are one release, but they are
 published in that order. `versionCode` is the authoritative ordering key;
 `versionName` and the numeric `version` field remain compatibility metadata.
 
-1. In the Android repository, increase the full APK's version code and name,
-   commit that source revision, and build `:app:assembleFullRelease` with the
+1. In the Android repository, increase the full APK's version code. Change its
+   version name only when intentionally changing the display version, commit
+   that source revision, and build `:app:assembleFullRelease` with the
    production signing configuration.
 2. Record the final APK's byte count, SHA-256, package name, version code, and
    signing-certificate digest.
