@@ -13,7 +13,16 @@ Read this document before changing object creation, references, node routing, sy
 
 An object's root node is its authoritative write location. An access node may hold and serve a synchronized copy.
 
-Leither is intended to keep access-node copies synchronized with their root-node objects. That synchronization is still under development and is not yet reliable enough to be the clients' only recovery mechanism.
+New tweets are published on the author's root node and then propagate to nodes
+that provide the author. A P2P network gives no deterministic upper bound for
+that propagation, so an access node can already serve the current User while
+still lacking one of that User's newly-published Tweets.
+
+Once an access node is announced as a provider of the Tweet itself, Leither is
+responsible for bringing that provider copy up to date and keeping it updated
+from the root. This is an eventual guarantee rather than an immediate read
+barrier: clients must not assume the first read after `MiMeiProvide` is already
+current.
 
 ## Publication and Provider Roles
 
@@ -33,6 +42,12 @@ publication; do not assume the pre-publication version remains current.
 Providers serve copies of MiMei data, like CDN nodes. `MiMeiProvide` announces
 that serving role; it does not itself grant publishing rights. A provider may
 also republish when it has the required rights and the latest data.
+
+Provider status has stronger synchronization meaning than merely finding the
+object through another node. After a node successfully takes the provider role,
+Leither owns propagation of subsequent root updates to that copy. Clients may
+use explicit recovery APIs when they require an immediate refresh, but must not
+continually re-sync a provider as a substitute for Leither's replication.
 
 Do not prescribe `publish -> provide` as a mandatory publication sequence, or
 treat an explicit `provide` call as the missing publication step merely because
@@ -167,6 +182,22 @@ After `refresh_tweet`, clients still call `get_comments` to load and render the 
 
 Routine screen opening should use normal read APIs rather than forcing synchronization.
 
+Deep-link Tweet Detail loading uses a two-stage ordinary-read policy:
+
+1. Resolve the author first with actual `get_user` requests, because a User
+   normally has more providers and its provider lookup completes faster.
+2. Call `get_tweet` on that proven author access node with
+   `fromdetailview="true"`. When the node can serve the Tweet and is not already
+   its provider, this asks the node to take the Tweet provider role so Leither
+   keeps its copy updated.
+3. If that node cannot yet serve the newly-published Tweet, discover providers
+   by `tweetId` and retry `get_tweet` there. Tweet provider discovery is the
+   slower fallback because the Tweet normally has fewer providers. If those
+   reads also fail, stop; do not cycle through more User providers.
+
+Cached author or Tweet data may be displayed immediately, but it never suppresses
+this server read sequence.
+
 On iOS and Android, explicit user recovery is attached to pull-to-refresh:
 
 - Profile pull: `resync_user` for the User and direct Tweets.
@@ -199,8 +230,11 @@ every mutation to the account's root node themselves, so no node forwards a
 write and then synchronizes the result back. The delegated-write branches still
 present in the legacy `.js` entries are dead paths, not a pattern to copy.
 
-Routine reads still force nothing: `get_tweet` with `fromdetailview` announces
-the tweet only when this node is not already a provider.
+Routine reads still force nothing. `get_tweet` with `fromdetailview="true"`
+announces the Tweet only when this node is not already a provider. After that
+announcement, Leither—not a client polling loop—is responsible for keeping the
+provider copy synchronized; the completion time remains unbounded in the P2P
+system.
 
 ## Review Checklist
 
