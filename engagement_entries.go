@@ -199,14 +199,6 @@ func (c *ctx) applyEngagementToTweet(kind engagementKind, userID, authorID, twee
 		if err := c.mimeiPublish(authSid, tweetID); err != nil {
 			c.warnf("publish %s failed: %v", tweetID, err)
 		}
-		if _, err := c.callEntry("node_update_score", map[string]string{
-			reqAppID:  c.appID(),
-			reqAppVer: verLast,
-			"userid":  authorID,
-			reqMID:    tweetID,
-		}); err != nil {
-			c.warnf("node_update_score failed: %v", err)
-		}
 	}
 	return c.fetchTweetV2(tweetID, userID)
 }
@@ -293,14 +285,6 @@ func (c *ctx) applyEngagementToUser(kind engagementKind, userID, tweetID string,
 		}
 		if err := c.mimeiPublish(authSid, userID); err != nil {
 			c.errorf("Failed to publish user %s: %v", userID, err)
-		}
-		if _, err := c.callEntry("node_update_score", map[string]string{
-			reqAppID:  c.appID(),
-			reqAppVer: verLast,
-			"userid":  userID,
-			reqMID:    userID,
-		}); err != nil {
-			c.errorf("Failed to update user score %s: %v", userID, err)
 		}
 	}
 

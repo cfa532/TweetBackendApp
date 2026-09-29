@@ -111,15 +111,6 @@ func entryAddComment(c *ctx) (any, error) {
 		c.warnf("publish %s failed: %v", tweetID, err)
 	}
 
-	if _, err := c.callEntry("node_update_score", map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"userid":  tweetAuthorID,
-		reqMID:    tweetID,
-	}); err != nil {
-		c.warnf("node_update_score failed: %v", err)
-	}
-
 	count, err := c.commentCount(tweetID)
 	if err != nil {
 		return respErr(err), nil
@@ -339,14 +330,6 @@ func entryDeleteComment(c *ctx) (any, error) {
 	}
 	if err := c.forgetSavedComment(authSid, appUserID, commentID); err != nil {
 		c.errorf("Failed to remove comment from user lists %s: %v", appUserID, err)
-	}
-	if _, err := c.callEntry("node_update_score", map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"userid":  appUserID,
-		reqMID:    tweetID,
-	}); err != nil {
-		c.errorf("Failed to update tweet score %s: %v", tweetID, err)
 	}
 
 	count, err := c.commentCount(tweetID)

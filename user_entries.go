@@ -203,14 +203,6 @@ func entryRegister(c *ctx) (any, error) {
 	if err := c.mimeiPublish(authSid, userMid); err != nil {
 		c.warnf("publish %s failed: %v", userMid, err)
 	}
-	if _, err := c.callEntry("node_update_score", map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"userid":  userMid,
-		reqMID:    userMid,
-	}); err != nil {
-		c.warnf("node_update_score failed: %v", err)
-	}
 
 	c.debugf("User registered %s", jsonStringify(map[string]any(user)))
 	user.stripPassword()
@@ -545,28 +537,14 @@ func entryResyncUser(c *ctx) (any, error) {
 	// other copy to synchronise from.
 	if rootHost != nodeID {
 		c.debugf("syncing user mid userId=%s hostId=%s", userID, rootHost)
-		// Asked for in v2 so a failure arrives as a message rather than as an
-		// absent value: node_update_mid_by_score handles its own errors, so this
-		// result is the only account of whether the sync ran.
-		syncResult, err := c.callEntryMap("node_update_mid_by_score", map[string]string{
-			reqAppID:   c.appID(),
-			reqAppVer:  verLast,
-			reqVersion: versionV2,
-			"hostid":   rootHost,
-			"userid":   userID,
-			reqMID:     userID,
-		})
-		switch {
-		case err != nil:
+		// Explicit user refresh: force the pull now instead of waiting for
+		// Leither's background replication.
+		authSid, err := c.authSid()
+		if err == nil {
+			err = c.mimeiSync(authSid, userID, nil)
+		}
+		if err != nil {
 			syncErr = err.Error()
-		case syncResult == nil:
-			syncErr = "node_update_mid_by_score returned no result"
-		case !mapBool(syncResult, "success"):
-			if msg := mapStr(syncResult, "message"); msg != "" {
-				syncErr = msg
-			} else {
-				syncErr = "node_update_mid_by_score returned no result"
-			}
 		}
 		if syncErr != "" {
 			// Not fatal by itself: an earlier sync may have left a usable copy
@@ -705,14 +683,6 @@ func entrySetUserAvatar(c *ctx) (any, error) {
 	}
 	if err := c.mimeiPublish(authSid, mid); err != nil {
 		c.warnf("publish %s failed: %v", mid, err)
-	}
-	if _, err := c.callEntry("node_update_score", map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"userid":  mid,
-		reqMID:    mid,
-	}); err != nil {
-		c.warnf("node_update_score failed: %v", err)
 	}
 	return c.wrapNotNull(avatar, "Avatar update failed"), nil
 }

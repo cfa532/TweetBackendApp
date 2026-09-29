@@ -725,41 +725,6 @@ The iOS client uses a **smart retry strategy** for IP resolution:
 
 **Usage:** Returns multiple provider IPs for redundancy and load balancing.
 
-### Node Get Score
-**Endpoint:** `node_get_score`
-
-**Input Parameters:**
-- `aid` (string): App ID
-- `userid` (string): User ID
-- `mid` (string): Mimei ID
-
-**Output Schema:**
-```json
-{
-  "score": "number"
-}
-```
-
-### Node Update Score
-**Endpoint:** `node_update_score`
-
-**Input Parameters:**
-- `aid` (string): App ID
-- `userid` (string): User ID
-- `mid` (string): Mimei ID
-
-**Output Schema:** No specific return value
-
-### Node Update Tweet
-**Endpoint:** `node_update_mid_by_score`
-
-**Input Parameters:**
-- `aid` (string): App ID
-- `userid` (string): User ID
-- `tweetid` (string): Tweet ID
-
-**Output Schema:** No specific return value
-
 ### Sync User
 **Endpoint:** `sync_user`
 

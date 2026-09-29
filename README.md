@@ -213,7 +213,7 @@ publication procedure.
 like an entry ignoring its parameters:
 
 ```bash
-./Leither lpki runapp --local ./twbe node_get_score -r "aid=<aid>;userid=<mid>;mid=<mid>;version=v2" -a gen8.key
+./Leither lpki runapp --local ./twbe get_provider_ip -r "aid=<aid>;mid=<mid>;version=v2" -a gen8.key
 ```
 
 Adding `version=v2` is the quickest way to see a failure: entries return the bare
@@ -251,7 +251,6 @@ through `[p2p] SyncMDBKVData`, which is outside this app's control.
 | `health`, `logging` | correct envelopes |
 | `check_upgrade` | `packageId` = `hdF-zawE_0MH0TSVuBvAU_yA0HA` — the same id `dev_upgrade.sh` hardcodes, so Go's `MMCreate` derives mids identically to the JS version |
 | `download_upgrade` | same id, legacy bare-string shape |
-| `node_update_score` / `node_get_score` | `BEOpenAppDataNode` + `Zaddwithseq` + `Zrank` + `Zscore` |
 | `get_provider_ip` | real reachable address via `GetVar` + private-range filtering |
 
 Historical JS backups remain at `~/demo/deploy-backups/twbe-js-<timestamp>/`.
@@ -291,7 +290,7 @@ Entries outside that rule, each for a stated reason:
   version nor this one checks where that object is rooted, so a misdirected
   attachment is still possible here.
 
-What the forwarding left behind is five `RunMApp` calls that genuinely span two
+What the forwarding left behind is four `RunMApp` calls that genuinely span two
 owners on two nodes; they are listed under *caps.go* below.
 
 ## Limitations to resolve before production
@@ -332,14 +331,13 @@ were intra-app and are now direct Go calls through `callEntry`, needing no node
 API at all. The rest were request forwarding, which misdirected writes no longer
 receive (see *Which node handles a request* above).
 
-What is left is five calls that genuinely span two owners on two nodes and
+What is left is four calls that genuinely span two owners on two nodes and
 cannot be split by the caller:
 
 - `toggle_following` → `toggle_follower` on the followed user's node
 - `toggle_bookmark` / `toggle_favorite` → the matching `*_by_user` entry on the
   acting user's node
 - `set_author_core_data` → `sync_user`, warming the node an account is moving to
-- `node_update_mid_by_score` → `node_get_score` on the object's owner
 - `toggle_following` → `get_tweet_id_list`, reading the followed user's tweets
 
 Callers distinguish best-effort work from work that changes the answer:

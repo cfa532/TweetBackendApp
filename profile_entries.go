@@ -102,14 +102,6 @@ func entrySetAuthorCoreData(c *ctx) (any, error) {
 	if err := c.mimeiProvide(authSid, userInDB.mid()); err != nil {
 		c.warnf("provide %s failed: %v", userInDB.mid(), err)
 	}
-	if _, err := c.callEntry("node_update_score", map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"userid":  userInDB.mid(),
-		reqMID:    userInDB.mid(),
-	}); err != nil {
-		c.warnf("node_update_score failed: %v", err)
-	}
 
 	userInDB.stripPassword()
 	return c.wrapStatus(map[string]any{

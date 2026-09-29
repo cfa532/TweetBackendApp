@@ -201,14 +201,11 @@ func entryTable() map[string]entryFunc {
 		"message_outgoing": entryMessageOutgoing,
 
 		// Nodes and providers
-		"get_node_ip":              entryGetNodeIP,
-		"get_node_ips":             entryGetNodeIPs,
-		"get_provider_ip":          entryGetProviderIP,
-		"get_provider_ips":         entryGetProviderIPs,
-		"node_get_score":           entryNodeGetScore,
-		"node_update_score":        entryNodeUpdateScore,
-		"node_update_mid_by_score": entryNodeUpdateMidByScore,
-		"mimei_provide":            entryMimeiProvide,
+		"get_node_ip":      entryGetNodeIP,
+		"get_node_ips":     entryGetNodeIPs,
+		"get_provider_ip":  entryGetProviderIP,
+		"get_provider_ips": entryGetProviderIPs,
+		"mimei_provide":    entryMimeiProvide,
 
 		// Files and sharing
 		"upload_file":           entryUploadFile,

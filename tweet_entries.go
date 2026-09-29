@@ -152,15 +152,6 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 		c.warnf("publish %s failed: %v", authorID, err)
 	}
 
-	if _, err := c.callEntry("node_update_score", map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"userid":  authorID,
-		reqMID:    authorID,
-	}); err != nil {
-		c.warnf("node_update_score failed: %v", err)
-	}
-
 	c.infof("local %s", jsonStringify(map[string]any(tweet)))
 	return c.wrapPassthrough(map[string]any{"success": true, "mid": tweetID}), nil
 }
@@ -412,19 +403,19 @@ func (c *ctx) provideForDetailView(tweetID string, tweet tweetObj, mmsid string)
 func entryRefreshTweet(c *ctx) (any, error) {
 	tweetID := c.str("tweetid")
 	hostID := c.str("hostid")
-	authorID := c.str("userid")
 	appUserID := c.str("appuserid")
 
+	// Explicit user refresh: force the pull now instead of waiting for Leither's
+	// background replication. A failed pull is not fatal; get_tweet below still
+	// answers from whatever copy this node has.
 	if nodeID := c.nodeID(); nodeID != hostID {
 		c.debugf("tweetId=%s on nodeId=%s from hostId=%s", tweetID, nodeID, hostID)
-		if _, err := c.callEntry("node_update_mid_by_score", map[string]string{
-			reqAppID:  c.appID(),
-			reqAppVer: verLast,
-			"hostid":  hostID,
-			"userid":  authorID,
-			reqMID:    tweetID,
-		}); err != nil {
-			c.errorf("Failed to update mid by score for tweetId=%s: %v", tweetID, err)
+		authSid, err := c.authSid()
+		if err == nil {
+			err = c.mimeiSync(authSid, tweetID, nil)
+		}
+		if err != nil {
+			c.errorf("Failed to sync tweetId=%s from hostId=%s: %v", tweetID, hostID, err)
 		}
 	}
 
@@ -533,16 +524,6 @@ func entryDeleteTweet(c *ctx) (any, error) {
 		c.warnf("publish %s failed: %v", userID, err)
 	}
 	c.debugf("Delete tweet %s %s", tweetID, jsonStringify(map[string]any(deleted)))
-
-	// Score maintenance is cleanup; its failure must not fail the deletion.
-	if _, err := c.callEntry("node_update_score", map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"userid":  userID,
-		reqMID:    userID,
-	}); err != nil {
-		c.errorf("Failed to update user score: %v, userId=%s", err, userID)
-	}
 
 	return c.wrapDelete(map[string]any{"tweetid": tweetID, "success": true}), nil
 }

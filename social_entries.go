@@ -161,14 +161,6 @@ func entryToggleFollowing(c *ctx) (any, error) {
 		return fail(err), nil
 	}
 
-	if _, err := c.callEntry("node_update_score", map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"userid":  userID,
-		reqMID:    userID,
-	}); err != nil {
-		c.warnf("node_update_score failed: %v", err)
-	}
 	return ok(!isFollowing), nil
 }
 
@@ -447,14 +439,6 @@ func entryToggleFollower(c *ctx) (any, error) {
 	}
 	if err := c.mimeiPublish(authSid, userID); err != nil {
 		c.warnf("publish %s failed: %v", userID, err)
-	}
-	if _, err := c.callEntry("node_update_score", map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"userid":  userID,
-		reqMID:    userID,
-	}); err != nil {
-		c.errorf("Failed to update user score: %v, userId=%s", err, userID)
 	}
 
 	c.debugf("%s with follower %s, isFollower=%t", userID, otherID, isFollower)

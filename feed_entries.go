@@ -96,17 +96,14 @@ func entryUpdateFollowingTweets(c *ctx) (any, error) {
 //
 // This is the second half of the client's pair of calls: it has already asked
 // the root node to refresh the feed, and asks this node to catch up so the
-// timeline read here is not stale. Nothing is written to the account —
-// node_update_mid_by_score pulls it, and the score it records afterwards is
-// this node's own bookkeeping.
+// timeline read here is not stale. Nothing is written to the account; the
+// forced sync is the explicit-refresh pull, ahead of Leither's own replication.
 func (c *ctx) pullFeedFromRoot(userID, rootHost string, lastScore int64) (any, error) {
-	if _, err := c.callEntry("node_update_mid_by_score", map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"hostid":  rootHost,
-		"userid":  userID,
-		reqMID:    userID,
-	}); err != nil {
+	authSid, err := c.authSid()
+	if err == nil {
+		err = c.mimeiSync(authSid, userID, nil)
+	}
+	if err != nil {
 		return respErrField(c, err), nil
 	}
 
@@ -206,17 +203,17 @@ func (c *ctx) collectFollowingTweets(uid, userID string, lastScore int64, userSi
 		return nil, err
 	}
 
-	// Pull the followed user's latest state before reading their tweet list,
-	// so the list reflects what they have actually published.
-	if sourceHost := followed.hostID(); sourceHost != "" {
-		if _, err := c.callEntry("node_update_mid_by_score", map[string]string{
-			reqAppID:  c.appID(),
-			reqAppVer: verLast,
-			"hostid":  sourceHost,
-			"userid":  uid,
-			reqMID:    uid,
-		}); err != nil {
-			c.errorf("Failed to update user score: %v, uid=%s, hostId=%s", err, uid, sourceHost)
+	// The feed refresh is an explicit user action, so pull the followed user's
+	// latest state now rather than waiting for Leither's replication, so the
+	// list read below reflects what they have actually published. A followed
+	// user rooted on this node has nothing to pull.
+	if sourceHost := followed.hostID(); sourceHost != "" && sourceHost != c.nodeID() {
+		authSid, err := c.authSid()
+		if err == nil {
+			err = c.mimeiSync(authSid, uid, nil)
+		}
+		if err != nil {
+			c.errorf("Failed to sync followed user: %v, uid=%s, hostId=%s", err, uid, sourceHost)
 		}
 	}
 
@@ -482,15 +479,6 @@ func entryRemoveBlacklistedRelationship(c *ctx) (any, error) {
 	}
 	if err := c.mimeiPublish(authSid, ownerID); err != nil {
 		c.warnf("publish %s failed: %v", ownerID, err)
-	}
-
-	if _, err := c.callEntry("node_update_score", map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"userid":  ownerID,
-		reqMID:    ownerID,
-	}); err != nil {
-		c.errorf("score update failed, userid=%s: %v", ownerID, err)
 	}
 
 	c.warnf("removed permanently inaccessible %s, userid=%s, otherid=%s", relationship, ownerID, otherID)

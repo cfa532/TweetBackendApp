@@ -527,14 +527,6 @@ func entryTogglePinnedTweet(c *ctx) (any, error) {
 	} else if err := c.mimeiPublish(authSid, appUserID); err != nil {
 		c.errorf("Failed to backup/publish user %s: %v", appUserID, err)
 	}
-	if _, err := c.callEntry("node_update_score", map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"userid":  appUserID,
-		reqMID:    appUserID,
-	}); err != nil {
-		c.errorf("Failed to update user score %s: %v", appUserID, err)
-	}
 
 	return c.wrapPinned(!pinned), nil
 }
@@ -625,14 +617,6 @@ func (c *ctx) updateRetweetList(entry string, add bool) (any, error) {
 		c.warnf("publish %s failed: %v", tweetID, err)
 	}
 
-	if _, err := c.callEntry("node_update_score", map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"userid":  authorID,
-		reqMID:    tweetID,
-	}); err != nil {
-		c.warnf("node_update_score failed: %v", err)
-	}
 
 	return c.wrapRetweet(c.fetchTweetV2(tweetID, appUserID)), nil
 }

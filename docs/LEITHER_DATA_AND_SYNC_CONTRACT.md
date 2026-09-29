@@ -213,13 +213,20 @@ Do not remove the explicit recovery APIs merely because Leither is expected to p
 ## Backend Synchronization Policy
 
 The backend mirrors the client policy above. A node that already provides a
-Mimei is kept current by Leither's own replication, so `MiMeiIsProvider` — a
-local table lookup, not a network call — decides whether a pull is needed:
+Mimei is kept current by Leither's own replication. The backend keeps no
+version or score bookkeeping of its own to detect staleness; the former
+`node_update_score`, `node_get_score` and `node_update_mid_by_score` entries
+were a workaround for unreliable early replication and have been removed.
+`MiMeiIsProvider` — a local table lookup, not a network call — decides whether
+a pull is needed:
 
 - **Explicit user recovery forces the sync.** Feed, Tweet Detail and Profile
   pull-to-refresh reach `update_following_tweets`, `refresh_tweet`,
   `resync_user` and `sync_user`, and the user is waiting on the newest data.
   Being a provider promises the copy will catch up, not that it already has.
+  On an access node (one that is not the object's root) each of these calls
+  `MiMeiSync` directly; on the root node there is nothing to pull. No score
+  comparison gates the sync.
 - **Taking or keeping a copy checks `MiMeiIsProvider` first.** Following an
   account, saving a tweet, quoting a tweet and `mimei_provide` want possession,
   not freshness; replication supplies the rest. A node holding no copy at all is
