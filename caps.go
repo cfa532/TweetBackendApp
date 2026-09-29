@@ -240,7 +240,7 @@ func (c *ctx) mimeiIsProvider(sid, mid string) (bool, error) {
 // a sync:
 //
 //   - Feed, tweet-detail and profile pull-to-refresh reach
-//     node_update_mid_by_score, sync_user or resync_user, and the user is
+//     update_following_tweets, refresh_tweet, sync_user or resync_user, and the user is
 //     waiting on the newest data. Being a provider says the copy will catch up,
 //     not that it already has. See the client policy in
 //     docs/LEITHER_DATA_AND_SYNC_CONTRACT.md.
@@ -252,7 +252,7 @@ func (c *ctx) mimeiIsProvider(sid, mid string) (bool, error) {
 // here would be stale by exactly that write. It does not arise: clients address
 // the account's root node directly (routing.go) and this app forwards no write.
 //
-// A site that has no copy at all (recoverUser, initialiseMid) needs no gate:
+// A site that has no copy at all (recoverUser) needs no gate:
 // this node cannot be providing what it does not hold.
 
 // alreadyProviding reports whether this node already serves mid and so needs no

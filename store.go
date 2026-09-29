@@ -250,55 +250,6 @@ func (c *ctx) zadd(mmsid, key string, score int64, member string) error {
 	return nil
 }
 
-// zaddSeq appends members scored by the database's own sequence, giving a
-// stable insertion order without the caller inventing timestamps.
-func (c *ctx) zaddSeq(mmsid, key string, members ...string) error {
-	if f := c.files[mmsid]; f != nil {
-		if len(members) == 0 {
-			return nil
-		}
-		// Keep a high-water mark even when the newest member is removed.
-		path := "sequences/" + fileSegment(key) + ".json"
-		state, err := c.fileJSON(f, path)
-		if err != nil {
-			return err
-		}
-		seq := int64(0)
-		if state != nil {
-			var ok bool
-			seq, ok = toInt64(state["value"])
-			if !ok {
-				return fmt.Errorf("invalid sequence for %s", key)
-			}
-		}
-		pairs, err := c.fileScores(f, key, false)
-		if err != nil {
-			return err
-		}
-		if len(pairs) > 0 && pairs[len(pairs)-1].Score > seq {
-			seq = pairs[len(pairs)-1].Score
-		}
-		for _, member := range members {
-			if seq == int64(9223372036854775807) {
-				return fmt.Errorf("sequence exhausted for %s", key)
-			}
-			seq++
-			if err := c.zadd(mmsid, key, seq, member); err != nil {
-				return err
-			}
-		}
-		return c.fileSet(f, path, map[string]any{"value": toString(seq)})
-	}
-
-	if len(members) == 0 {
-		return nil
-	}
-	if _, err := c.api.Zaddwithseq(mmsid, key, members...); err != nil {
-		return fmt.Errorf("Zaddwithseq(%s): %v", key, err)
-	}
-	return nil
-}
-
 // zrem removes members.
 func (c *ctx) zrem(mmsid, key string, members ...string) error {
 	if f := c.files[mmsid]; f != nil {

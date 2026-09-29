@@ -617,7 +617,6 @@ func (c *ctx) updateRetweetList(entry string, add bool) (any, error) {
 		c.warnf("publish %s failed: %v", tweetID, err)
 	}
 
-
 	return c.wrapRetweet(c.fetchTweetV2(tweetID, appUserID)), nil
 }
 
