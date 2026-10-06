@@ -433,7 +433,7 @@ const (
 	// Keep the advertisement disabled until all fields describe the exact
 	// signed full APK already published under the package MiMei.
 	upgradeEnabled     = true
-	upgradeVersion     = 78 // Compatibility trigger for legacy versionName clients.
+	upgradeVersion     = 79 // Compatibility trigger for legacy versionName clients.
 	upgradeVersionCode = 162
 	upgradeVersionName = "77"
 	upgradePackageSize = int64(23900450)
