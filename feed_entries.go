@@ -137,10 +137,10 @@ func (c *ctx) pullFeedFromRoot(userID, rootHost string, lastScore int64) (any, e
 // refreshFeedLocally walks the user's followings and collects their new tweets.
 //
 // The account is held open for writing for the whole walk, and anything else
-// that reads it queues behind that. Nothing belongs in here beyond the
-// synchronisation each following needs: announcing the tweets this refresh
-// picked up was tried and made every other request to this node wait on a
-// MiMeiProvide per tweet. The node advertises what it holds on its own.
+// that reads it queues behind that. Check provider status once per following
+// and only announce users this node does not already provide. Leither handles
+// replication of those users and their direct tweet references; do not add
+// a synchronous pull or a MiMeiProvide per tweet to this walk.
 func (c *ctx) refreshFeedLocally(authSid, userID string, lastScore int64, tracker *followingAccessTracker) (any, error) {
 	mmsid, err := c.openMimei(authSid, userID, verCur)
 	if err != nil {
@@ -161,7 +161,7 @@ func (c *ctx) refreshFeedLocally(authSid, userID string, lastScore int64, tracke
 
 	tweets := []any{}
 	for _, uid := range followings {
-		collected, err := c.collectFollowingTweets(uid, userID, lastScore, mmsid, tracker)
+		collected, err := c.collectFollowingTweets(authSid, uid, userID, lastScore, mmsid, tracker)
 		if err != nil {
 			// Only a failure to record access state stops the walk: it means
 			// the bookkeeping is unreliable, and continuing would compound it.
@@ -191,8 +191,23 @@ func (c *ctx) refreshFeedLocally(authSid, userID string, lastScore int64, tracke
 // collectFollowingTweets adds one followed user's new tweets to the feed.
 //
 // Reading the account is what decides whether the user is reachable; a failure
-// after that point is transient and does not count against them.
-func (c *ctx) collectFollowingTweets(uid, userID string, lastScore int64, userSid string, tracker *followingAccessTracker) ([]any, error) {
+// in provider setup or after that read is transient and does not count against them.
+func (c *ctx) collectFollowingTweets(authSid, uid, userID string, lastScore int64, userSid string, tracker *followingAccessTracker) ([]any, error) {
+	// Check before opening the account so a missing local copy can also become
+	// provided. Providing is not a freshness barrier: Leither owns replication,
+	// and this refresh reads whatever has arrived without forcing MiMeiSync.
+	provided, err := c.mimeiIsProvider(authSid, uid)
+	if err != nil {
+		c.errorf("Failed to check followed user provider: %v, uid=%s", err, uid)
+		return nil, nil
+	}
+	if !provided {
+		if err := c.mimeiProvide(authSid, uid); err != nil {
+			c.errorf("Failed to provide followed user: %v, uid=%s", err, uid)
+			return nil, nil
+		}
+	}
+
 	followed, err := c.loadUser(uid)
 	if err != nil || followed == nil {
 		c.errorf("updateUser: user not found, uid=%s, nodeId=%s", uid, c.nodeID())
@@ -203,22 +218,7 @@ func (c *ctx) collectFollowingTweets(uid, userID string, lastScore int64, userSi
 		return nil, err
 	}
 
-	// The feed refresh is an explicit user action, so pull the followed user's
-	// latest state now rather than waiting for Leither's replication, so the
-	// list read below reflects what they have actually published. A followed
-	// user rooted on this node has nothing to pull.
-	if sourceHost := followed.hostID(); sourceHost != "" && sourceHost != c.nodeID() {
-		authSid, err := c.authSid()
-		if err == nil {
-			err = c.mimeiSync(authSid, uid, nil)
-		}
-		if err != nil {
-			c.errorf("Failed to sync followed user: %v, uid=%s, hostId=%s", err, uid, sourceHost)
-		}
-	}
-
-	// Reopened after the synchronisation above so the freshly pulled tweet list
-	// is the one that gets read.
+	// Read the local tweet list maintained by Leither's provider replication.
 	var newTweets []lapi.ScorePair
 	err = c.readMimei("", uid, func(mmsid string) error {
 		got, err := c.zrangebyscore(mmsid, userTweetList, lastScore, nowMillis(), 0, feedScanLimit)

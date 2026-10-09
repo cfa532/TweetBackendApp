@@ -594,7 +594,7 @@ func entryResyncUser(c *ctx) (any, error) {
 // collectRecentTweets reads the newest tweets now present on this node for a
 // user, as they stand after synchronisation.
 func (c *ctx) collectRecentTweets(userID, appUserID string) ([]any, error) {
-	const recentTweetCount = 20
+	const recentTweetCount = 40
 
 	var ids []string
 	err := c.readMimei("", userID, func(mmsid string) error {

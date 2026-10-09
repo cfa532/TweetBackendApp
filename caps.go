@@ -239,12 +239,16 @@ func (c *ctx) mimeiIsProvider(sid, mid string) (bool, error) {
 // is possession rather than freshness. Only explicit user recovery still forces
 // a sync:
 //
-//   - Feed, tweet-detail and profile pull-to-refresh reach
-//     update_following_tweets, refresh_tweet, sync_user or resync_user, and the user is
-//     waiting on the newest data. Being a provider says the copy will catch up,
-//     not that it already has. See the client policy in
+//   - Tweet-detail and profile recovery reach refresh_tweet, sync_user or
+//     resync_user. The access-node branch of update_following_tweets also pulls
+//     the app user's updated feed from its root. Being a provider says the copy
+//     will catch up, not that it already has.
+//   - On the app user's root, update_following_tweets checks each followed user's
+//     provider status and calls mimeiProvide only when false, without mimeiSync.
+//     Leither supplies the user and direct tweets. iOS feed pull-to-refresh uses
+//     sync_user for appUser alone before reading get_tweet_feed. See
 //     docs/LEITHER_DATA_AND_SYNC_CONTRACT.md.
-//   - Everything else takes or keeps a copy: following an account, saving a
+//   - Other operations take or keep a copy: following an account, saving a
 //     tweet, quoting one, mimei_provide. Freshness is not the point, possession
 //     is, and replication supplies the rest. These go through ensureProvided.
 //

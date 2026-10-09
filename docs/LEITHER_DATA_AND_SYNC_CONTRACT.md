@@ -204,6 +204,14 @@ On iOS and Android, explicit user recovery is attached to pull-to-refresh:
 - Tweet Detail pull: `refresh_tweet`, then `get_comments` for direct Comments.
 - Comment Detail pull: `refresh_tweet`, then `get_comments` for direct Replies.
 
+iOS main-feed pull-to-refresh first calls `sync_user` for appUser on its access
+node when that node differs from appUser's root. This pulls appUser's existing
+root state without scanning or explicitly syncing followed Users. The pull
+waits for that request, then reloads page zero from the local cache and calls
+`get_tweet_feed` as before. It does not require a new-tweet count before syncing.
+If the sync fails, the error is logged and the existing reload still proceeds.
+The separate session-opening check still runs once per session.
+
 Periodic detail refreshes use ordinary reads and do not force `refresh_tweet`.
 
 TweetWeb currently has no pull-to-refresh interaction. Any Web recovery synchronization must therefore have an explicit, intentional trigger; it must not be accidentally hidden inside a general-purpose cached read helper.
@@ -212,21 +220,42 @@ Do not remove the explicit recovery APIs merely because Leither is expected to p
 
 ## Backend Synchronization Policy
 
+### Feed refactor decision — 2026-10-09
+
+An appUser can follow hundreds of users. Do not turn feed opening or a main-feed
+pull into a network check or forced synchronization against every followed root.
+Leither provider replication is responsible for keeping followed Users and their
+direct Tweet references current. The root still scans local following tweet lists
+and checks local provider status; the refactor removes per-following forced sync,
+not that local scan. Main-feed pull-to-refresh recovers appUser alone on the access
+node, then reads the feed already assembled on its root. It does not discover
+posts the root has not yet collected. This deliberately accepts replication delay
+in exchange for avoiding network work proportional to the number of followings.
+
 The backend mirrors the client policy above. A node that already provides a
 Mimei is kept current by Leither's own replication. The backend keeps no
 version or score bookkeeping of its own to detect staleness; the former
 `node_update_score`, `node_get_score` and `node_update_mid_by_score` entries
 were a workaround for unreliable early replication and have been removed.
 `MiMeiIsProvider` — a local table lookup, not a network call — decides whether
-a pull is needed:
+provider setup or an explicit recovery pull is needed:
 
-- **Explicit user recovery forces the sync.** Feed, Tweet Detail and Profile
-  pull-to-refresh reach `update_following_tweets`, `refresh_tweet`,
-  `resync_user` and `sync_user`, and the user is waiting on the newest data.
+- **Following-feed collection trusts provider replication.** On appUser's root
+  node, `update_following_tweets` checks `MiMeiIsProvider` for each followed User
+  before reading it. If false, it calls `MiMeiProvide` for that User directly,
+  without `MiMeiSync`. It then reads the local tweet list; Leither supplies
+  updates to the User and its directly referenced Tweets. This is the behavior
+  of `update_following_tweets`. Providing is not an immediate
+  freshness barrier, so newly available data may appear on a later feed check.
+- **Explicit profile and detail recovery force the sync.** These actions reach
+  `refresh_tweet`, `resync_user` and `sync_user`.
   Being a provider promises the copy will catch up, not that it already has.
   On an access node (one that is not the object's root) each of these calls
   `MiMeiSync` directly; on the root node there is nothing to pull. No score
   comparison gates the sync.
+- **Access-node feed catch-up still pulls appUser.** The non-root branch of
+  `update_following_tweets` calls `MiMeiSync` for appUser to retrieve the feed
+  assembled on its root. It does not walk or explicitly sync followed Users.
 - **Taking or keeping a copy checks `MiMeiIsProvider` first.** Following an
   account, saving a tweet, quoting a tweet and `mimei_provide` want possession,
   not freshness; replication supplies the rest. A node holding no copy at all is
