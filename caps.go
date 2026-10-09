@@ -245,7 +245,7 @@ func (c *ctx) mimeiIsProvider(sid, mid string) (bool, error) {
 //     will catch up, not that it already has.
 //   - On the app user's root, update_following_tweets checks each followed user's
 //     provider status and calls mimeiProvide only when false, without mimeiSync.
-//     Leither supplies the user and direct tweets. iOS feed pull-to-refresh uses
+//     Leither supplies the user and direct tweets. iOS and Android feed pulls use
 //     sync_user for appUser alone before reading get_tweet_feed. See
 //     docs/LEITHER_DATA_AND_SYNC_CONTRACT.md.
 //   - Other operations take or keep a copy: following an account, saving a

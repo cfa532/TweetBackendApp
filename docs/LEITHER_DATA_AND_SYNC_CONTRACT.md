@@ -204,7 +204,7 @@ On iOS and Android, explicit user recovery is attached to pull-to-refresh:
 - Tweet Detail pull: `refresh_tweet`, then `get_comments` for direct Comments.
 - Comment Detail pull: `refresh_tweet`, then `get_comments` for direct Replies.
 
-iOS main-feed pull-to-refresh first calls `sync_user` for appUser on its access
+iOS and Android main-feed pull-to-refresh first call `sync_user` for appUser on its access
 node when that node differs from appUser's root. This pulls appUser's existing
 root state without scanning or explicitly syncing followed Users. The pull
 waits for that request, then reloads page zero from the local cache and calls
