@@ -2,9 +2,9 @@
 //
 // Node and provider addresses arrive as "host:port" strings mixing IPv4 and
 // bracketed IPv6. Clients need an address they can actually reach, so private
-// and loopback ranges are filtered out: a node announcing 192.168.x.x is
-// reachable only from its own LAN and would give a remote client a connection
-// that hangs.
+// and loopback ranges, plus Tailscale's shared IPv4 range, are filtered out:
+// a node announcing 192.168.x.x is reachable only from its own LAN and would
+// give a remote client a connection that hangs.
 package lapp
 
 import (
@@ -85,7 +85,8 @@ func isPrivateIP(addr string) bool {
 	return isPrivateIPv4(host)
 }
 
-// isPrivateIPv4 covers the RFC 1918 ranges plus loopback and link-local.
+// isPrivateIPv4 covers the RFC 1918 ranges plus loopback, link-local and
+// Tailscale's shared address space.
 func isPrivateIPv4(ip string) bool {
 	parts := strings.Split(ip, ".")
 	if len(parts) != 4 {
@@ -98,6 +99,8 @@ func isPrivateIPv4(ip string) bool {
 	}
 	switch {
 	case first == 10: // 10.0.0.0/8
+		return true
+	case first == 100 && second >= 64 && second <= 127: // Tailscale: 100.64.0.0/10
 		return true
 	case first == 172 && second >= 16 && second <= 31: // 172.16.0.0/12
 		return true
