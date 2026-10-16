@@ -97,7 +97,7 @@ client reconciliation changes were authorized. No tests were run.
 ## Source locations inspected
 
 - Backend: `toggle_following.js`, `toggle_follower.js`, `node_update_score.js`,
-  and `docs/LEITHER_DATA_AND_SYNC_CONTRACT.md`.
+  and [LEITHER_DATA_AND_SYNC_CONTRACT.md](https://github.com/cfa532/Leither/blob/main/cfa532-docs/integrations/tweet/DATA_AND_SYNC_CONTRACT.md).
 - Android repository: `/Users/cfa532/Documents/GitHub/Tweet`.
 - Android files under `app/src/main/java/us/fireshare/tweet/`:
   `HproseInstance.kt`, `network/HproseClientPool.kt`,

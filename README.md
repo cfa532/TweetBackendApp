@@ -65,7 +65,7 @@ removing the fixture's versions then made `last` unavailable as expected.
 These CLI probes used node authority. The MApp author's session cannot remove
 staging files: on gen8 V0.24.24 every `FilesRm` it makes returns
 `5006:Insufficient permissions Run as administrator`, so edits of existing File
-objects fail and staging trees are left behind (`LEITHER_ISSUES.md` P19). Local regression tests cover File
+objects fail and staging trees are left behind ([LEITHER_ISSUES.md](https://github.com/cfa532/Leither/blob/main/cfa532-docs/reference/RUNTIME_ISSUES.md) P19). Local regression tests cover File
 commit/update/removal failures and unpublish-before-delete ordering.
 
 Username lookup checks both legacy and File identities; discovery failures and
@@ -446,7 +446,7 @@ the current shapes. Each is commented at its site.
 
 ## Invariants worth knowing
 
-From `docs/LEITHER_DATA_AND_SYNC_CONTRACT.md`, which this port follows:
+From [LEITHER_DATA_AND_SYNC_CONTRACT.md](https://github.com/cfa532/Leither/blob/main/cfa532-docs/integrations/tweet/DATA_AND_SYNC_CONTRACT.md), which this port follows:
 
 - A user object is authoritative on `user.hostIds[0]`. Every write to a user, or
   to anything they own, belongs on that node — writing to a local replica

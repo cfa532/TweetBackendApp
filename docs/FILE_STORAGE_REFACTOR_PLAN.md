@@ -104,7 +104,7 @@ Per the user's instruction, this phase adds no locks, expected-version concurren
 
 ### References and synchronization
 
-Preserve the [canonical contract](/Users/cfa532/Documents/GitHub/TweetBackendApp/docs/LEITHER_DATA_AND_SYNC_CONTRACT.md): user references own tweets; parent tweet/comment references direct comments/replies; comment storage uses the parent's storage ownership rule. Maintain `MMAddRef`/`MMDelRef` in addition to JSON list entries. Preserve media retention and explicit pull-to-refresh recovery.
+Preserve the [canonical contract](https://github.com/cfa532/Leither/blob/main/cfa532-docs/integrations/tweet/DATA_AND_SYNC_CONTRACT.md): user references own tweets; parent tweet/comment references direct comments/replies; comment storage uses the parent's storage ownership rule. Maintain `MMAddRef`/`MMDelRef` in addition to JSON list entries. Preserve media retention and explicit pull-to-refresh recovery.
 
 LifeAlbum's private drive policy cannot be copied: Tweet still needs publication, providers and cross-node synchronization. The interaction between native references and `MFSetCid` is a **release gate**, not an assumed atomic guarantee. Verify that a new snapshot exposes the intended references and carries exactly one child layer when synchronized. If the runtime cannot safely commit those together, obtain a supported Leither commit mechanism before shipping this layout; do not hide the missing guarantee with a read-time repair.
 

@@ -2,7 +2,7 @@
 
 - **Active backend:** Only inspect and modify the Go implementation in the repository root for backend work. The JavaScript backend is deprecated and lives in `legacy-js/`; do not inspect it, use it as a reference, or update it unless the user explicitly requests JavaScript work.
 
-- **Canonical sync contract:** Before changing object creation, references, node routing, synchronization, profiles, tweets, comments, replies, or related APIs, read `docs/LEITHER_DATA_AND_SYNC_CONTRACT.md` and preserve its cross-client invariants.
+- **Canonical sync contract:** Before changing object creation, references, node routing, synchronization, profiles, tweets, comments, replies, or related APIs, read `/Users/cfa532/Documents/GitHub/Leither/cfa532-docs/integrations/tweet/DATA_AND_SYNC_CONTRACT.md` and preserve its cross-client invariants.
 
 - Before changing code, consider multiple plausible fixes and choose the one with the smallest coherent scope.
 - Prefer removing or simplifying conflicting logic before adding new state, variables, flags, or branches. Minus first, addition second.
