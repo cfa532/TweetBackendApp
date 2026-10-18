@@ -203,12 +203,9 @@ func (c *ctx) follow(authSid, userID, followingID, hostOfOther, nodeID string) e
 	}
 	c.debugf("relationship persisted actor=%s target=%s tweetCount=%d", userID, followingID, len(pairs))
 
-	// Hold a local copy of the followed account so their profile renders
-	// without a network round trip — but only when another node owns it and
-	// this node is not already serving it. Following someone hosted here needs
-	// no copy, and attempting it blocks the whole request for seconds before
-	// failing.
-	c.syncIfRemote(authSid, followingID, hostOfOther)
+	// Register the followed account when needed; Leither keeps the provider
+	// copy and its direct tweet references synchronized.
+	c.ensureProvided(authSid, followingID)
 
 	if err := c.updateFollowerSide(authSid, followingID, userID, hostOfOther, true); err != nil {
 		c.errorf("toggle_follower failed: %v, %s", err, c.requestJSON())

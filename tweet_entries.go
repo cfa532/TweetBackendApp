@@ -119,26 +119,13 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 		return respErr(err), nil
 	}
 
-	// A retweet points at the quoted tweet. Pulling that tweet here is
-	// best-effort: it may have been deleted, or live on an unreachable node, and
-	// the retweet is still valid without it.
-	//
-	// The quoted tweet is often on this very node — quoting someone whose posts
-	// you are already reading is the common case — and syncing it then is what
-	// the JavaScript version described as "if original tweet is on the same
-	// node, MimeiSync will throw an error". Resolving the original author's host
-	// first costs one local read and avoids seconds of blocked request.
+	// A retweet points at the quoted tweet. Registering its provider role is
+	// best-effort; Leither synchronizes the quoted tweet after registration.
 	if originalID := tweet.originalTweetID(); originalID != "" {
 		if err := c.addRef(authSid, authorID, originalID); err != nil {
 			c.errorf("Error sync original tweet: %v, tweet=%s", err, jsonStringify(map[string]any(tweet)))
 		} else {
-			originalHost := ""
-			if origAuthor := tweet.originalAuthorID(); origAuthor != "" {
-				if u, err := c.loadUser(origAuthor); err == nil {
-					originalHost = u.hostID()
-				}
-			}
-			c.syncIfRemote(authSid, originalID, originalHost)
+			c.ensureProvided(authSid, originalID)
 		}
 	}
 

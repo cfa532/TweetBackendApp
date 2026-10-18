@@ -18,10 +18,9 @@ import (
 
 // entryMimeiProvide starts or stops serving an object from this node.
 //
-// Providing pulls a current copy first, so the node does not advertise content
-// it cannot serve — unless the node already serves it, which makes the whole
-// request a no-op. Withdrawing also drops the stored versions, since nothing on
-// this node refers to them any more.
+// Providing checks the existing role before registering it; Leither handles
+// synchronization. Withdrawing also drops the stored versions, since nothing
+// on this node refers to them any more.
 func entryMimeiProvide(c *ctx) (any, error) {
 	targetID := c.str(reqMID)
 	provide := c.str("provide") == "true"
@@ -32,18 +31,7 @@ func entryMimeiProvide(c *ctx) (any, error) {
 	}
 
 	if provide {
-		if c.alreadyProviding(authSid, targetID) {
-			c.debugf("already providing targetId=%s", targetID)
-			return c.wrap(map[string]any{"success": true}), nil
-		}
-		if err := c.mimeiSync(authSid, targetID, nil); err != nil {
-			return c.wrapErr(err), nil
-		}
-		if err := c.mimeiProvide(authSid, targetID); err != nil {
-			c.errorf("Failed to provide %s: %v", targetID, err)
-		} else {
-			c.debugf("provide targetId=%s", targetID)
-		}
+		c.ensureProvided(authSid, targetID)
 	} else {
 		if err := c.mimeiUnprovide(authSid, targetID); err != nil {
 			c.errorf("Failed to unprovide %s: %v", targetID, err)

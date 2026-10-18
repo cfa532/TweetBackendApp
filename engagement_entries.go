@@ -109,17 +109,13 @@ func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 
 	// The user's own list is updated from the state the tweet ended up in, not
 	// from what was requested, so a no-op toggle stays a no-op on both sides.
-	//
-	// skipcontentsync is set when the user lives on this node: the tweet is
-	// already here, so pulling it again would be wasted work.
 	byUserParams := map[string]string{
-		reqAppID:          c.appID(),
-		reqAppVer:         verLast,
-		reqSid:            authSid,
-		"userid":          userID,
-		"tweetid":         tweetID,
-		kind.stateParam:   boolParam(engagementFlag(updatedTweet, kind.favoritesIndex)),
-		"skipcontentsync": boolParam(userHostID == c.nodeID()),
+		reqAppID:        c.appID(),
+		reqAppVer:       verLast,
+		reqSid:          authSid,
+		"userid":        userID,
+		"tweetid":       tweetID,
+		kind.stateParam: boolParam(engagementFlag(updatedTweet, kind.favoritesIndex)),
 	}
 	// The user's list lives on their own node. Addressing that node directly
 	// matters when this node holds no copy of the user: the entry would then be
@@ -222,17 +218,16 @@ func engagementFlag(tweet any, index int) bool {
 
 // toggleEngagementByUser records or clears a tweet in the user's own list.
 //
-// Bookmarking also pulls the tweet onto the user's node and announces it, so a
-// saved tweet stays readable even if its author's node goes away. Removing does
+// Saving also registers the user's node as a provider; Leither synchronizes
+// the tweet so it stays readable if its author's node goes away. Removing does
 // not reverse that: the copy may be the only one left, and other users' saves
 // may depend on it.
 func (c *ctx) toggleEngagementByUser(kind engagementKind) (any, error) {
 	userID := c.str("userid")
 	tweetID := c.str("tweetid")
 	wanted := c.boolParam(kind.stateParam)
-	skipContentSync := c.boolParam("skipcontentsync")
 
-	result, err := c.applyEngagementToUser(kind, userID, tweetID, wanted, skipContentSync)
+	result, err := c.applyEngagementToUser(kind, userID, tweetID, wanted)
 	if err != nil {
 		c.failf(err)
 		return respErr(err), nil
@@ -243,7 +238,7 @@ func (c *ctx) toggleEngagementByUser(kind engagementKind) (any, error) {
 	return result, nil
 }
 
-func (c *ctx) applyEngagementToUser(kind engagementKind, userID, tweetID string, wanted, skipContentSync bool) (any, error) {
+func (c *ctx) applyEngagementToUser(kind engagementKind, userID, tweetID string, wanted bool) (any, error) {
 	authSid, err := c.authSid()
 	if err != nil {
 		return nil, err
@@ -288,10 +283,9 @@ func (c *ctx) applyEngagementToUser(kind engagementKind, userID, tweetID string,
 		}
 	}
 
-	if changed && wanted && !skipContentSync {
-		// Saving a tweet means this node should hold it; ensureProvided skips
-		// the pull when it already does. skipcontentsync is the caller's hint
-		// that the tweet is on this node, which the provider table confirms.
+	if wanted {
+		// Provider status, rather than the list or the author's location,
+		// decides whether this node needs to register the saved tweet.
 		c.ensureProvided(authSid, tweetID)
 	}
 	// Un-saving deliberately does not unprovide or delete the local copy: this

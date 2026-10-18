@@ -259,8 +259,8 @@ func (c *ctx) mimeiIsProvider(sid, mid string) (bool, error) {
 // A site that has no copy at all (recoverUser) needs no gate:
 // this node cannot be providing what it does not hold.
 
-// alreadyProviding reports whether this node already serves mid and so needs no
-// copy pulled. A check that cannot be answered reports false, which leaves the
+// alreadyProviding reports whether this node already serves mid and needs no
+// provider registration. A check that cannot be answered reports false, leaving the
 // caller doing the work it would have done anyway.
 func (c *ctx) alreadyProviding(sid, mid string) bool {
 	provided, err := c.mimeiIsProvider(sid, mid)
@@ -271,35 +271,14 @@ func (c *ctx) alreadyProviding(sid, mid string) bool {
 	return provided
 }
 
-// syncIfRemote takes a copy of an object only when another node owns it.
-//
-// Synchronising a mimei this node already hosts cannot work — there is nowhere
-// to pull from. The JavaScript entries made the call regardless and swallowed
-// the error ("If original tweet is on the same node, MimeiSync will throw an
-// error"); skipping it saves that round trip.
-//
-// ownerHost is the node that owns mid. An unknown owner is treated as remote,
-// since attempting the sync is the recoverable choice.
-func (c *ctx) syncIfRemote(sid, mid, ownerHost string) {
-	if ownerHost != "" && ownerHost == c.nodeID() {
-		c.debugf("skipping sync of %s: this node already hosts it", mid)
-		return
-	}
-	c.ensureProvided(sid, mid)
-}
-
 // ensureProvided makes this node one of mid's providers, logging failures.
 //
-// Nothing is pulled when the node already provides the object, because
-// replication keeps a provided copy current. Callers that need the newest data
-// now — the recovery entries above — must call mimeiSync directly instead.
+// Leither synchronizes the data after provider registration; this is not an
+// immediate freshness barrier. Callers that need the newest data now — the
+// recovery entries above — must call mimeiSync directly instead.
 func (c *ctx) ensureProvided(sid, mid string) {
 	if c.alreadyProviding(sid, mid) {
-		c.debugf("skipping sync of %s: this node already provides it", mid)
-		return
-	}
-	if err := c.mimeiSync(sid, mid, nil); err != nil {
-		c.warnf("sync %s failed: %v", mid, err)
+		c.debugf("already providing %s", mid)
 		return
 	}
 	if err := c.mimeiProvide(sid, mid); err != nil {
