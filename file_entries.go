@@ -441,7 +441,7 @@ const (
 	// upgradeMission is how insistent the prompt is: minor, major or critical.
 	upgradeMission = "minor"
 	// upgradeDomain is the base host used for deep links and sharing.
-	upgradeDomain = "t1.ww33.world"
+	upgradeDomain = "t1.www33.shop"
 )
 
 // entryCheckUpgrade tells a client whether a newer build exists and where to
