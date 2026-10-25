@@ -186,6 +186,9 @@ This document describes all endpoints available in the TweetBackendApp server, i
 - `aid` (string): App ID
 - `appuserid` (string): Current app user ID
 - `tweetid` (string): Tweet ID to retrieve
+- `fromdetailview` (string, optional): `"true"` for a detail-view read. A non-root node then becomes a provider of the tweet, and pulls the tweet from its root first if it holds no data for it yet
+- `authorhostid` (string, optional): the author's root host ID, so the node need not look up the author's account
+- `authorid` (string, optional): author of the tweet, used instead of `authorhostid` to find the root host (the server sets it for the quoted tweet of a v3 reply)
 
 **Output Schema:**
 ```json

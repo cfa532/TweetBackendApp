@@ -190,18 +190,25 @@ func (c *ctx) authorizePost(tweet tweetObj, user userObj, agentAuth map[string]a
 // timelines fast. refresh_tweet is the explicit recovery path for stale data.
 //
 // A detail-view read also lets a non-root access node announce itself as a
-// provider; see fromdetailview below.
+// provider, and pulls the tweet first when the node does not hold it yet; see
+// fromdetailview below.
 func entryGetTweet(c *ctx) (any, error) {
 	tweetID := c.str("tweetid")
 	appUserID := c.str("appuserid")
 
-	mmsid, err := c.openMimei("", tweetID, verLast)
-	if err != nil {
-		return c.wrapErr(err), nil
+	mmsid, stored, err := c.readTweetContent(tweetID)
+
+	// A detail view opened on an access node that has no data for the tweet yet:
+	// the node provides the author but Leither has not replicated this tweet to it.
+	// Pull the tweet now and become its provider, then read it again. Only the
+	// detail view does this; a routine read keeps answering from the local copy.
+	if (err != nil || stored == nil) && c.str("fromdetailview") == "true" {
+		if c.pullTweetForDetailView(tweetID) {
+			c.closeMimei(mmsid)
+			mmsid, stored, err = c.readTweetContent(tweetID)
+		}
 	}
 	defer func() { c.closeMimei(mmsid) }()
-
-	stored, err := c.getObject(mmsid, tweetContentKey)
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
@@ -292,6 +299,9 @@ func entryGetTweet(c *ctx) (any, error) {
 		// changing it would change what v3 clients parse.
 		result := []any{ret}
 		if originalID := tweet.originalTweetID(); originalID != "" {
+			// The quoted tweet belongs to another user, so the caller's
+			// authorhostid does not apply. authorid lets the call find that
+			// user's root host if it has to pull the quoted tweet.
 			original, err := c.callEntry("get_tweet", map[string]string{
 				reqAppID:         c.appID(),
 				reqAppVer:        verLast,
@@ -299,6 +309,7 @@ func entryGetTweet(c *ctx) (any, error) {
 				"appuserid":      appUserID,
 				reqVersion:       c.version(),
 				"fromdetailview": c.str("fromdetailview"),
+				"authorid":       tweet.originalAuthorID(),
 			})
 			if err == nil && original != nil {
 				result = append(result, original)
@@ -309,6 +320,86 @@ func entryGetTweet(c *ctx) (any, error) {
 	return c.wrapNotNull(ret, "Tweet not found"), nil
 }
 
+// readTweetContent opens a tweet and reads its content. The handle is returned
+// open when the read succeeds, including when the node holds no content (nil
+// stored); on error it is already closed and the returned handle is empty.
+func (c *ctx) readTweetContent(tweetID string) (string, map[string]any, error) {
+	mmsid, err := c.openMimei("", tweetID, verLast)
+	if err != nil {
+		return "", nil, err
+	}
+	stored, err := c.getObject(mmsid, tweetContentKey)
+	if err != nil {
+		c.closeMimei(mmsid)
+		return "", nil, err
+	}
+	return mmsid, stored, nil
+}
+
+// pullTweetForDetailView fetches a tweet this node does not hold yet, for a
+// detail view served by an access node. It reports whether the pull ran, so the
+// caller knows a second read is worthwhile.
+//
+// It does nothing when the node is the author's root host: the root is where the
+// tweet is written, so a tweet missing there does not exist and a sync would
+// have nowhere to pull from. The author's root host comes from the client's
+// authorhostid (or, for a quoted tweet, from its author's account via authorid)
+// because the tweet, which would name its author, is not here to read.
+//
+// This forces mimeiSync on a read, which the contract otherwise reserves for
+// explicit recovery (refresh_tweet). It is allowed here because the alternative
+// is a "not found" for a tweet Leither has simply not delivered yet, and it runs
+// only on a miss, never on a read the node can already serve.
+func (c *ctx) pullTweetForDetailView(tweetID string) bool {
+	writeHostID, err := c.authorRootHostID(c.str("authorid"))
+	if err != nil {
+		c.errorf("fromdetailview pull failed for %s: %v", tweetID, err)
+		return false
+	}
+	nodeID := c.nodeID()
+	if writeHostID == "" || nodeID == "" || writeHostID == nodeID {
+		return false
+	}
+
+	authSid, err := c.authSid()
+	if err != nil {
+		c.errorf("fromdetailview pull failed for %s: %v", tweetID, err)
+		return false
+	}
+	c.debugf("fromdetailview pulling absent tweetId=%s on nodeId=%s from writeHostId=%s",
+		tweetID, nodeID, writeHostID)
+	if err := c.mimeiSync(authSid, tweetID, nil); err != nil {
+		c.errorf("fromdetailview sync failed for %s: %v", tweetID, err)
+		return false
+	}
+	c.ensureProvided(authSid, tweetID)
+	return true
+}
+
+// authorRootHostID returns the root host of the author a detail read concerns.
+//
+// The caller usually knows it already and sends it as authorhostid; looking it up
+// instead reads the author's account, which this node is not guaranteed to hold.
+// Without authorhostid the account is read, and with no authorID either the host
+// is unknown and "" is returned.
+func (c *ctx) authorRootHostID(authorID string) (string, error) {
+	if hostID := c.str("authorhostid"); hostID != "" {
+		return hostID, nil
+	}
+	if authorID == "" {
+		return "", nil
+	}
+	author, err := c.callEntryMap("get_user_core_data", map[string]string{
+		reqAppID:  c.appID(),
+		reqAppVer: verLast,
+		"userid":  authorID,
+	})
+	if err != nil {
+		return "", err
+	}
+	return userObj(author).hostID(), nil
+}
+
 // provideForDetailView makes this node a provider when it is neither the author's
 // root host nor already serving the tweet. MiMeiProvide performs Leither's
 // synchronization internally, so this path must not call MiMeiSync itself.
@@ -317,21 +408,10 @@ func entryGetTweet(c *ctx) (any, error) {
 // Every failure here is contained: a detail view that shows a slightly stale
 // tweet is better than one that shows an error.
 func (c *ctx) provideForDetailView(tweetID string, tweet tweetObj, mmsid string) (tweetObj, string) {
-	// The caller usually knows the author's node already. Looking it up here
-	// would read the author's account, which this node is not guaranteed to
-	// hold.
-	writeHostID := c.str("authorhostid")
-	if writeHostID == "" {
-		author, err := c.callEntryMap("get_user_core_data", map[string]string{
-			reqAppID:  c.appID(),
-			reqAppVer: verLast,
-			"userid":  tweet.authorID(),
-		})
-		if err != nil {
-			c.errorf("fromdetailview provider setup failed for %s: %v", tweetID, err)
-			return nil, ""
-		}
-		writeHostID = userObj(author).hostID()
+	writeHostID, err := c.authorRootHostID(tweet.authorID())
+	if err != nil {
+		c.errorf("fromdetailview provider setup failed for %s: %v", tweetID, err)
+		return nil, ""
 	}
 	nodeID := c.nodeID()
 	if writeHostID == "" || writeHostID == nodeID {
