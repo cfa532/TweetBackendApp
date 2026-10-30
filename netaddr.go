@@ -147,11 +147,12 @@ func isPrivateIPv6(ip string) bool {
 // usableAddress reports whether an announced address is worth handing to a
 // client: public, and IPv4 when the caller can only use IPv4.
 func usableAddress(addr string, v4Only bool) bool {
-	host, _ := splitHostPort(addr)
-	if isPrivateIP(host) {
+	// Classify the complete address: splitting first mistakes a bare IPv6
+	// address's final numeric group for a port (for example, ::1 becomes :).
+	if isPrivateIP(addr) {
 		return false
 	}
-	if v4Only && isIPv6(host) {
+	if v4Only && isIPv6(addr) {
 		return false
 	}
 	return true
