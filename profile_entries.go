@@ -24,11 +24,10 @@ const savedItemSyncGraceMillis = int64(5 * 60 * 1000)
 // stored value, so a client that knows about fewer fields than the node cannot
 // erase the rest.
 //
-// Moving an account between nodes runs through here as well. A changed primary
-// host only warms the target node up; the profile itself is written on whichever
-// node the client called. That is what lets an account move off a node that has
-// since disappeared — the request lands on a surviving copy and is saved there
-// rather than being refused.
+// Ordinary edits belong to the root. An explicit migration may start on a
+// surviving copy when the old root is gone. Publish the changed ownership before
+// the client pulls it onto the destination with a separately timed sync_user.
+// This entry acknowledges the committed source, not migration completion.
 func entrySetAuthorCoreData(c *ctx) (any, error) {
 	raw, err := c.obj("user")
 	if err != nil {
@@ -57,23 +56,21 @@ func entrySetAuthorCoreData(c *ctx) (any, error) {
 
 	nodeID := c.nodeID()
 
-	// A changed primary host means the account is being moved. Warm the target
-	// node up first; if the old primary is already gone this is best-effort only.
 	requestedHost := user.hostID()
 	primaryHostChanged := requestedHost != "" && len(userInDB.hostIDs()) > 0 && requestedHost != userInDB.hostID()
-	if primaryHostChanged {
-		syncRet, err := c.callRemote(requestedHost, "sync_user", map[string]string{
-			reqAppID:   c.appID(),
-			reqAppVer:  verLast,
-			reqSid:     authSid,
-			reqVersion: c.version(),
-			reqMID:     user.mid(),
-		})
-		if err != nil {
-			c.errorf("best-effort sync_user threw for new host %s: %v, userId=%s", requestedHost, err, user.mid())
-		} else if m, ok := toMap(syncRet); ok && has(m, "success") && !mapBool(m, "success") {
-			c.errorf("best-effort sync_user failed for new host %s: %s, userId=%s",
-				requestedHost, mapStr(m, "message"), user.mid())
+	// migrate also identifies a retry after the source committed the new host
+	// but destination synchronisation failed. The root ID may already match.
+	migrating := c.str("migrate") == "true"
+	if migrating {
+		if requestedHost == "" {
+			return c.wrapErrUpdate(fmt.Errorf("Migration requires a destination host")), nil
+		}
+	} else {
+		if err := c.requireRootNodeFor(userInDB, user.mid()); err != nil {
+			return c.wrapErrUpdate(err), nil
+		}
+		if primaryHostChanged {
+			return c.wrapErrUpdate(fmt.Errorf("Changing the root host requires an explicit migration")), nil
 		}
 	}
 
@@ -102,11 +99,15 @@ func entrySetAuthorCoreData(c *ctx) (any, error) {
 	if err := c.mimeiProvide(authSid, userInDB.mid()); err != nil {
 		c.warnf("provide %s failed: %v", userInDB.mid(), err)
 	}
+	if err := c.mimeiPublish(authSid, userInDB.mid()); err != nil {
+		return c.wrapErrUpdate(err), nil
+	}
 
 	userInDB.stripPassword()
 	return c.wrapStatus(map[string]any{
-		"user":   jsonStringify(map[string]any(userInDB)),
-		"status": "success",
+		"user":           jsonStringify(map[string]any(userInDB)),
+		"status":         "success",
+		"migrationSaved": migrating,
 	}), nil
 }
 

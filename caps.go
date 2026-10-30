@@ -115,7 +115,6 @@ func isCapUnsupported(err error) bool {
 //	toggle_following  -> toggle_follower on the followed user's node
 //	toggle_bookmark   -> toggle_bookmark_by_user on the acting user's node
 //	toggle_favorite   -> toggle_favorite_by_user on the acting user's node
-//	set_author_core_data -> sync_user, warming the node an account is moving to
 //	toggle_following  -> get_tweet_id_list, reading the followed user's tweets
 //	add_comment       -> add_tweet, creating a quote-comment's retweet half on
 //	                     the node of the writer who owns it

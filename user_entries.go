@@ -491,12 +491,34 @@ func entryGetUser(c *ctx) (any, error) {
 // entrySyncUser pulls an account's current data from its root node onto this
 // one. It is the low-level half of resync_user.
 func entrySyncUser(c *ctx) (any, error) {
+	migrating := c.str("migrate") == "true"
+	destination := c.str("hostid")
+	if migrating && (destination == "" || destination != c.nodeID()) {
+		return c.wrapErr(fmt.Errorf("Migration sync must target the resolved destination node")), nil
+	}
 	authSid, err := c.authSid()
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
-	if err := c.mimeiSync(authSid, c.str(reqMID), nil); err != nil {
+	userID := c.str(reqMID)
+	if err := c.mimeiSync(authSid, userID, nil); err != nil {
 		return c.wrapErr(err), nil
+	}
+	if migrating {
+		// Keep sync and its local verification in one directly timed RPC. A
+		// nested cross-node RunMApp call has no published timeout control.
+		data, err := c.callEntryMap("get_user_core_data", map[string]string{
+			reqAppID: c.appID(), reqAppVer: verLast, reqVersion: "v3", "userid": userID,
+		})
+		if err != nil {
+			return c.wrapErr(err), nil
+		}
+		owner := userObj(data)
+		hosts := owner.hostIDs()
+		if owner.mid() != userID || len(hosts) < 2 || hosts[0] != destination || hosts[1] != destination {
+			return c.wrapErr(fmt.Errorf("Destination has not adopted the account's new root")), nil
+		}
+		return c.wrap(map[string]any{"success": true, "migrationComplete": true, "user": data}), nil
 	}
 	return c.wrap(map[string]any{"success": true}), nil
 }
