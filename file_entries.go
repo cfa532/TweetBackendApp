@@ -352,8 +352,8 @@ func entryGetSharedFile(c *ctx) (any, error) {
 
 // entryGetSharedFileIP returns the address to download a shared file from.
 //
-// Private IPv4 remains available for files served across the same LAN.
-// Private IPv6 is excluded, matching node and provider address discovery.
+// Apply the same per-node preference as node/provider discovery: public IPs,
+// or up to two ranked alternatives for each node without a public address.
 func entryGetSharedFileIP(c *ctx) (any, error) {
 	providers, err := c.providerAddresses(c.str(reqMID))
 	if err != nil {
@@ -366,10 +366,7 @@ func entryGetSharedFileIP(c *ctx) (any, error) {
 	best := ""
 	var bestScore int64
 	found := false
-	for _, p := range providers {
-		if isIPv6(p.addr) && isPrivateIP(p.addr) {
-			continue
-		}
+	for _, p := range preferredProviderAddresses(providers, false) {
 		if !found || p.score < bestScore {
 			best, bestScore, found = p.addr, p.score, true
 		}

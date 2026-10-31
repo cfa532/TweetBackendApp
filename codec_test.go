@@ -134,6 +134,33 @@ func TestAddressFiltering(t *testing.T) {
 		{"[fe80::1]:8002", false, false},
 		{"[::1]:8002", false, false},
 		{"115.205.180.247:8002", true, true},
+		{"1.1.1.1:8080", false, true},
+		{"[2606:4700:4700::1111]:8080", false, true},
+		{"[2001::1234]:8080", false, true},
+		{"[2001::ffff:ffff:ffff:fff4]:8080", false, true},
+		{"localhost:8080", false, false},
+		{"node.example.com:8080", false, false},
+		{"999.1.1.1:8080", false, false},
+		{"0.0.0.0:8080", false, false},
+		{"100.64.0.1:8080", false, false},
+		{"100.127.255.254:8080", false, false},
+		{"198.18.0.1:8080", false, false},
+		{"198.19.255.254:8080", false, false},
+		{"192.0.2.1:8080", false, false},
+		{"198.51.100.1:8080", false, false},
+		{"203.0.113.1:8080", false, false},
+		{"224.0.0.1:8080", false, false},
+		{"255.255.255.255:8080", false, false},
+		{"[::]:8080", false, false},
+		{"[ff02::1]:8080", false, false},
+		{"[::ffff:192.168.1.1]:8080", false, false},
+		{"[::ffff:c0a8:101]:8080", false, false},
+		{"[2001:db8::1]:8080", false, false},
+		{"[3fff::1]:8080", false, false},
+		{"[2001:2::1]:8080", false, false},
+		{"[2001::ffff:ffff:ffff:fff0]:8080", false, false},
+		{"[2001:0000:0000:0000:ffff:ffff:ffff:fff3]:8080", false, false},
+		{"[2001:::1]:8080", false, false},
 	}
 	for _, tc := range cases {
 		if got := usableAddress(tc.addr, tc.v4Only); got != tc.usable {
@@ -261,5 +288,56 @@ func TestRedactParam(t *testing.T) {
 	}
 	if got := redactParam("password", ""); got != "" {
 		t.Fatalf("empty value should stay empty: %q", got)
+	}
+}
+
+func TestPreferredNodeIPs(t *testing.T) {
+	cases := []struct {
+		name      string
+		addresses []string
+		v4Only    bool
+		want      []string
+	}{
+		{"public wins", []string{"192.168.1.1:80", "1.1.1.1:80", "100.64.1.1:80"}, false, []string{"1.1.1.1:80"}},
+		{"two private routes", []string{"192.168.1.1:80", "100.64.1.1:80", "[fd00::1]:80"}, false, []string{"192.168.1.1:80", "100.64.1.1:80"}},
+		{"IPv6 private routes", []string{"[fd00::1]:80", "[2001::ffff:ffff:ffff:fff1]:80"}, false, []string{"[fd00::1]:80", "[2001::ffff:ffff:ffff:fff1]:80"}},
+		{"public IPv6 wins", []string{"192.168.1.1:80", "[2606:4700:4700::1111]:80"}, false, []string{"[2606:4700:4700::1111]:80"}},
+		{"IPv4-only fallback", []string{"192.168.1.1:80", "[2606:4700:4700::1111]:80"}, true, []string{"192.168.1.1:80"}},
+		{"invalid is not fallback", []string{"node.example.com:80", "999.1.1.1:80", "192.168.1.1:80"}, false, []string{"192.168.1.1:80"}},
+		{"IPv4-only empty", []string{"[fd00::1]:80"}, true, nil},
+		{"empty", nil, false, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := preferredNodeIPs(tc.addresses, tc.v4Only)
+			if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPreferredProviderAddressesKeepsNodeGroups(t *testing.T) {
+	providers := []providerAddr{
+		{addr: "192.168.1.1:80", score: 30, node: 0},
+		{addr: "100.64.1.1:80", score: 10, node: 0},
+		{addr: "[fd00::1]:80", score: 20, node: 0},
+		{addr: "10.1.1.1:80", score: 1, node: 1},
+		{addr: "1.1.1.1:80", score: 40, node: 1},
+		{addr: "198.18.0.1:80", score: 5, node: 2},
+		{addr: "26.26.26.1:80", score: 6, node: 2},
+	}
+	got := preferredProviderAddresses(providers, false)
+	want := []string{"100.64.1.1:80", "[fd00::1]:80", "1.1.1.1:80", "198.18.0.1:80", "26.26.26.1:80"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i, p := range got {
+		if p.addr != want[i] {
+			t.Fatalf("route %d: got %s, want %s", i, p.addr, want[i])
+		}
+	}
+	if len(providers) != 7 || providers[0].addr != "192.168.1.1:80" {
+		t.Fatal("selection changed raw announcements used for identity discovery")
 	}
 }

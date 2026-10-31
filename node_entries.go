@@ -49,8 +49,8 @@ func entryMimeiProvide(c *ctx) (any, error) {
 // Node addresses
 // ---------------------------------------------------------------------------
 
-// entryGetNodeIP returns one reachable address for a node, or nothing when the
-// node only announces private addresses.
+// entryGetNodeIP prefers a public address, using a ranked non-public address
+// only when the node has no public route of the requested family.
 func entryGetNodeIP(c *ctx) (any, error) {
 	addresses, err := c.nodeAddresses(c.str("nodeid"))
 	if err != nil {
@@ -61,28 +61,23 @@ func entryGetNodeIP(c *ctx) (any, error) {
 		// empty result, matching what callers expect from an unknown node.
 		return nil, nil
 	}
-	v4Only := c.str("v4only") == "true"
-	for _, addr := range addresses {
-		if usableAddress(addr, v4Only) {
-			return c.wrapNotNull(addr, "No valid node IPs found"), nil
-		}
+	addresses = preferredNodeIPs(addresses, c.str("v4only") == "true")
+	if len(addresses) > 0 {
+		return c.wrapNotNull(addresses[0], "No valid node IPs found"), nil
 	}
 	return c.wrapNotNull(nil, "No valid node IPs found"), nil
 }
 
-// entryGetNodeIPs returns every reachable address for a node, so a client can
-// try them in order.
+// entryGetNodeIPs returns public addresses, or up to two other IPs when the
+// node has no public route of the requested family.
 func entryGetNodeIPs(c *ctx) (any, error) {
 	addresses, err := c.nodeAddresses(c.str("nodeid"))
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
-	v4Only := c.str("v4only") == "true"
 	valid := []any{}
-	for _, addr := range addresses {
-		if usableAddress(addr, v4Only) {
-			valid = append(valid, addr)
-		}
+	for _, addr := range preferredNodeIPs(addresses, c.str("v4only") == "true") {
+		valid = append(valid, addr)
 	}
 	if len(valid) == 0 {
 		return c.wrapNotNull(nil, "No valid node IPs found"), nil
@@ -132,10 +127,7 @@ func entryGetProviderIP(c *ctx) (any, error) {
 	best := ""
 	var bestScore int64
 	found := false
-	for _, p := range providers {
-		if !usableAddress(p.addr, v4Only) {
-			continue
-		}
+	for _, p := range preferredProviderAddresses(providers, v4Only) {
 		if !found || p.score < bestScore {
 			best, bestScore, found = p.addr, p.score, true
 		}
@@ -161,12 +153,7 @@ func entryGetProviderIPs(c *ctx) (any, error) {
 	}
 
 	v4Only := c.str("v4only") == "true"
-	valid := make([]providerAddr, 0, len(providers))
-	for _, p := range providers {
-		if usableAddress(p.addr, v4Only) {
-			valid = append(valid, p)
-		}
-	}
+	valid := preferredProviderAddresses(providers, v4Only)
 	sort.SliceStable(valid, func(i, j int) bool { return valid[i].score < valid[j].score })
 
 	out := make([]any, 0, len(valid))
@@ -181,6 +168,61 @@ func entryGetProviderIPs(c *ctx) (any, error) {
 type providerAddr struct {
 	addr  string
 	score int64
+	node  int // Announcement group; retain identity until route selection.
+}
+
+// preferredNodeAddresses implements one policy for node, provider and file
+// discovery: keep all public IPs, or the two lowest-score IPs if none are public.
+// An IPv4-only caller makes that choice among IPv4 routes only.
+func preferredNodeAddresses(addresses []providerAddr, v4Only bool) []providerAddr {
+	public := []providerAddr{}
+	fallback := []providerAddr{}
+	for _, p := range addresses {
+		if !validIPAddress(p.addr, v4Only) {
+			continue
+		}
+		if usableAddress(p.addr, v4Only) {
+			public = append(public, p)
+		} else {
+			fallback = append(fallback, p)
+		}
+	}
+	if len(public) > 0 {
+		return public
+	}
+	sort.SliceStable(fallback, func(i, j int) bool { return fallback[i].score < fallback[j].score })
+	if len(fallback) > 2 {
+		fallback = fallback[:2]
+	}
+	return fallback
+}
+
+func preferredNodeIPs(addresses []string, v4Only bool) []string {
+	ranked := make([]providerAddr, 0, len(addresses))
+	for i, addr := range addresses {
+		ranked = append(ranked, providerAddr{addr: addr, score: int64(i)})
+	}
+	out := []string{}
+	for _, p := range preferredNodeAddresses(ranked, v4Only) {
+		out = append(out, p.addr)
+	}
+	return out
+}
+
+// Raw provider announcements are contiguous by node. Select routes per group
+// before flattening so one public node cannot suppress a private-only node.
+// Keep the raw parser separate: identityExists needs every announcement.
+func preferredProviderAddresses(providers []providerAddr, v4Only bool) []providerAddr {
+	out := []providerAddr{}
+	for start := 0; start < len(providers); {
+		end := start + 1
+		for end < len(providers) && providers[end].node == providers[start].node {
+			end++
+		}
+		out = append(out, preferredNodeAddresses(providers[start:end], v4Only)...)
+		start = end
+	}
+	return out
 }
 
 // providerAddresses reads the providers announced for an object.
@@ -216,7 +258,7 @@ func (c *ctx) providerAddresses(mid string) ([]providerAddr, error) {
 	}
 
 	out := []providerAddr{}
-	for _, group := range groups {
+	for node, group := range groups {
 		entries, ok := toSlice(group)
 		if !ok {
 			return nil, fmt.Errorf("invalid provider group for %s", mid)
@@ -231,7 +273,7 @@ func (c *ctx) providerAddresses(mid string) ([]providerAddr, error) {
 				return nil, fmt.Errorf("empty provider address for %s", mid)
 			}
 			score, _ := toInt64(pair[1])
-			out = append(out, providerAddr{addr: addr, score: score})
+			out = append(out, providerAddr{addr: addr, score: score, node: node})
 		}
 	}
 	return out, nil

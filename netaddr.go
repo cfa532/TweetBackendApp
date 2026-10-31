@@ -85,43 +85,109 @@ func isPrivateIP(addr string) bool {
 	return isPrivateIPv4(host)
 }
 
-// isPrivateIPv4 covers the RFC 1918 ranges plus loopback, link-local and
-// Tailscale's shared address space.
-func isPrivateIPv4(ip string) bool {
+// ipv4Octets accepts only IPv4 literals, never hostnames or malformed values.
+func ipv4Octets(ip string) ([]int, bool) {
 	parts := strings.Split(ip, ".")
 	if len(parts) != 4 {
-		return false
+		return nil, false
 	}
-	first, err1 := strconv.Atoi(parts[0])
-	second, err2 := strconv.Atoi(parts[1])
-	if err1 != nil || err2 != nil {
-		return false
-	}
-	switch {
-	case first == 10: // 10.0.0.0/8
-		return true
-	case first == 100 && second >= 64 && second <= 127: // Tailscale: 100.64.0.0/10
-		return true
-	case first == 172 && second >= 16 && second <= 31: // 172.16.0.0/12
-		return true
-	case first == 192 && second == 168: // 192.168.0.0/16
-		return true
-	case first == 127: // loopback
-		return true
-	case first == 169 && second == 254: // link-local
-		return true
-	}
-	// 26.26.26.0/24 is blocked as well: it belongs to a VPN range that has
-	// shown up in announcements and is not routable here.
-	if third, err := strconv.Atoi(parts[2]); err == nil {
-		if first == 26 && second == 26 && third == 26 {
-			return true
+	out := make([]int, 4)
+	for i, part := range parts {
+		if !isAllDigits(part) {
+			return nil, false
 		}
+		n, err := strconv.Atoi(part)
+		if err != nil || n < 0 || n > 255 {
+			return nil, false
+		}
+		out[i] = n
 	}
-	return false
+	return out, true
 }
 
-// isPrivateIPv6 covers loopback, unique-local and link-local addresses.
+// isBenchmarkIPv4 recognizes the benchmarking range also used by VPN TUN
+// interfaces. It is not a usable public route, including for shared files.
+func isBenchmarkIPv4(ip string) bool {
+	parts, ok := ipv4Octets(ip)
+	return ok && parts[0] == 198 && (parts[1] == 18 || parts[1] == 19)
+}
+
+// isPrivateIPv4 excludes non-public literals and known VPN subnets. Keep this
+// policy aligned with TweetWeb's publicIPv4BaseUrl.
+func isPrivateIPv4(ip string) bool {
+	parts, ok := ipv4Octets(ip)
+	if !ok {
+		return true
+	}
+	first, second, third := parts[0], parts[1], parts[2]
+	return first == 0 || first == 10 || first == 127 || first >= 224 ||
+		(first == 26 && second == 26 && third == 26) || // Known VPN TUN subnet
+		(first == 100 && second >= 64 && second <= 127) || // CGNAT / Tailscale
+		(first == 169 && second == 254) ||
+		(first == 172 && second >= 16 && second <= 31) ||
+		(first == 192 && second == 168) ||
+		(first == 192 && second == 0 && (third == 0 || third == 2)) ||
+		(first == 192 && second == 88 && third == 99) ||
+		isBenchmarkIPv4(ip) ||
+		(first == 198 && second == 51 && third == 100) ||
+		(first == 203 && second == 0 && third == 113)
+}
+
+// ipv6Words expands a literal without importing packages unavailable in the
+// Leither interpreter. Expansion makes compressed and full subnet spellings
+// receive the same classification.
+func ipv6Words(ip string) ([]int, bool) {
+	if strings.Contains(ip, ".") {
+		last := strings.LastIndex(ip, ":")
+		if last < 0 {
+			return nil, false
+		}
+		v4, ok := ipv4Octets(ip[last+1:])
+		if !ok {
+			return nil, false
+		}
+		ip = ip[:last+1] + strconv.FormatInt(int64(v4[0]*256+v4[1]), 16) + ":" +
+			strconv.FormatInt(int64(v4[2]*256+v4[3]), 16)
+	}
+	halves := strings.Split(ip, "::")
+	if len(halves) > 2 {
+		return nil, false
+	}
+	words := make([]int, 0, 8)
+	for side, half := range halves {
+		if half != "" {
+			for _, part := range strings.Split(half, ":") {
+				if len(part) == 0 || len(part) > 4 || strings.Trim(part, "0123456789abcdefABCDEF") != "" {
+					return nil, false
+				}
+				n, err := strconv.ParseUint(part, 16, 16)
+				if err != nil {
+					return nil, false
+				}
+				words = append(words, int(n))
+			}
+		}
+		if side == 0 && len(halves) == 2 {
+			rightCount := 0
+			if halves[1] != "" {
+				rightCount = len(strings.Split(halves[1], ":"))
+			}
+			zeros := 8 - len(words) - rightCount
+			if zeros < 1 {
+				return nil, false
+			}
+			for i := 0; i < zeros; i++ {
+				words = append(words, 0)
+			}
+		}
+	}
+	return words, len(words) == 8
+}
+
+// isPrivateIPv6 permits native global unicast only, excluding documentation,
+// benchmarking and the known Hysteria TUN subnet. IPv4-mapped literals cannot
+// disguise private IPv4 routes. Other Teredo addresses remain available.
+// Keep this policy aligned with TweetWeb's publicIpAddressBaseUrl.
 func isPrivateIPv6(ip string) bool {
 	clean := ip
 	if strings.HasPrefix(clean, "[") {
@@ -129,19 +195,17 @@ func isPrivateIPv6(ip string) bool {
 			clean = clean[1:end]
 		}
 	}
-	clean = strings.ToLower(clean)
-	switch {
-	case clean == "::1": // loopback
-		return true
-	case strings.HasPrefix(clean, "fc"), strings.HasPrefix(clean, "fd"): // fc00::/7
-		return true
-	case strings.HasPrefix(clean, "fe8"), strings.HasPrefix(clean, "fe9"),
-		strings.HasPrefix(clean, "fea"), strings.HasPrefix(clean, "feb"): // fe80::/10
-		return true
-	case strings.HasPrefix(clean, "::ffff:127."): // IPv4-mapped loopback
+	words, ok := ipv6Words(clean)
+	if !ok {
 		return true
 	}
-	return false
+	return words[0] < 0x2000 || words[0] > 0x3fff ||
+		(words[0] == 0x2001 && words[1] == 0xdb8) || // Documentation
+		(words[0] == 0x3fff && words[1] < 0x1000) || // Documentation
+		(words[0] == 0x2001 && words[1] == 2 && words[2] == 0) || // Benchmarking
+		(words[0] == 0x2001 && words[1] == 0 && words[2] == 0 && words[3] == 0 &&
+			words[4] == 0xffff && words[5] == 0xffff && words[6] == 0xffff &&
+			words[7] >= 0xfff0 && words[7] <= 0xfff3) // Hysteria TUN /126
 }
 
 // usableAddress reports whether an announced address is worth handing to a
@@ -156,4 +220,23 @@ func usableAddress(addr string, v4Only bool) bool {
 		return false
 	}
 	return true
+}
+
+// validIPAddress admits literal IPs of the requested family for a node's
+// private-only fallback, without admitting malformed values or hostnames.
+func validIPAddress(addr string, v4Only bool) bool {
+	if isIPv6(addr) {
+		if v4Only {
+			return false
+		}
+		host := addr
+		if strings.HasPrefix(addr, "[") {
+			host, _ = splitHostPort(addr)
+		}
+		_, ok := ipv6Words(host)
+		return ok
+	}
+	host, _ := splitHostPort(addr)
+	_, ok := ipv4Octets(host)
+	return ok
 }
