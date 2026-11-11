@@ -16,6 +16,9 @@ func entryPinIpfs(c *ctx) (any, error) {
 	if err := c.requireRootNode(c.str("userid")); err != nil {
 		return c.wrapErr(err), nil
 	}
+	if err := c.requireOwner(c.str("userid")); err != nil {
+		return c.wrapErr(err), nil
+	}
 	authSid, err := c.authSid()
 	if err != nil {
 		return c.wrapErr(err), nil

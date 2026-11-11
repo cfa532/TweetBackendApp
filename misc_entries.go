@@ -4,11 +4,18 @@ package lapp
 // entryHealth reports that the node is serving this application. Clients call
 // it to decide whether a node is reachable before sending real work.
 func entryHealth(c *ctx) (any, error) {
+	// A node whose configuration cannot be read still answers; registration
+	// reports the failure when someone tries it.
+	config, _ := c.loadNodeConfig()
 	return map[string]any{
-		"success":        true,
-		"message":        "Server is running",
-		"storageFormats": []string{"database", fileSchema},
-		"creationFormat": "mixed",
+		"success": true,
+		// userSessions tells a client this node checks "usersid", so it should
+		// sign in to Leither here rather than send a password to be stored.
+		"userSessions":      true,
+		"guestRegistration": config.allowGuests,
+		"message":           "Server is running",
+		"storageFormats":    []string{"database", fileSchema},
+		"creationFormat":    "mixed",
 		"creationFormats": map[string]string{
 			"user": fileSchema, "tweet": fileSchema, "comment": fileSchema,
 			"messages": "database",

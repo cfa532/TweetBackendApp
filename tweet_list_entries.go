@@ -40,6 +40,9 @@ func entryUpdateTweet(c *ctx) (any, error) {
 	if err := c.requireRootNode(appUserID); err != nil {
 		return respErr(err), nil
 	}
+	if err := c.requireOwner(appUserID); err != nil {
+		return respErr(err), nil
+	}
 
 	authSid, err := c.authSid()
 	if err != nil {
@@ -183,6 +186,9 @@ func entryToggleTweetPrivacy(c *ctx) (any, error) {
 
 	// Only the author flips this, and the tweet lives on their root node.
 	if err := c.requireRootNode(appUserID); err != nil {
+		return c.wrapErr(err), nil
+	}
+	if err := c.requireOwner(appUserID); err != nil {
 		return c.wrapErr(err), nil
 	}
 
@@ -495,6 +501,9 @@ func entryTogglePinnedTweet(c *ctx) (any, error) {
 
 	// The pinned list is part of the profile, which lives on its root node.
 	if err := c.requireRootNode(appUserID); err != nil {
+		return c.wrapErrBool(err), nil
+	}
+	if err := c.requireOwner(appUserID); err != nil {
 		return c.wrapErrBool(err), nil
 	}
 

@@ -428,6 +428,9 @@ func entryRemoveBlacklistedRelationship(c *ctx) (any, error) {
 	if owner == nil || owner.hostID() != nodeID {
 		return c.wrapErr(fmt.Errorf("Current node is not the profile owner's authoritative host")), nil
 	}
+	if err := c.requireOwner(ownerID); err != nil {
+		return c.wrapErr(err), nil
+	}
 
 	authSid, err := c.authSid()
 	if err != nil {

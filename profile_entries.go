@@ -54,6 +54,12 @@ func entrySetAuthorCoreData(c *ctx) (any, error) {
 	}
 	userInDB := userObj(stored)
 
+	// Checked before the migration branch: a migration rewrites the account's
+	// root host, so it is the edit that most needs a verified owner.
+	if err := c.requireOwner(user.mid()); err != nil {
+		return c.wrapErrUpdate(err), nil
+	}
+
 	nodeID := c.nodeID()
 
 	requestedHost := user.hostID()
@@ -120,7 +126,9 @@ func applyProfileUpdate(c *ctx, authSid string, user, userInDB userObj) {
 	if hosts := cleanHostIDs(user.hostIDs()); len(hosts) > 0 {
 		userInDB["hostIds"] = strSlice(hosts)
 	}
-	if pw := user.password(); pw != "" {
+	// A bound account's password is Leither's to keep; the client changes it
+	// there (SetUserInfo), and nothing is stored in the account.
+	if pw := user.password(); pw != "" && userInDB.authUID() == "" {
 		hashed, err := c.contentID(authSid, pw)
 		if err != nil {
 			c.errorf("Failed to hash password for %s: %v", userInDB.mid(), err)
@@ -411,6 +419,9 @@ func entryDeleteAccount(c *ctx) (any, error) {
 	// the account, so the deletion would appear to succeed and then undo itself
 	// on the next synchronisation.
 	if err := c.requireRootNodeFor(user, userID); err != nil {
+		return c.wrapErrDelete(err), nil
+	}
+	if err := c.requireOwner(userID); err != nil {
 		return c.wrapErrDelete(err), nil
 	}
 

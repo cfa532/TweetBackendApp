@@ -178,6 +178,9 @@ func entryUploadCompressedHLS(c *ctx) (any, error) {
 // what keeps it from being collected.
 func entryUploadFile(c *ctx) (any, error) {
 	userID := c.str("userid")
+	if err := c.requireOwner(userID); err != nil {
+		return c.wrapErr(err), nil
+	}
 
 	authSid, err := c.authSid()
 	if err != nil {
@@ -258,6 +261,9 @@ func entryShareFile(c *ctx) (any, error) {
 
 	// The share is recorded on the sharing user's own account.
 	if err := c.requireRootNode(userID); err != nil {
+		return c.wrapErr(err), nil
+	}
+	if err := c.requireOwner(userID); err != nil {
 		return c.wrapErr(err), nil
 	}
 

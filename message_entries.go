@@ -75,6 +75,9 @@ func entryMessageOutgoing(c *ctx) (any, error) {
 	if err := c.requireRootNode(senderID); err != nil {
 		return false, nil
 	}
+	if err := c.requireOwner(senderID); err != nil {
+		return c.wrapErrBool(err), nil
+	}
 
 	authSid, err := c.authSid()
 	if err != nil {
@@ -280,6 +283,9 @@ func entryMessageFetch(c *ctx) (any, error) {
 	// must be their root node.
 	if err := c.requireRootNode(userID); err != nil {
 		return c.wrapErrList(fmt.Errorf("User not found or missing host")), nil
+	}
+	if err := c.requireOwner(userID); err != nil {
+		return c.wrapErrList(err), nil
 	}
 
 	authSid, err := c.authSid()

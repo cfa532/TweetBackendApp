@@ -35,6 +35,40 @@ This document describes all endpoints available in the TweetBackendApp server, i
 }
 ```
 
+### User sessions (`usersid`)
+
+A client identifies itself by signing in to the node's own Leither RPC and
+passing the session id it receives as `usersid`. The node resolves it to a
+Leither user id; each account records the id that controls it as `authUid`.
+`health` advertises this with `userSessions: true`, and reports whether guests
+may register as `guestRegistration`.
+
+- **Owner**: `tweet-owner.sh` on the node issues a Leither key and lists its
+  user id in `tweet.node.json`. The app signs in with `LoginWithPPT`, then calls
+  `login` with only `usersid`. The reply carries `owner: true` and the account,
+  which is created on the first call.
+- **Guest**: the app calls Leither `Register(username, password, "")` and
+  `Login(username, password)` on the root node, then `register` with `usersid`
+  (the account stores no password), and later `login` with `usersid` and
+  `username`. Password changes go through Leither `SetUserInfo(sid, {newpass})`.
+- **Account created before sessions**: `login` with `usersid`, `username` and
+  `password` on the root node binds the account to the session's user after
+  checking the stored password, which is left in place for older clients.
+
+Writes to the caller's own data accept `usersid` (`add_tweet`, `update_tweet`,
+`delete_tweet`, `toggle_tweet_privacy`, `toggle_pinned_tweet`,
+`toggle_following`, `block_user`, `remove_blacklisted_relationship`,
+`set_author_core_data`, `set_user_avatar`, `delete_account`,
+`message_outgoing`, `message_fetch`, `share_file`, `pin_ipfs`, `upload_file`).
+When present, the session's user must control the account named by the request,
+otherwise the write is refused. A session this node does not know fails with
+the message `Session invalid`; sign in again and repeat the request. A request
+without `usersid`, or for an account with no `authUid`, is still accepted until
+`ownerSessionRequired` is switched on.
+
+`register` is refused with `This node does not accept new registrations` when
+the node's owners have run `tweet-owner.sh --guests deny`.
+
 ### Register
 **Endpoint:** `register`
 

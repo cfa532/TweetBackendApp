@@ -109,6 +109,9 @@ func entryToggleFollowing(c *ctx) (any, error) {
 		}))
 		return fail(fmt.Errorf("Node %s is not the root node for user %s", nodeID, userID)), nil
 	}
+	if err := c.requireOwner(userID); err != nil {
+		return fail(err), nil
+	}
 
 	authSid, err := c.authSid()
 	if err != nil {
@@ -633,6 +636,9 @@ func entryBlockUser(c *ctx) (any, error) {
 
 	// The block list and the unfollow both write this user's own account.
 	if err := c.requireRootNode(userID); err != nil {
+		return c.wrapErrSuccess(err), nil
+	}
+	if err := c.requireOwner(userID); err != nil {
 		return c.wrapErrSuccess(err), nil
 	}
 

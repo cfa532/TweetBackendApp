@@ -172,6 +172,11 @@ func (c *ctx) callEntry(entry string, params map[string]string) (any, error) {
 	if params[reqSid] == "" {
 		params[reqSid] = c.sid()
 	}
+	// An entry acting for the caller keeps acting as that caller: delete_account
+	// reaches delete_tweet this way, and both check the same owner.
+	if params[reqUserSid] == "" && c.str(reqUserSid) != "" {
+		params[reqUserSid] = c.str(reqUserSid)
+	}
 
 	sub := newCtx(c.api, entry, params, nil, c.wr)
 	sub.nodeIDCache = c.nodeIDCache
@@ -241,7 +246,8 @@ func redactParam(key, value string) string {
 		return value
 	}
 	switch key {
-	case "password":
+	case "password", reqUserSid:
+		// A user session is a bearer credential for as long as it lives.
 		return redactedMark
 	case "user":
 		// A user object carries the password as a field.

@@ -167,6 +167,13 @@ func (c *ctx) authorizePost(tweet tweetObj, user userObj, agentAuth map[string]a
 		return nil
 	}
 
+	// No app code means the request came from a client rather than a peer
+	// node, so the caller must be the author it names.
+	if c.str("nodeappcode") == "" {
+		if err := c.requireOwner(tweet.authorID()); err != nil {
+			return err
+		}
+	}
 	friendID, err := c.friendByAppCode(c.str("nodeappcode"), user.hostID())
 	if err != nil {
 		return err
@@ -545,6 +552,9 @@ func entryDeleteTweet(c *ctx) (any, error) {
 	// Both paths write the requester's own account: the author's deletes the
 	// tweet, anyone else's removes it from their lists.
 	if err := c.requireRootNodeFor(user, userID); err != nil {
+		return respErr(err), nil
+	}
+	if err := c.requireOwner(userID); err != nil {
 		return respErr(err), nil
 	}
 

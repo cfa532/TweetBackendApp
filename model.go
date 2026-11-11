@@ -20,7 +20,11 @@ func (u userObj) username() string { return mapStr(u, "username") }
 func (u userObj) name() string     { return mapStr(u, "name") }
 func (u userObj) profile() string  { return mapStr(u, "profile") }
 func (u userObj) password() string { return mapStr(u, "password") }
-func (u userObj) avatar() string   { return mapStr(u, "avatar") }
+
+// authUID is the Leither user id that controls the account, empty for an
+// account created before sessions existed.
+func (u userObj) authUID() string { return mapStr(u, "authUid") }
+func (u userObj) avatar() string  { return mapStr(u, "avatar") }
 
 // hostIDs lists the nodes that hold this user. The first entry is the root
 // node, the authoritative write location; later entries are access nodes

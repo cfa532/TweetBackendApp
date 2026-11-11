@@ -139,10 +139,18 @@ func entryRegister(c *ctx) (any, error) {
 	if !validUsername(user.username()) {
 		return fail(fmt.Errorf("Invalid username format")), nil
 	}
+	// Registering is how a guest gets an account; an owner's is created when
+	// their device is paired (see sessionLogin).
+	config, err := c.loadNodeConfig()
+	if err != nil {
+		return fail(err), nil
+	}
+	if !config.allowGuests {
+		return fail(fmt.Errorf("This node does not accept new registrations")), nil
+	}
 	user["hostIds"] = strSlice(cleanHostIDs(user.hostIDs()))
 
-	nodeID := c.nodeID()
-	c.debugf("nodeId=%s, user=%s", nodeID, redactParam("user", c.str("user")))
+	c.debugf("nodeId=%s, user=%s", c.nodeID(), redactParam("user", c.str("user")))
 
 	// The account is created here. Clients pick the node they want to register
 	// on and call it directly, so a request that arrives here is meant for here.
@@ -160,48 +168,31 @@ func entryRegister(c *ctx) (any, error) {
 		return fail(fmt.Errorf("Username is taken")), nil
 	}
 
-	user["mid"] = userMid
-	user["storageFormat"] = fileSchema
-
-	// The password is not stored. A content-addressed Mimei id derived from it
-	// is, and login re-derives that id to compare.
-	hashed, err := c.contentID(authSid, user.password())
+	// The caller's Leither session, when there is one, becomes the identity
+	// that controls the account, and Leither keeps the username and password.
+	// Without one the account is created the old way, for clients that do not
+	// sign in to Leither yet: a content-addressed Mimei id derived from the
+	// password is stored, and login re-derives that id to compare.
+	callerUID, err := c.callerUID()
 	if err != nil {
-		c.errorf("Failed to hash password for user %s: %v", user.username(), err)
-		return fail(fmt.Errorf("Failed to process password")), nil
-	}
-	user["password"] = hashed
-
-	now := nowMillis()
-	user["timestamp"] = now
-	user["lastLogin"] = now
-	user["name"] = strings.TrimSpace(user.name())
-	user["profile"] = strings.TrimSpace(user.profile())
-	user["cloudDrivePort"] = mapInt(user, "cloudDrivePort", 0)
-
-	if hosts := cleanHostIDs(user.hostIDs()); len(hosts) == 0 {
-		user["hostIds"] = strSlice([]string{nodeID})
-	} else {
-		user["hostIds"] = strSlice(hosts)
-	}
-
-	userSid, err := c.openMimei(authSid, userMid, verCur)
-	if err != nil {
-		c.errorf("Failed to open user storage for %s: %v", user.username(), err)
-		return fail(fmt.Errorf("Failed to create user storage")), nil
-	}
-	defer c.closeMimei(userSid)
-
-	if err := c.setValue(userSid, ownerDataKey, map[string]any(user)); err != nil {
-		c.errorf("Failed to save user data for %s: %v", user.username(), err)
-		return fail(fmt.Errorf("Failed to save user data")), nil
-	}
-	if err := c.backupDelRef(authSid, userMid, ""); err != nil {
 		return fail(err), nil
 	}
-	// Publishing is what lets toggle_following on another node find the account.
-	if err := c.mimeiPublish(authSid, userMid); err != nil {
-		c.warnf("publish %s failed: %v", userMid, err)
+	if callerUID != "" {
+		user["authUid"] = callerUID
+		delete(user, "password")
+	} else {
+		hashed, err := c.contentID(authSid, user.password())
+		if err != nil {
+			c.errorf("Failed to hash password for user %s: %v", user.username(), err)
+			return fail(fmt.Errorf("Failed to process password")), nil
+		}
+		user["password"] = hashed
+	}
+	user["name"] = strings.TrimSpace(user.name())
+	user["profile"] = strings.TrimSpace(user.profile())
+
+	if err := c.createAccount(authSid, userMid, user); err != nil {
+		return fail(err), nil
 	}
 
 	c.debugf("User registered %s", jsonStringify(map[string]any(user)))
@@ -212,6 +203,45 @@ func entryRegister(c *ctx) (any, error) {
 		"user":   jsonStringify(map[string]any(user)),
 		"status": "success",
 	}), nil
+}
+
+// createAccount writes a new account and publishes it. register and the first
+// sign-in of an owner both end here, so an account is the same object however
+// it came to exist.
+func (c *ctx) createAccount(authSid, userMid string, user userObj) error {
+	user["mid"] = userMid
+	user["storageFormat"] = fileSchema
+
+	now := nowMillis()
+	user["timestamp"] = now
+	user["lastLogin"] = now
+	user["cloudDrivePort"] = mapInt(user, "cloudDrivePort", 0)
+
+	if hosts := cleanHostIDs(user.hostIDs()); len(hosts) == 0 {
+		user["hostIds"] = strSlice([]string{c.nodeID()})
+	} else {
+		user["hostIds"] = strSlice(hosts)
+	}
+
+	userSid, err := c.openMimei(authSid, userMid, verCur)
+	if err != nil {
+		c.errorf("Failed to open user storage for %s: %v", user.username(), err)
+		return fmt.Errorf("Failed to create user storage")
+	}
+	defer c.closeMimei(userSid)
+
+	if err := c.setValue(userSid, ownerDataKey, map[string]any(user)); err != nil {
+		c.errorf("Failed to save user data for %s: %v", user.username(), err)
+		return fmt.Errorf("Failed to save user data")
+	}
+	if err := c.backupDelRef(authSid, userMid, ""); err != nil {
+		return err
+	}
+	// Publishing is what lets toggle_following on another node find the account.
+	if err := c.mimeiPublish(authSid, userMid); err != nil {
+		c.warnf("publish %s failed: %v", userMid, err)
+	}
+	return nil
 }
 
 // registerReply shapes a registration result. A successful reply carries the
@@ -253,39 +283,17 @@ func (c *ctx) registerReply(enveloped bool, result map[string]any) any {
 // account — it has no way to know the root node before this reply tells it. The
 // lastLogin write that follows is confined to that root node.
 func entryLogin(c *ctx) (any, error) {
-	username := c.str("username")
-	password := c.str("password")
-
+	// A caller already signed in to Leither is identified by that session.
+	if c.has(reqUserSid) {
+		return c.sessionLogin()
+	}
 	authSid, err := c.authSid()
 	if err != nil {
 		return c.wrapErrStatus(err), nil
 	}
-	userID, err := c.userIDForName(authSid, username)
+	userID, user, err := c.authenticate(authSid, c.str("username"), c.str("password"))
 	if err != nil {
 		return c.wrapErrStatus(err), nil
-	}
-
-	readSid, err := c.openMimei(authSid, userID, verLast)
-	if err != nil {
-		return c.wrapErrStatus(err), nil
-	}
-	stored, err := c.getObject(readSid, ownerDataKey)
-	c.closeMimei(readSid)
-	if err != nil {
-		return c.wrapErrStatus(err), nil
-	}
-	if stored == nil {
-		c.errorf("User not found for username: %s %s", username, userID)
-		return c.wrapErrStatus(fmt.Errorf("User not found")), nil
-	}
-	user := userObj(stored)
-
-	expected, err := c.contentID(authSid, password)
-	if err != nil {
-		return c.wrapErrStatus(err), nil
-	}
-	if user.password() != expected {
-		return c.wrapErrStatus(fmt.Errorf("Wrong password")), nil
 	}
 
 	// Authenticated from here on.
@@ -328,6 +336,40 @@ func entryLogin(c *ctx) (any, error) {
 		"user":   map[string]any(user),
 		"status": "success",
 	}), nil
+}
+
+// authenticate checks a username and password against the copy of the account
+// this node holds, returning the account. login and open_session share it so
+// the two cannot disagree about what a valid credential is.
+func (c *ctx) authenticate(authSid, username, password string) (string, userObj, error) {
+	userID, err := c.userIDForName(authSid, username)
+	if err != nil {
+		return "", nil, err
+	}
+
+	readSid, err := c.openMimei(authSid, userID, verLast)
+	if err != nil {
+		return "", nil, err
+	}
+	stored, err := c.getObject(readSid, ownerDataKey)
+	c.closeMimei(readSid)
+	if err != nil {
+		return "", nil, err
+	}
+	if stored == nil {
+		c.errorf("User not found for username: %s %s", username, userID)
+		return "", nil, fmt.Errorf("User not found")
+	}
+	user := userObj(stored)
+
+	expected, err := c.contentID(authSid, password)
+	if err != nil {
+		return "", nil, err
+	}
+	if user.password() != expected {
+		return "", nil, fmt.Errorf("Wrong password")
+	}
+	return userID, user, nil
 }
 
 // recordLogin persists the updated lastLogin and republishes the account.
@@ -690,6 +732,9 @@ func entrySetUserAvatar(c *ctx) (any, error) {
 	// node. The check reuses the object already read above rather than loading
 	// it a second time.
 	if err := c.requireRootNodeFor(user, userID); err != nil {
+		return c.wrapErr(err), nil
+	}
+	if err := c.requireOwner(userID); err != nil {
 		return c.wrapErr(err), nil
 	}
 
