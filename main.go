@@ -174,6 +174,8 @@ func entryTable() map[string]entryFunc {
 		"add_comment":    entryAddComment,
 		"get_comments":   entryGetComments,
 		"delete_comment": entryDeleteComment,
+		"apply_comment":  entryApplyComment,
+		"remove_comment": entryRemoveComment,
 
 		// Engagement
 		"toggle_bookmark":         entryToggleBookmark,

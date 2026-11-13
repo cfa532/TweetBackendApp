@@ -107,6 +107,45 @@ func (c *ctx) requireOwner(ownerID string) error {
 	return nil
 }
 
+// requireAuthorSession rejects a caller that is not this application acting
+// from a node. The entries that write a node's own data on a peer's behalf
+// (apply_comment, remove_comment) are not part of the client surface: a client
+// cannot produce the application author's login session, while the cross-node
+// RunMApp transport carries exactly that. The caller's session must resolve to
+// the same Leither user this node itself logs in as.
+//
+// This is the boundary the node-to-node calls have always trusted. It does not
+// authenticate which node is calling, only that the caller holds the author
+// identity; a node could still act for a user it has not verified.
+func (c *ctx) requireAuthorSession() error {
+	const errNotPeer = "Not called from a peer node"
+	callerSid := c.sid()
+	if callerSid == "" {
+		return fmt.Errorf(errNotPeer)
+	}
+	value, err := c.api.GetVar(callerSid, "userid")
+	callerUID := toString(value)
+	if err != nil || callerUID == "" {
+		c.warnf("peer call without a resolvable session: %v", err)
+		return fmt.Errorf(errNotPeer)
+	}
+	authSid, err := c.authSid()
+	if err != nil {
+		return err
+	}
+	value, err = c.api.GetVar(authSid, "userid")
+	authorUID := toString(value)
+	if err != nil || authorUID == "" {
+		c.errorf("author identity has no userid: %v", err)
+		return fmt.Errorf(errNotPeer)
+	}
+	if callerUID != authorUID {
+		c.errorf("peer call under a foreign session %s", callerUID)
+		return fmt.Errorf(errNotPeer)
+	}
+	return nil
+}
+
 // ---------------------------------------------------------------------------
 // Node configuration
 // ---------------------------------------------------------------------------

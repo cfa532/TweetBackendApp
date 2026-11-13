@@ -5,6 +5,18 @@
 // the comment, and the parent holds a Mimei reference to it. A reply follows
 // the same rule against its parent comment.
 //
+// Who may perform that write changed with caller identity. The comment writer
+// no longer sends the request to the parent author's node: a session is only
+// valid on the node that issued it, and a guest's credential exists only on
+// their own root. The writer calls add_comment on their own root node, signed
+// by their session; that node verifies them and asks the parent author's node
+// to perform the write through apply_comment, which accepts only this
+// application speaking as its author identity (requireAuthorSession).
+// Deletion splits the same way (delete_comment / remove_comment). The write
+// into the parent is therefore performed by the parent author's own node, and
+// apply_comment is where a parent author's comment policy — a tweet closed to
+// comments, or open only to selected users — will be checked.
+//
 // Three identities are easy to confuse here, and the request parameter names do
 // not help:
 //
@@ -12,10 +24,9 @@
 //	tweetauthorid  the parent author's id (a legacy name: it is not the comment's author)
 //	comment.authorId  the user who actually wrote the comment
 //
-// The client is responsible for calling the parent author's node; hostid still
-// names it and is carried through for that reason. Writing a comment on the
-// comment writer's node instead would put it somewhere the parent can never
-// reference it.
+// hostid is a routing hint for the delegation; the node that holds the parent
+// re-derives the parent's author from the parent object and does not trust the
+// name the caller gave.
 package lapp
 
 import "fmt"
@@ -24,8 +35,129 @@ import "fmt"
 // add_comment
 // ---------------------------------------------------------------------------
 
-// entryAddComment attaches a comment to a tweet or to another comment.
+// entryAddComment attaches a comment to a tweet or to another comment, called
+// by the comment's writer on the writer's own root node.
 func entryAddComment(c *ctx) (any, error) {
+	comment, err := c.obj("comment")
+	if err != nil {
+		return respErr(err), nil
+	}
+	commentAuthorID := tweetObj(comment).authorID()
+	if commentAuthorID == "" {
+		return respErr(fmt.Errorf("Missing comment author ID: expected comment.authorId")), nil
+	}
+	// The writer's account is authoritative on this node, and the session must
+	// be the writer's own — only the account's root could have issued it.
+	if err := c.requireRootNode(commentAuthorID); err != nil {
+		return respErr(err), nil
+	}
+	if err := c.requireOwner(commentAuthorID); err != nil {
+		return respErr(err), nil
+	}
+
+	tweetID := c.str("tweetid")
+	parentAuthorID := firstNonEmpty(c.str("tweetauthorid"), c.str("userid"))
+	if tweetID == "" || parentAuthorID == "" {
+		return respErr(fmt.Errorf("Missing parent: expected tweetid and tweetauthorid")), nil
+	}
+	// Route to the parent author's node, preferring this node's own record of
+	// their account over the client's hostid hint. The target re-checks
+	// everything, so a wrong hint can only fail, never misroute a write.
+	parentHost := c.str("hostid")
+	parentAuthor, err := c.loadUser(parentAuthorID)
+	if err != nil {
+		return respErr(err), nil
+	}
+	if parentAuthor != nil && parentAuthor.hasValidHost() {
+		parentHost = parentAuthor.hostID()
+	}
+	if parentHost == "" {
+		return respErr(fmt.Errorf("Parent author not found")), nil
+	}
+
+	// A comment that quotes a tweet becomes two objects: a real retweet owned
+	// by its writer, and the comment itself with the quote fields stripped.
+	// The retweet half is created before anything is delegated, so a failed
+	// delegation leaves nothing half-attached on the parent author's node.
+	retweetID := ""
+	if mapStr(comment, "originalTweetId") != "" && mapStr(comment, "originalAuthorId") != "" {
+		retweetID = c.createQuotedRetweet()
+		delete(comment, "originalTweetId")
+		delete(comment, "originalAuthorId")
+	}
+
+	authSid, err := c.authSid()
+	if err != nil {
+		return respErr(err), nil
+	}
+	reply, err := c.callCommentPeer(authSid, parentHost, "apply_comment", map[string]string{
+		"tweetid":       tweetID,
+		"tweetauthorid": parentAuthorID,
+		"comment":       jsonStringify(comment),
+	})
+	if err != nil {
+		return respErr(err), nil
+	}
+	if retweetID != "" {
+		if m, ok := toMap(reply); ok {
+			m["retweetid"] = retweetID
+		}
+	}
+	// A peer failure arrives as an envelope of its own and must reach the
+	// client unchanged rather than being re-labelled a local success.
+	return c.wrapPassthrough(reply), nil
+}
+
+// createQuotedRetweet creates the retweet half of a quote-comment and returns
+// its id. The retweet belongs to the writer of the comment, and add_comment
+// runs on the writer's root node, so the tweet is created right here through
+// add_tweet, which checks the writer's session itself.
+//
+// Best effort, as it has always been: a comment whose quoted retweet could not
+// be created is still a comment, and the caller reports an empty retweet id.
+func (c *ctx) createQuotedRetweet() string {
+	ret, err := c.callEntryMap("add_tweet", map[string]string{
+		reqAppID:  c.appID(),
+		reqAppVer: verLast,
+		"tweet":   c.str("comment"),
+	})
+	if err != nil {
+		c.warnf("quoted tweet creation failed: %v", err)
+		return ""
+	}
+	if !mapBool(ret, "success") {
+		c.warnf("quoted tweet creation failed: %s", jsonStringify(ret))
+		return ""
+	}
+	return mapStr(ret, "mid")
+}
+
+// callCommentPeer reaches a comment peer entry on the parent author's node:
+// directly when this is that node, otherwise through a cross-node call. The
+// author session accompanies the request; requireAuthorSession on the target
+// accepts nothing less.
+func (c *ctx) callCommentPeer(authSid, parentHost, entry string, params map[string]string) (any, error) {
+	params[reqAppID] = c.appID()
+	params[reqAppVer] = verLast
+	params[reqSid] = authSid
+	params[reqVersion] = c.version()
+	if parentHost == c.nodeID() {
+		return c.callEntry(entry, params)
+	}
+	return c.callRemote(parentHost, entry, params)
+}
+
+// entryApplyComment performs the parent-side half of add_comment on the parent
+// author's root node: it creates the comment object, gives the parent both the
+// list entry and the Mimei reference, and publishes. It is reached from
+// add_comment on the writer's node and is not part of the client surface.
+//
+// A parent author's comment policy — who may comment at all — belongs here,
+// where the node that owns the parent decides. There is no such setting yet.
+func entryApplyComment(c *ctx) (any, error) {
+	if err := c.requireAuthorSession(); err != nil {
+		return respErr(err), nil
+	}
 	// tweetauthorid is the parent's author; userid is the older clients' name
 	// for the same thing.
 	tweetAuthorID := firstNonEmpty(c.str("tweetauthorid"), c.str("userid"))
@@ -35,24 +167,28 @@ func entryAddComment(c *ctx) (any, error) {
 		return respErr(fmt.Errorf("Missing parent author ID: expected tweetauthorid")), nil
 	}
 	// A comment is stored on its parent's author's root node and referenced by
-	// the parent, so this must be that node — the identity that decides it is the
-	// parent's author, never the writer of the comment. All three clients send
-	// add_comment to that node's writable route.
+	// the parent, so this must be that node — the identity that decides it is
+	// the parent's author, never the writer of the comment.
 	if err := c.requireRootNode(tweetAuthorID); err != nil {
 		return respErr(err), nil
 	}
-	comment, err := c.obj("comment")
+	// The parent object itself must agree: a request naming this root author
+	// for a parent that belongs to someone else would attach the comment to a
+	// copy of a foreign tweet.
+	parent, err := c.loadTweet(tweetID)
 	if err != nil {
 		return respErr(err), nil
 	}
+	if parent == nil {
+		return respErr(fmt.Errorf("Tweet not found")), nil
+	}
+	if parent.authorID() != tweetAuthorID {
+		return respErr(fmt.Errorf("Parent tweet does not belong to the named author")), nil
+	}
 
-	// A comment that quotes a tweet becomes two objects: a real retweet owned
-	// by its writer, and the comment itself with the quote fields stripped.
-	retweetID := ""
-	if mapStr(comment, "originalTweetId") != "" && mapStr(comment, "originalAuthorId") != "" {
-		retweetID = c.createQuotedRetweet(tweetObj(comment).authorID())
-		delete(comment, "originalTweetId")
-		delete(comment, "originalAuthorId")
+	comment, err := c.obj("comment")
+	if err != nil {
+		return respErr(err), nil
 	}
 
 	authSid, err := c.authSid()
@@ -115,65 +251,12 @@ func entryAddComment(c *ctx) (any, error) {
 	if err != nil {
 		return respErr(err), nil
 	}
-	c.debugf("local commentCount=%d, commentId=%s, retweetId=%s", count, commentID, retweetID)
 	return c.wrapPassthrough(map[string]any{
 		"success":   true,
 		"mid":       commentID,
 		"commentId": commentID,
 		"count":     count,
-		"retweetid": retweetID,
 	}), nil
-}
-
-// createQuotedRetweet creates the retweet half of a quote-comment, on the node
-// that owns it, and returns its id.
-//
-// The retweet belongs to the writer of the comment, so it belongs on the
-// writer's root node — and this is the parent author's node, which is a
-// different one whenever someone quotes across nodes. The JavaScript entry
-// could call add_tweet locally because add_tweet forwarded a misdirected
-// request itself; the Go one does not forward (routing.go), so the hop is made
-// here. It is the same two-owners-on-two-nodes case the other callRemote sites
-// cover, and it is why add_tweet can require its own root node.
-//
-// Best effort, as it has always been: a comment whose quoted retweet could not
-// be created is still a comment, and the caller reports an empty retweet id.
-func (c *ctx) createQuotedRetweet(writerID string) string {
-	writer, err := c.loadUser(writerID)
-	if err != nil || writer == nil || !writer.hasValidHost() {
-		c.warnf("quoted tweet creation failed: no known host for writer %s: %v", writerID, err)
-		return ""
-	}
-
-	params := map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"tweet":   c.str("comment"),
-	}
-
-	var ret map[string]any
-	if writerHost := writer.hostID(); writerHost == c.nodeID() {
-		ret, err = c.callEntryMap("add_tweet", params)
-	} else {
-		authSid, sidErr := c.authSid()
-		if sidErr != nil {
-			c.warnf("quoted tweet creation failed: %v", sidErr)
-			return ""
-		}
-		params[reqSid] = authSid
-		var raw any
-		raw, err = c.callRemote(writerHost, "add_tweet", params)
-		ret, _ = toMap(raw)
-	}
-	if err != nil {
-		c.warnf("quoted tweet creation failed: %v", err)
-		return ""
-	}
-	if !mapBool(ret, "success") {
-		c.warnf("quoted tweet creation failed on node %s: %s", writer.hostID(), jsonStringify(ret))
-		return ""
-	}
-	return mapStr(ret, "mid")
 }
 
 // commentCount reads a parent's comment count from its committed version.
@@ -290,21 +373,28 @@ func (c *ctx) pruneComments(tweetID string, commentIDs []string, page int64) err
 // delete_comment
 // ---------------------------------------------------------------------------
 
-// entryDeleteComment removes a comment from its parent.
+// entryDeleteComment removes a comment, called on the deleter's own root node.
 //
-// Both the comment's author and the parent's author may delete it, so no
-// authorship check is made here; the client decides who may ask. Each step is
-// isolated because a partly deleted comment is worse than a fully deleted one:
-// once the versions are gone, the list entry and reference must still go.
-//
-// The comment and the parent's list of them live on the parent author's root
-// node — the same identity add_comment writes under — so that is where the
-// deletion belongs. The parent is read to learn who that is, since the request
-// only names the parent object.
+// Both the comment's author and the parent's author may delete it, and nobody
+// else. The authority check needs the comment object, which lives on the
+// parent author's node, so it runs there: locally when this is that node,
+// otherwise in remove_comment through the same guarded delegation add_comment
+// uses. Dropping the comment from the deleter's saved lists happens here,
+// where those lists live.
 func entryDeleteComment(c *ctx) (any, error) {
 	appUserID := c.str("appuserid")
 	tweetID := c.str("tweetid")
 	commentID := c.str("commentid")
+	if appUserID == "" || tweetID == "" || commentID == "" {
+		return respErr(fmt.Errorf("Missing parameters: expected appuserid, tweetid, commentid")), nil
+	}
+	// The deleter's session was issued by this node, the deleter's root.
+	if err := c.requireRootNode(appUserID); err != nil {
+		return respErr(err), nil
+	}
+	if err := c.requireOwner(appUserID); err != nil {
+		return respErr(err), nil
+	}
 
 	parent, err := c.loadTweet(tweetID)
 	if err != nil {
@@ -313,35 +403,140 @@ func entryDeleteComment(c *ctx) (any, error) {
 	if parent == nil {
 		return respErr(fmt.Errorf("Tweet not found")), nil
 	}
-	if err := c.requireRootNode(parent.authorID()); err != nil {
-		return respErr(err), nil
+	parentAuthorID := parent.authorID()
+	if parentAuthorID == "" {
+		return respErr(fmt.Errorf("Parent tweet has no author")), nil
+	}
+
+	// The comment lives on the parent author's node. Find it, preferring the
+	// account's own record of its root over the client's hostid hint.
+	parentHost := c.str("hostid")
+	if parentAuthor, err := c.loadUser(parentAuthorID); err == nil && parentAuthor.hasValidHost() {
+		parentHost = parentAuthor.hostID()
+	}
+
+	var reply any
+	if parentHost == c.nodeID() {
+		count, err := c.removeCommentChecked(tweetID, commentID, parentAuthorID, appUserID)
+		if err != nil {
+			return respErr(err), nil
+		}
+		reply = map[string]any{
+			"success":   true,
+			"commentId": commentID,
+			"count":     count,
+		}
+	} else {
+		if parentHost == "" {
+			return respErr(fmt.Errorf("Parent author not found")), nil
+		}
+		authSid, err := c.authSid()
+		if err != nil {
+			return respErr(err), nil
+		}
+		reply, err = c.callCommentPeer(authSid, parentHost, "remove_comment", map[string]string{
+			"tweetid":   tweetID,
+			"commentid": commentID,
+			"appuserid": appUserID,
+		})
+		if err != nil {
+			return respErr(err), nil
+		}
+		if m, ok := toMap(reply); !ok || !mapBool(m, "success") {
+			// The parent author's node decided against the deletion; its
+			// refusal reaches the client unchanged.
+			return c.wrapPassthrough(reply), nil
+		}
 	}
 
 	authSid, err := c.authSid()
 	if err != nil {
 		return respErr(err), nil
 	}
+	if err := c.forgetSavedComment(authSid, appUserID, commentID); err != nil {
+		c.errorf("Failed to remove comment from user lists %s: %v", appUserID, err)
+	}
+	return c.wrapPassthrough(reply), nil
+}
 
+// entryRemoveComment performs the parent-side half of delete_comment on the
+// parent author's root node, with the same peer guard as apply_comment. The
+// deleter is named by their own root node, which verified their session; the
+// authority check against the comment object happens here, where it lives.
+func entryRemoveComment(c *ctx) (any, error) {
+	if err := c.requireAuthorSession(); err != nil {
+		return respErr(err), nil
+	}
+	tweetID := c.str("tweetid")
+	commentID := c.str("commentid")
+	deleterID := c.str("appuserid")
+
+	parent, err := c.loadTweet(tweetID)
+	if err != nil {
+		return respErr(err), nil
+	}
+	if parent == nil {
+		return respErr(fmt.Errorf("Tweet not found")), nil
+	}
+	parentAuthorID := parent.authorID()
+	if parentAuthorID == "" {
+		return respErr(fmt.Errorf("Parent tweet has no author")), nil
+	}
+	if err := c.requireRootNode(parentAuthorID); err != nil {
+		return respErr(err), nil
+	}
+
+	count, err := c.removeCommentChecked(tweetID, commentID, parentAuthorID, deleterID)
+	if err != nil {
+		return respErr(err), nil
+	}
+	return c.wrapPassthrough(map[string]any{
+		"success":   true,
+		"commentId": commentID,
+		"count":     count,
+	}), nil
+}
+
+// removeCommentChecked performs a deletion on the node that holds the comment,
+// after verifying the deleter is the comment's author or the parent's author.
+// Each step is isolated because a partly deleted comment is worse than a fully
+// deleted one: once the versions are gone, the list entry and reference must
+// still go.
+func (c *ctx) removeCommentChecked(tweetID, commentID, parentAuthorID, deleterID string) (int64, error) {
+	comment, err := c.loadTweet(commentID)
+	if err != nil {
+		return 0, err
+	}
+	if comment != nil {
+		if commentAuthor := comment.authorID(); commentAuthor != deleterID && parentAuthorID != deleterID {
+			c.errorf("comment deletion refused %s", jsonStringify(map[string]any{
+				"deleterId": deleterID, "commentAuthorId": commentAuthor,
+				"parentAuthorId": parentAuthorID,
+			}))
+			return 0, fmt.Errorf("Only the comment's author or the parent's author may delete this comment")
+		}
+	} else if parentAuthorID != deleterID {
+		// The comment is already gone. What remains is a list entry in the
+		// parent author's data, so only the parent's author cleans it up.
+		return 0, fmt.Errorf("Comment not found")
+	}
+
+	authSid, err := c.authSid()
+	if err != nil {
+		return 0, err
+	}
 	if err := c.destroyComment(authSid, commentID); err != nil {
 		c.errorf("Failed to delete comment versions %s: %v", commentID, err)
 	}
 	if err := c.detachComment(authSid, tweetID, commentID); err != nil {
 		c.errorf("Failed to remove comment from tweet %s: %v", tweetID, err)
 	}
-	if err := c.forgetSavedComment(authSid, appUserID, commentID); err != nil {
-		c.errorf("Failed to remove comment from user lists %s: %v", appUserID, err)
-	}
 
 	count, err := c.commentCount(tweetID)
 	if err != nil {
-		return respErr(err), nil
+		return 0, err
 	}
-	c.debugf("local commentCount=%d, commentId=%s", count, commentID)
-	return c.wrapPassthrough(map[string]any{
-		"success":   true,
-		"commentId": commentID,
-		"count":     count,
-	}), nil
+	return count, nil
 }
 
 // destroyComment removes the comment object itself.

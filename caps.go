@@ -116,8 +116,9 @@ func isCapUnsupported(err error) bool {
 //	toggle_bookmark   -> toggle_bookmark_by_user on the acting user's node
 //	toggle_favorite   -> toggle_favorite_by_user on the acting user's node
 //	toggle_following  -> get_tweet_id_list, reading the followed user's tweets
-//	add_comment       -> add_tweet, creating a quote-comment's retweet half on
-//	                     the node of the writer who owns it
+//	add_comment       -> apply_comment, writing the comment on the parent
+//	                     author's node
+//	delete_comment    -> remove_comment, deleting it there
 //
 // params must contain aid/ver, the entry arguments, and an author login sid
 // from authSid(). RunMApp rejects BEOpenAppDataNode and MMOpen data sessions.

@@ -11,7 +11,11 @@ func entryHealth(c *ctx) (any, error) {
 		"success": true,
 		// userSessions tells a client this node checks "usersid", so it should
 		// sign in to Leither here rather than send a password to be stored.
-		"userSessions":      true,
+		"userSessions": true,
+		// commentDelegation tells a client this node routes comments through
+		// the writer's own root (add_comment/delete_comment there, peer
+		// apply_comment/remove_comment on the parent author's node).
+		"commentDelegation": true,
 		"guestRegistration": config.allowGuests,
 		"message":           "Server is running",
 		"storageFormats":    []string{"database", fileSchema},

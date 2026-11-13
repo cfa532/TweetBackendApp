@@ -59,12 +59,19 @@ Writes to the caller's own data accept `usersid` (`add_tweet`, `update_tweet`,
 `delete_tweet`, `toggle_tweet_privacy`, `toggle_pinned_tweet`,
 `toggle_following`, `block_user`, `remove_blacklisted_relationship`,
 `set_author_core_data`, `set_user_avatar`, `delete_account`,
-`message_outgoing`, `message_fetch`, `share_file`, `pin_ipfs`, `upload_file`).
-When present, the session's user must control the account named by the request,
-otherwise the write is refused. A session this node does not know fails with
-the message `Session invalid`; sign in again and repeat the request. A request
-without `usersid`, or for an account with no `authUid`, is still accepted until
-`ownerSessionRequired` is switched on.
+`message_outgoing`, `message_fetch`, `share_file`, `pin_ipfs`, `upload_file`,
+`add_comment`, `delete_comment`). When present, the session's user must control
+the account named by the request, otherwise the write is refused. A session
+this node does not know fails with the message `Session invalid`; sign in again
+and repeat the request. A request without `usersid`, or for an account with no
+`authUid`, is still accepted until `ownerSessionRequired` is switched on.
+
+Comments are written through the commenter's own root node, which asks the
+parent author's node to perform the write (see the Comment endpoints). The
+node-to-node halves of that flow (`apply_comment`, `remove_comment`) accept no
+user session: they admit only a caller presenting the application author's
+session, which a client cannot obtain. `health` advertises the arrangement as
+`commentDelegation: true`.
 
 `register` is refused with `This node does not accept new registrations` when
 the node's owners have run `tweet-owner.sh --guests deny`.
@@ -386,21 +393,32 @@ identifies the tweet author.
 
 ## Comment Management Endpoints
 
+Comments still live on the parent author's root node, but a client no longer
+writes there. `add_comment` and `delete_comment` are called on the comment
+writer's (or deleter's) own root node with their `usersid`; that node asks the
+parent author's node to perform the parent-side write through `apply_comment`
+or `remove_comment`. A node advertises this arrangement in `health` as
+`commentDelegation: true`; a node without it still takes the old form — the
+request sent straight to the parent author's node, no session.
+
 ### Add Comment
-**Endpoint:** `add_comment`
+**Endpoint:** `add_comment` — called on the comment writer's root node
 
 **Input Parameters:**
 - `aid` (string): App ID
-- `appuserid` (string): App user making the comment
+- `usersid` (string): the writer's Leither session on this node
 - `tweetid` (string): Tweet ID being commented on
-- `hostid` (string): Host ID where tweet is published
-- `comment` (string): JSON string of comment object (same as tweet object)
+- `tweetauthorid` (string): the parent author's user ID (legacy name; not the
+  comment's author)
+- `comment` (string): JSON string of comment object (same as tweet object); its
+  `authorId` is the writer and names the account the session must control
 
 **Output Schema:**
 ```json
 {
   "success": "boolean",
   "mid": "string",
+  "commentId": "string",
   "count": "number",
   "retweetid": "string"
 }
@@ -419,22 +437,65 @@ identifies the tweet author.
 **Output Schema:** Array of comment objects (same as tweet objects)
 
 ### Delete Comment
-**Endpoint:** `delete_comment`
+**Endpoint:** `delete_comment` — called on the deleter's root node
+
+Only the comment's author and the parent's author may delete; the check runs on
+the parent author's node, which holds the comment object. A refused deletion
+returns that refusal unchanged.
 
 **Input Parameters:**
 - `aid` (string): App ID
-- `commentid` (string): Comment ID to delete
+- `usersid` (string): the deleter's Leither session on this node
+- `appuserid` (string): the deleting user ID
 - `tweetid` (string): Tweet ID containing the comment
+- `commentid` (string): Comment ID to delete
+- `hostid` (string, old form only): Host ID where comment is stored
 
-**Output Schema:** No specific return value
+**Output Schema:**
+```json
+{
+  "success": "boolean",
+  "commentId": "string",
+  "count": "number"
+}
+```
+
+### Apply Comment (node to node)
+**Endpoint:** `apply_comment` — reached from `add_comment` on the writer's node;
+not part of the client surface
+
+Creates the comment object on the parent author's root node, adds the parent's
+list entry and Mimei reference, and publishes. This is also where a parent
+author's comment policy (who may comment) will be checked; no such setting
+exists yet.
 
 **Input Parameters:**
 - `aid` (string): App ID
-- `commentid` (string): Comment ID to delete
-- `tweetid` (string): Tweet ID containing the comment
-- `hostid` (string): Host ID where comment is stored
+- `sid` (string): the application author's session; a request without it is
+  refused with `Not called from a peer node`
+- `tweetid` (string): Tweet ID being commented on
+- `tweetauthorid` (string): the parent author's user ID
+- `comment` (string): JSON string of comment object, quote fields stripped
 
-**Output Schema:** No specific return value
+**Output Schema:** as Add Comment, without `retweetid`.
+
+### Remove Comment (node to node)
+**Endpoint:** `remove_comment` — reached from `delete_comment` on the deleter's
+node; not part of the client surface
+
+Deletes the comment object and detaches it from the parent on the parent
+author's root node, after checking the named deleter is the comment's author or
+the parent's author.
+
+**Input Parameters:**
+- `aid` (string): App ID
+- `sid` (string): the application author's session; a request without it is
+  refused with `Not called from a peer node`
+- `tweetid` (string): Tweet ID containing the comment
+- `commentid` (string): Comment ID to delete
+- `appuserid` (string): the deleting user ID, verified by their own root node
+
+**Output Schema:** as Delete Comment.
 
 ## Interaction Endpoints
 

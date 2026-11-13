@@ -48,8 +48,8 @@ func entryAddTweet(c *ctx) (any, error) {
 	}
 	// The tweet is stored on its author's root node and referenced by their
 	// account, so creating it anywhere else writes a copy the root never learns
-	// about. Clients address that node; add_comment reaches it through
-	// createQuotedRetweet.
+	// about. Clients address that node; add_comment creates a quote-comment's
+	// retweet half here through createQuotedRetweet.
 	if err := c.requireRootNodeFor(user, tweet.authorID()); err != nil {
 		return respErr(err), nil
 	}
