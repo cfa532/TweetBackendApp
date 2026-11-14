@@ -107,43 +107,52 @@ func (c *ctx) requireOwner(ownerID string) error {
 	return nil
 }
 
-// requireAuthorSession rejects a caller that is not this application acting
-// from a node. The entries that write a node's own data on a peer's behalf
-// (apply_comment, remove_comment) are not part of the client surface: a client
-// cannot produce the application author's login session, while the cross-node
-// RunMApp transport carries exactly that. The caller's session must resolve to
-// the same Leither user this node itself logs in as.
+// requirePeerCall rejects a caller that is not this application acting from
+// the expected node. The entries that write a node's own data on a peer's
+// behalf (apply_comment, remove_comment) are not part of the client surface,
+// and a request reaches them in one of two forms:
 //
-// This is the boundary the node-to-node calls have always trusted. It does not
-// authenticate which node is calling, only that the caller holds the author
-// identity; a node could still act for a user it has not verified.
-func (c *ctx) requireAuthorSession() error {
+//   - Local delegation, an in-process callEntry from another entry of this
+//     app. The caller carries the local author login session in sid, and the
+//     node injects the app record's author uid as the "author" request key
+//     (overwriting any caller-supplied value). A client cannot obtain an
+//     author session: BELoginAsAuthor is not on the RPC surface.
+//   - Cross-node, forwarded by RunMApp. The forwarding node deletes sid
+//     before the request leaves it and the target runs the entry as guest;
+//     what the platform does inject is a nodeappcode minted here under the
+//     calling node's transport session, so SessionGet(code, "nodeid") names
+//     the calling node. A code minted by an ordinary logged-in user names
+//     that user instead, which is why the resolved node must be the one this
+//     entry expects: the delegating node, the user's own root.
+//
+// What this still does not do: a code leaked from the expected node is a
+// bearer credential for its remaining lifetime (about an hour), and the
+// check trusts the expected node itself, which is the documented residual.
+func (c *ctx) requirePeerCall(expectedNodeID string) error {
 	const errNotPeer = "Not called from a peer node"
-	callerSid := c.sid()
-	if callerSid == "" {
-		return fmt.Errorf(errNotPeer)
+	if callerSid := c.sid(); callerSid != "" {
+		value, err := c.api.GetVar(callerSid, "userid")
+		callerUID := toString(value)
+		authorUID := c.str("author")
+		if err != nil || callerUID == "" || authorUID == "" || callerUID != authorUID {
+			c.warnf("peer call under a session that is not the app author")
+			return fmt.Errorf(errNotPeer)
+		}
+		return nil
 	}
-	value, err := c.api.GetVar(callerSid, "userid")
-	callerUID := toString(value)
-	if err != nil || callerUID == "" {
-		c.warnf("peer call without a resolvable session: %v", err)
-		return fmt.Errorf(errNotPeer)
+	if code := c.str("nodeappcode"); code != "" {
+		friendID, err := c.friendByAppCode(code, "")
+		if err != nil {
+			c.warnf("peer call with an unresolvable node app code: %v", err)
+			return fmt.Errorf(errNotPeer)
+		}
+		if friendID == "" || friendID != expectedNodeID {
+			c.errorf("peer call from node %s, expected %s", friendID, expectedNodeID)
+			return fmt.Errorf(errNotPeer)
+		}
+		return nil
 	}
-	authSid, err := c.authSid()
-	if err != nil {
-		return err
-	}
-	value, err = c.api.GetVar(authSid, "userid")
-	authorUID := toString(value)
-	if err != nil || authorUID == "" {
-		c.errorf("author identity has no userid: %v", err)
-		return fmt.Errorf(errNotPeer)
-	}
-	if callerUID != authorUID {
-		c.errorf("peer call under a foreign session %s", callerUID)
-		return fmt.Errorf(errNotPeer)
-	}
-	return nil
+	return fmt.Errorf(errNotPeer)
 }
 
 // ---------------------------------------------------------------------------

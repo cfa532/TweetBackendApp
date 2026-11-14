@@ -133,13 +133,18 @@ func (c *ctx) createQuotedRetweet() string {
 }
 
 // callCommentPeer reaches a comment peer entry on the parent author's node:
-// directly when this is that node, otherwise through a cross-node call. The
-// author session accompanies the request; requireAuthorSession on the target
-// accepts nothing less.
+// directly when this is that node, otherwise through a cross-node call.
+//
+// The author session in sid survives only the local callEntry; a cross-node
+// RunMApp deletes sid before the request leaves this node, and the target
+// identifies its caller by the nodeappcode the platform injects there. The
+// node-set author uid travels along for the local guard, which compares
+// against it rather than logging in as the author again.
 func (c *ctx) callCommentPeer(authSid, parentHost, entry string, params map[string]string) (any, error) {
 	params[reqAppID] = c.appID()
 	params[reqAppVer] = verLast
 	params[reqSid] = authSid
+	params["author"] = c.str("author")
 	params[reqVersion] = c.version()
 	if parentHost == c.nodeID() {
 		return c.callEntry(entry, params)
@@ -147,17 +152,50 @@ func (c *ctx) callCommentPeer(authSid, parentHost, entry string, params map[stri
 	return c.callRemote(parentHost, entry, params)
 }
 
+// userRootNode resolves the node that may delegate for a user: their own
+// root. The parent author's node may hold no copy of a commenter's account
+// (a user object does not follow the user's comments), so an absent copy is
+// pulled once, the way the recovery entries do.
+func (c *ctx) userRootNode(userID string) (string, error) {
+	user, err := c.loadUser(userID)
+	if err != nil {
+		return "", err
+	}
+	if user != nil && user.hasValidHost() {
+		return user.hostID(), nil
+	}
+	authSid, err := c.authSid()
+	if err != nil {
+		return "", err
+	}
+	if err := c.mimeiSync(authSid, userID, nil); err != nil {
+		c.warnf("sync for root of user %s failed: %v", userID, err)
+		return "", fmt.Errorf("User %s is not known here", userID)
+	}
+	user, err = c.loadUser(userID)
+	if err != nil {
+		return "", err
+	}
+	if user == nil || !user.hasValidHost() {
+		return "", fmt.Errorf("User %s is not known here", userID)
+	}
+	return user.hostID(), nil
+}
+
 // entryApplyComment performs the parent-side half of add_comment on the parent
 // author's root node: it creates the comment object, gives the parent both the
 // list entry and the Mimei reference, and publishes. It is reached from
-// add_comment on the writer's node and is not part of the client surface.
+// add_comment on the writer's node and is not part of the client surface: the
+// caller must be that node, named by the platform-injected node app code.
 //
 // A parent author's comment policy — who may comment at all — belongs here,
 // where the node that owns the parent decides. There is no such setting yet.
 func entryApplyComment(c *ctx) (any, error) {
-	if err := c.requireAuthorSession(); err != nil {
-		return respErr(err), nil
-	}
+	// What the peer call carried, for the cross-node record: presence only,
+	// never the code itself.
+	c.debugf("peer request: sid=%t nodeappcode=%t author=%q",
+		c.sid() != "", c.str("nodeappcode") != "", c.str("author"))
+
 	// tweetauthorid is the parent's author; userid is the older clients' name
 	// for the same thing.
 	tweetAuthorID := firstNonEmpty(c.str("tweetauthorid"), c.str("userid"))
@@ -188,6 +226,20 @@ func entryApplyComment(c *ctx) (any, error) {
 
 	comment, err := c.obj("comment")
 	if err != nil {
+		return respErr(err), nil
+	}
+	commentAuthorID := tweetObj(comment).authorID()
+	if commentAuthorID == "" {
+		return respErr(fmt.Errorf("Missing comment author ID: expected comment.authorId")), nil
+	}
+
+	// The delegating node is the comment writer's own root, and only it may
+	// ask this node to attach the comment.
+	writerRoot, err := c.userRootNode(commentAuthorID)
+	if err != nil {
+		return respErr(err), nil
+	}
+	if err := c.requirePeerCall(writerRoot); err != nil {
 		return respErr(err), nil
 	}
 
@@ -464,12 +516,15 @@ func entryDeleteComment(c *ctx) (any, error) {
 // deleter is named by their own root node, which verified their session; the
 // authority check against the comment object happens here, where it lives.
 func entryRemoveComment(c *ctx) (any, error) {
-	if err := c.requireAuthorSession(); err != nil {
-		return respErr(err), nil
-	}
+	c.debugf("peer request: sid=%t nodeappcode=%t author=%q",
+		c.sid() != "", c.str("nodeappcode") != "", c.str("author"))
+
 	tweetID := c.str("tweetid")
 	commentID := c.str("commentid")
 	deleterID := c.str("appuserid")
+	if deleterID == "" {
+		return respErr(fmt.Errorf("Missing parameters: expected appuserid")), nil
+	}
 
 	parent, err := c.loadTweet(tweetID)
 	if err != nil {
@@ -483,6 +538,15 @@ func entryRemoveComment(c *ctx) (any, error) {
 		return respErr(fmt.Errorf("Parent tweet has no author")), nil
 	}
 	if err := c.requireRootNode(parentAuthorID); err != nil {
+		return respErr(err), nil
+	}
+
+	// Only the deleter's own root may ask this node to remove the comment.
+	deleterRoot, err := c.userRootNode(deleterID)
+	if err != nil {
+		return respErr(err), nil
+	}
+	if err := c.requirePeerCall(deleterRoot); err != nil {
 		return respErr(err), nil
 	}
 

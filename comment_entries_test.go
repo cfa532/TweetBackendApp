@@ -22,6 +22,7 @@ type commentAPI struct {
 	users     map[string]map[string]any
 	tweets    map[string]map[string]any
 	sessions  map[string]string // sid -> Leither uid
+	codes     map[string]map[string]string
 	authorSid string
 	authorUID string
 
@@ -43,6 +44,7 @@ func newCommentAPI(node string) *commentAPI {
 		users:    map[string]map[string]any{},
 		tweets:   map[string]map[string]any{},
 		sessions: map[string]string{},
+		codes:    map[string]map[string]string{},
 	}
 }
 
@@ -70,6 +72,15 @@ func (a *commentAPI) GetVar(sid, name string, args ...string) (any, error) {
 		return map[string]any{}, nil
 	}
 	return nil, nil
+}
+
+// SessionGet answers the node app code resolver: codes minted by this node
+// carry their minter's nodeid and the app they were minted for.
+func (a *commentAPI) SessionGet(sid, key string) (any, error) {
+	if code, ok := a.codes[sid]; ok {
+		return code[key], nil
+	}
+	return nil, fmt.Errorf("2:session id is not safe!")
 }
 func (a *commentAPI) Get(mmsid, key string) (any, error) {
 	mid := strings.TrimPrefix(mmsid, "open:")
@@ -247,9 +258,11 @@ func TestAddCommentStripsQuoteFieldsWhenRetweetCreationFails(t *testing.T) {
 func TestApplyCommentRefusesClientCallers(t *testing.T) {
 	api := newCommentAPI("nodeB")
 	api.addUser("pauthor", "nodeB", "uid-pauthor")
+	api.addUser("writer", "nodeA", "uid-writer")
 	api.authorSid, api.authorUID = "author-session", "uid-author"
 	api.sessions["author-session"] = "uid-author"
 	api.sessions["sid-guest"] = "uid-guest"
+	api.tweets["parent"] = map[string]any{"mid": "parent", "authorId": "pauthor"}
 
 	for name, sid := range map[string]string{"no session": "", "user session": "sid-guest"} {
 		ret, err := entryApplyComment(commentCtx(api, "apply_comment", map[string]string{
@@ -315,6 +328,7 @@ func TestRemoveCommentAuthority(t *testing.T) {
 	api := newCommentAPI("nodeB")
 	api.addUser("pauthor", "nodeB", "uid-pauthor")
 	api.addUser("writer", "nodeA", "uid-writer")
+	api.addUser("stranger", "nodeC", "uid-stranger")
 	api.authorSid, api.authorUID = "author-session", "uid-author"
 	api.sessions["author-session"] = "uid-author"
 	api.tweets["parent"] = map[string]any{"mid": "parent", "authorId": "pauthor"}
@@ -323,6 +337,7 @@ func TestRemoveCommentAuthority(t *testing.T) {
 	base := func() map[string]string {
 		return map[string]string{
 			"sid":       "author-session",
+			"author":    "uid-author",
 			"tweetid":   "parent",
 			"commentid": "c1",
 		}
@@ -363,6 +378,158 @@ func withParam(params map[string]string, key, value string) map[string]string {
 	params[key] = value
 	return params
 }
+
+// A cross-node request arrives without sid (the forwarding node deletes it)
+// and carries the platform-injected node app code. The code must name the
+// delegating node — the comment writer's root; a code minted by anyone else,
+// including an ordinary user, is refused before anything is written.
+func TestApplyCommentCrossNodeNodeAppCode(t *testing.T) {
+	api := newCommentAPI("nodeB")
+	api.addUser("pauthor", "nodeB", "uid-pauthor")
+	api.addUser("writer", "nodeA", "uid-writer")
+	api.authorSid, api.authorUID = "author-session", "uid-author"
+	api.sessions["author-session"] = "uid-author"
+	api.tweets["parent"] = map[string]any{"mid": "parent", "authorId": "pauthor"}
+	api.createErr = errors.New("stop after the guard")
+	api.codes = map[string]map[string]string{
+		"code-node":  {"nodeid": "nodeA", "forapp": "aid-test"},
+		"code-wrong": {"nodeid": "nodeZ", "forapp": "aid-test"},
+		"code-user":  {"nodeid": "uid-guest", "forapp": "aid-test"},
+		"code-app":   {"nodeid": "nodeA", "forapp": "another-app"},
+	}
+
+	req := func(code string) map[string]string {
+		return map[string]string{
+			"tweetid":       "parent",
+			"tweetauthorid": "pauthor",
+			"nodeappcode":   code,
+			"comment":       `{"authorId":"writer","content":"hi"}`,
+		}
+	}
+
+	// The genuine delegating node passes the guard and the entry proceeds
+	// until this fixture refuses to create the object.
+	ret, err := entryApplyComment(commentCtx(api, "apply_comment", req("code-node")))
+	if err != nil {
+		t.Fatalf("returned error: %v", err)
+	}
+	if ok, msg := replyMessage(t, ret); ok || !strings.Contains(msg, "stop after the guard") {
+		t.Fatalf("reply %s / %s, want the guard passed and creation failed", fmt.Sprint(ok), msg)
+	}
+
+	for name, code := range map[string]string{
+		"another node": "code-wrong",
+		"a user":       "code-user",
+		"another app":  "code-app",
+		"unknown code": "code-missing",
+	} {
+		ret, err := entryApplyComment(commentCtx(api, "apply_comment", req(code)))
+		if err != nil {
+			t.Fatalf("%s: returned error: %v", name, err)
+		}
+		if ok, msg := replyMessage(t, ret); ok || msg != "Not called from a peer node" {
+			t.Fatalf("%s: reply %s / %s, want peer refusal", name, fmt.Sprint(ok), msg)
+		}
+	}
+	if hasCall(api, "create") {
+		t.Fatalf("refused requests still created an object: %v", api.calls)
+	}
+}
+
+// The local-delegation branch: sid must resolve to the uid the node injected
+// as the app record's author. A client cannot forge that key, and a session
+// that is not the app author's does not pass.
+func TestApplyCommentLocalSessionMustMatchAuthorKey(t *testing.T) {
+	api := newCommentAPI("nodeB")
+	api.addUser("pauthor", "nodeB", "uid-pauthor")
+	api.addUser("writer", "nodeA", "uid-writer")
+	api.authorSid, api.authorUID = "author-session", "uid-author"
+	api.sessions["author-session"] = "uid-author"
+	api.sessions["sid-guest"] = "uid-guest"
+	api.tweets["parent"] = map[string]any{"mid": "parent", "authorId": "pauthor"}
+	api.createErr = errors.New("stop after the guard")
+
+	base := func(sid, author string) map[string]string {
+		return map[string]string{
+			"sid":           sid,
+			"author":        author,
+			"tweetid":       "parent",
+			"tweetauthorid": "pauthor",
+			"comment":       `{"authorId":"writer","content":"hi"}`,
+		}
+	}
+
+	for name, params := range map[string]map[string]string{
+		"no author key":  base("author-session", ""),
+		"foreign author": base("author-session", "uid-guest"),
+		"user session":   base("sid-guest", "uid-author"),
+	} {
+		ret, err := entryApplyComment(commentCtx(api, "apply_comment", params))
+		if err != nil {
+			t.Fatalf("%s: returned error: %v", name, err)
+		}
+		if ok, msg := replyMessage(t, ret); ok || msg != "Not called from a peer node" {
+			t.Fatalf("%s: reply %s / %s, want peer refusal", name, fmt.Sprint(ok), msg)
+		}
+	}
+
+	// The matching pair passes the guard and proceeds to creation, which this
+	// fixture refuses.
+	ret, err := entryApplyComment(commentCtx(api, "apply_comment", base("author-session", "uid-author")))
+	if err != nil {
+		t.Fatalf("returned error: %v", err)
+	}
+	if ok, msg := replyMessage(t, ret); ok || !strings.Contains(msg, "stop after the guard") {
+		t.Fatalf("reply %s / %s, want the guard passed and creation failed", fmt.Sprint(ok), msg)
+	}
+}
+
+// remove_comment admits the delegating node named by the injected code: the
+// deleter's own root. A code naming any other node is refused before the
+// comment is touched.
+func TestRemoveCommentCrossNodeNodeAppCode(t *testing.T) {
+	api := newCommentAPI("nodeB")
+	api.addUser("pauthor", "nodeB", "uid-pauthor")
+	api.addUser("writer", "nodeA", "uid-writer")
+	api.authorSid, api.authorUID = "author-session", "uid-author"
+	api.sessions["author-session"] = "uid-author"
+	api.tweets["parent"] = map[string]any{"mid": "parent", "authorId": "pauthor"}
+	api.tweets["c1"] = map[string]any{"mid": "c1", "authorId": "writer"}
+	api.codes = map[string]map[string]string{
+		"code-node":  {"nodeid": "nodeA", "forapp": "aid-test"},
+		"code-wrong": {"nodeid": "nodeZ", "forapp": "aid-test"},
+	}
+
+	req := func(code string) map[string]string {
+		return map[string]string{
+			"tweetid":     "parent",
+			"commentid":   "c1",
+			"appuserid":   "writer",
+			"nodeappcode": code,
+		}
+	}
+
+	ret, err := entryRemoveComment(commentCtx(api, "remove_comment", req("code-node")))
+	if err != nil {
+		t.Fatalf("returned error: %v", err)
+	}
+	if ok, msg := replyMessage(t, ret); !ok {
+		t.Fatalf("delegated deletion failed: %s", msg)
+	}
+	if !hasCall(api, "delvers:c1") || !hasCall(api, "delref:parent:c1") {
+		t.Fatalf("deletion missing steps, calls: %v", api.calls)
+	}
+
+	api.calls = nil
+	ret, _ = entryRemoveComment(commentCtx(api, "remove_comment", req("code-wrong")))
+	if ok, msg := replyMessage(t, ret); ok || msg != "Not called from a peer node" {
+		t.Fatalf("foreign node: reply %s / %s, want peer refusal", fmt.Sprint(ok), msg)
+	}
+	if len(api.calls) != 0 {
+		t.Fatalf("refused deletion still wrote: %v", api.calls)
+	}
+}
+
 
 // delete_comment runs on the deleter's root and delegates the parent-side
 // removal to the parent author's node; a refusal there reaches the client

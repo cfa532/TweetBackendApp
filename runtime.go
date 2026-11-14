@@ -246,8 +246,9 @@ func redactParam(key, value string) string {
 		return value
 	}
 	switch key {
-	case "password", reqUserSid:
-		// A user session is a bearer credential for as long as it lives.
+	case "password", reqUserSid, "nodeappcode":
+		// A user session is a bearer credential for as long as it lives, and
+		// so is a node app code on the node that minted it.
 		return redactedMark
 	case "user":
 		// A user object carries the password as a field.

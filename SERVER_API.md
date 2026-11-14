@@ -69,9 +69,10 @@ and repeat the request. A request without `usersid`, or for an account with no
 Comments are written through the commenter's own root node, which asks the
 parent author's node to perform the write (see the Comment endpoints). The
 node-to-node halves of that flow (`apply_comment`, `remove_comment`) accept no
-user session: they admit only a caller presenting the application author's
-session, which a client cannot obtain. `health` advertises the arrangement as
-`commentDelegation: true`.
+user session: they admit only the delegating node, named by the platform's
+`nodeappcode` injection (cross-node) or the application author's session
+(same-node), bound to the comment writer's own root. `health` advertises the
+arrangement as `commentDelegation: true`.
 
 `register` is refused with `This node does not accept new registrations` when
 the node's owners have run `tweet-owner.sh --guests deny`.
@@ -469,10 +470,18 @@ list entry and Mimei reference, and publishes. This is also where a parent
 author's comment policy (who may comment) will be checked; no such setting
 exists yet.
 
+The caller must be the comment writer's own root node. A cross-node request is
+identified by the `nodeappcode` the platform injects on this node (the
+forwarding transport deletes `sid`); the code must resolve to the writer's
+root. A same-node delegation carries the local author session in `sid`, checked
+against the node-set `author` key. Anything else is refused with
+`Not called from a peer node`. If this node holds no copy of the writer's
+account, one is pulled (`MiMeiSync`) to resolve their root.
+
 **Input Parameters:**
-- `aid` (string): App ID
-- `sid` (string): the application author's session; a request without it is
-  refused with `Not called from a peer node`
+- `aid` (string): App ID (its presence is what makes the platform inject the
+  node app code on the cross-node hop)
+- `sid` (string, local hop only): the application author's session
 - `tweetid` (string): Tweet ID being commented on
 - `tweetauthorid` (string): the parent author's user ID
 - `comment` (string): JSON string of comment object, quote fields stripped
@@ -485,12 +494,12 @@ node; not part of the client surface
 
 Deletes the comment object and detaches it from the parent on the parent
 author's root node, after checking the named deleter is the comment's author or
-the parent's author.
+the parent's author. The caller must be the deleter's own root node, verified
+the same way as `apply_comment`.
 
 **Input Parameters:**
 - `aid` (string): App ID
-- `sid` (string): the application author's session; a request without it is
-  refused with `Not called from a peer node`
+- `sid` (string, local hop only): the application author's session
 - `tweetid` (string): Tweet ID containing the comment
 - `commentid` (string): Comment ID to delete
 - `appuserid` (string): the deleting user ID, verified by their own root node
