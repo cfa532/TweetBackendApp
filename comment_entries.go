@@ -94,6 +94,7 @@ func entryAddComment(c *ctx) (any, error) {
 		"tweetid":       tweetID,
 		"tweetauthorid": parentAuthorID,
 		"comment":       jsonStringify(comment),
+		"requestid":     c.str("requestid"),
 	})
 	if err != nil {
 		return respErr(err), nil
@@ -109,18 +110,24 @@ func entryAddComment(c *ctx) (any, error) {
 }
 
 // createQuotedRetweet creates the retweet half of a quote-comment and returns
-// its id. The retweet belongs to the writer of the comment, and add_comment
+// its id. The retweet belongs to the writer of the comment, and add_comment now
 // runs on the writer's root node, so the tweet is created right here through
-// add_tweet, which checks the writer's session itself.
+// add_tweet, which checks the writer's session itself. A requestid from the
+// comment submission names the quote half deterministically ("-quote"), so a
+// retried quote-comment converges on the same two objects.
 //
 // Best effort, as it has always been: a comment whose quoted retweet could not
 // be created is still a comment, and the caller reports an empty retweet id.
 func (c *ctx) createQuotedRetweet() string {
-	ret, err := c.callEntryMap("add_tweet", map[string]string{
+	params := map[string]string{
 		reqAppID:  c.appID(),
 		reqAppVer: verLast,
 		"tweet":   c.str("comment"),
-	})
+	}
+	if requestID := c.str("requestid"); requestID != "" {
+		params["requestid"] = requestID + "-quote"
+	}
+	ret, err := c.callEntryMap("add_tweet", params)
 	if err != nil {
 		c.warnf("quoted tweet creation failed: %v", err)
 		return ""
@@ -245,7 +252,15 @@ func entryApplyComment(c *ctx) (any, error) {
 	if err != nil {
 		return respErr(err), nil
 	}
-	commentID, err := c.fileObjectID(authSid, "tweet", "{{auto}}")
+	// The comment writer's node names this submission with a requestid; the
+	// id is derived from the mark, so a retried comment resolves the same
+	// object and every step below (list entry, reference) converges. Without
+	// one, "{{auto}}" mints a fresh id, as before.
+	commentMark := c.str("requestid")
+	if commentMark == "" {
+		commentMark = "{{auto}}"
+	}
+	commentID, err := c.fileObjectID(authSid, "tweet", commentMark)
 	if err != nil {
 		return respErr(fmt.Errorf("MMCreate(comment): %v", err)), nil
 	}

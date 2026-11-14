@@ -119,11 +119,18 @@ func (a *commentAPI) MiMeiSync(sid, dhts, mid string, param map[string]string) e
 	return nil
 }
 func (a *commentAPI) MMCreate(sid, appid, ext, mark string, tp byte, right uint64) (string, error) {
+	// The mark is recorded even when creation is made to fail, so tests can
+	// assert which mark a submission carried.
+	a.calls = append(a.calls, "create:"+mark)
 	if a.createErr != nil {
 		return "", a.createErr
 	}
-	a.calls = append(a.calls, "create")
-	return "new-object", nil
+	// A deterministic mark resolves the same identity, "{{auto}}" mints a
+	// fresh one — the property tweet and comment submission rely on.
+	if mark == "{{auto}}" {
+		return "new-object", nil
+	}
+	return "mid-" + mark, nil
 }
 func (a *commentAPI) Hdel(mmsid, key string, fields ...string) (int64, error) {
 	for _, field := range fields {
@@ -458,8 +465,15 @@ func TestApplyCommentCrossNodeNodeAppCode(t *testing.T) {
 			t.Fatalf("%s: reply %s / %s, want peer refusal", name, fmt.Sprint(ok), msg)
 		}
 	}
-	if hasCall(api, "create") {
-		t.Fatalf("refused requests still created an object: %v", api.calls)
+	// Every refused request fails at the guard, before any object is created
+	// (the genuine attempt above is the only one that reached creation).
+	for _, call := range api.calls {
+		if strings.HasPrefix(call, "create:") && call != "create:{{auto}}" {
+			t.Fatalf("refused request created an object: %v", api.calls)
+		}
+	}
+	if len(api.calls) != 1 {
+		t.Fatalf("expected only the genuine creation attempt, calls: %v", api.calls)
 	}
 }
 
@@ -504,6 +518,95 @@ func TestApplyCommentPullsUnknownCommentAuthor(t *testing.T) {
 	}))
 	if ok, msg := replyMessage(t, ret); ok || msg != "User writer is not known here" {
 		t.Fatalf("reply %s / %s, want unknown-user refusal", fmt.Sprint(ok), msg)
+	}
+}
+
+// A submission's requestid names the object deterministically: the same id on
+// a retry resolves the same tweet instead of creating a second one. Without
+// one, a fresh id is minted, as before.
+func TestAddTweetRequestidNamesTheTweet(t *testing.T) {
+	api := newCommentAPI("nodeA")
+	api.addUser("author", "nodeA", "uid-author")
+	api.authorSid, api.authorUID = "author-session", "uid-author"
+	api.createErr = errors.New("stop after creation")
+
+	var firstReply any
+	run := func(requestid string) {
+		params := map[string]string{
+			"tweet": `{"authorId":"author","content":"hello"}`,
+		}
+		if requestid != "" {
+			params["requestid"] = requestid
+		}
+		var err error
+		firstReply, err = entryAddTweet(commentCtx(api, "add_tweet", params))
+		if err != nil {
+			t.Fatalf("add_tweet returned error: %v", err)
+		}
+	}
+
+	run("req-1")
+	run("req-1")
+	run("")
+	creates := make([]string, 0, 3)
+	for _, call := range api.calls {
+		if strings.HasPrefix(call, "create:") {
+			creates = append(creates, strings.TrimPrefix(call, "create:"))
+		}
+	}
+	// Two retries with the same requestid derive the same identity twice; a
+	// submission without one asks for a fresh id.
+	if len(creates) != 3 || creates[0] != "req-1" || creates[1] != "req-1" || creates[2] != "{{auto}}" {
+		t.Fatalf("creation marks wrong: %v, first reply: %#v, calls: %v", creates, firstReply, api.calls)
+	}
+}
+
+// The comment submission carries its requestid to the peer entry, which uses
+// it as the comment object's mark.
+func TestAddCommentCarriesRequestidToPeer(t *testing.T) {
+	api := newCommentAPI("nodeA")
+	api.addUser("writer", "nodeA", "uid-writer")
+	api.addUser("pauthor", "nodeB", "uid-pauthor")
+	api.authorSid, api.authorUID = "author-session", "uid-author"
+	api.sessions["author-session"] = "uid-author"
+	api.sessions["sid-writer"] = "uid-writer"
+	api.tweets["parent"] = map[string]any{"mid": "parent", "authorId": "pauthor"}
+	api.reply = map[string]any{"success": true, "mid": "c1", "commentId": "c1", "count": int64(1)}
+
+	ret, err := entryAddComment(commentCtx(api, "add_comment", map[string]string{
+		"usersid":       "sid-writer",
+		"tweetid":       "parent",
+		"tweetauthorid": "pauthor",
+		"requestid":     "cmt-7",
+		"comment":       `{"authorId":"writer","content":"hi"}`,
+	}))
+	if err != nil {
+		t.Fatalf("add_comment returned error: %v", err)
+	}
+	if ok, msg := replyMessage(t, ret); !ok {
+		t.Fatalf("add_comment failed: %s", msg)
+	}
+	if api.remote.req["requestid"] != "cmt-7" {
+		t.Fatalf("requestid not forwarded: %#v", api.remote.req)
+	}
+
+	// On the peer side the requestid becomes the comment's creation mark.
+	api.node = "nodeB"
+	api.createErr = errors.New("stop after creation")
+	api.codes["code-node"] = map[string]string{"nodeid": "nodeA", "forapp": "aid-test"}
+	_, err = entryApplyComment(commentCtx(api, "apply_comment", map[string]string{
+		"tweetid":       "parent",
+		"tweetauthorid": "pauthor",
+		"userid":        "writer",
+		"nodeappcode":   "code-node",
+		"requestid":     "cmt-7",
+		"comment":       `{"authorId":"writer","content":"hi"}`,
+	}))
+	if err != nil {
+		t.Fatalf("apply_comment returned error: %v", err)
+	}
+	if !hasCall(api, "create:cmt-7") {
+		t.Fatalf("requestid not used as the comment mark, calls: %v", api.calls)
 	}
 }
 

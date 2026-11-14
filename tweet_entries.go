@@ -66,9 +66,17 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 	if err != nil {
 		return respErr(err), nil
 	}
-	// "{{auto}}" asks Leither for a fresh id rather than deriving one from the
-	// mark, so two tweets with identical text remain distinct objects.
-	tweetID, err := c.fileObjectID(authSid, "tweet", "{{auto}}")
+	// A client-supplied requestid makes submission idempotent: the id is
+	// derived from the mark, so a retry after a lost response resolves the
+	// same tweet instead of creating a second one, and every step below
+	// (list entry, references) already converges on the same mid. Without
+	// one, "{{auto}}" asks Leither for a fresh id, so two tweets with
+	// identical text remain distinct objects.
+	mark := c.str("requestid")
+	if mark == "" {
+		mark = "{{auto}}"
+	}
+	tweetID, err := c.fileObjectID(authSid, "tweet", mark)
 	if err != nil {
 		return respErr(fmt.Errorf("MMCreate(tweet): %v", err)), nil
 	}

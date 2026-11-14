@@ -192,6 +192,12 @@ the node's owners have run `tweet-owner.sh --guests deny`.
 - `aid` (string): App ID
 - `hostid` (string): Host ID where tweet should be published
 - `tweet` (string): JSON string of tweet object
+- `requestid` (string, optional): a caller-generated id naming this
+  submission. The tweet's Mimei id is derived from it, so a retry after a
+  lost response resolves the same tweet instead of creating a duplicate —
+  every step of the entry (list entry, references) converges on the same id.
+  Without one, a fresh id is minted on every accepted request and a retry
+  creates a second tweet.
 - `nodeappcode` (string, optional): Node app code for peer validation
 
 **Tweet Object Schema:**
@@ -413,6 +419,10 @@ request sent straight to the parent author's node, no session.
   comment's author)
 - `comment` (string): JSON string of comment object (same as tweet object); its
   `authorId` is the writer and names the account the session must control
+- `requestid` (string, optional): a caller-generated id naming this
+  submission; the comment's id is derived from it, so a retried comment
+  resolves the same object instead of creating a duplicate. A quote-comment's
+  retweet half is named `<requestid>-quote`.
 
 **Output Schema:**
 ```json
