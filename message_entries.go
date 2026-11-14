@@ -7,9 +7,10 @@
 //	Zset  <otherUserId>              server timestamp -> same timestamp as member
 //	Hash  <otherUserId>[timestamp]   the message itself
 //
-// Sending writes twice: the sender stores its own copy through message_outgoing,
-// and message_incoming stores a copy on the recipient's node. Neither node needs
-// the other to read its own history afterwards.
+// Sending writes twice: the sender's node stores its own copy through
+// message_outgoing and then asks the recipient's node to store the recipient's
+// copy through message_incoming, a peer entry no client may call. Neither node
+// needs the other to read its own history afterwards.
 //
 // Two indicators drive the unread badge, both on the recipient's Mimei:
 //
@@ -59,7 +60,13 @@ func (c *ctx) messageMimeiID(authSid, userID string) (string, error) {
 // message_outgoing
 // ---------------------------------------------------------------------------
 
-// entryMessageOutgoing stores the sender's copy of a message.
+// entryMessageOutgoing stores the sender's copy of a message and delivers the
+// recipient's copy, called on the sender's own root node.
+//
+// The recipient's half is the delivery itself, so a peer refusal or unreachable
+// recipient node fails the whole entry — unlike the best-effort follower side —
+// and the client surfaces it. A client retry re-stamps the sender's copy (the
+// member is the node clock), which has always been true of a retried send.
 func entryMessageOutgoing(c *ctx) (any, error) {
 	senderID := c.str("userid")
 	receiptID := c.str("receiptid")
@@ -107,6 +114,28 @@ func entryMessageOutgoing(c *ctx) (any, error) {
 	if err := c.backupDelRef(authSid, msgMid, ""); err != nil {
 		return c.wrapErrBool(err), nil
 	}
+
+	// Deliver the recipient's copy on their node, through the guarded peer
+	// path. An account this node has never seen is pulled once so its root can
+	// be resolved.
+	recipientRoot, err := c.userRootNode(receiptID)
+	if err != nil {
+		return c.wrapErrBool(err), nil
+	}
+	reply, err := c.callPeerEntry(authSid, recipientRoot, "message_incoming", map[string]string{
+		"senderid":  senderID,
+		"receiptid": receiptID,
+		"msg":       c.str("msg"),
+	})
+	if err != nil {
+		c.errorf("deliver to %s failed: %v", receiptID, err)
+		return c.wrapSent(false), nil
+	}
+	if m, ok := toMap(reply); !ok || !mapBool(m, "success") {
+		message := firstNonEmpty(mapStr(m, "message"), mapStr(m, "error"))
+		c.errorf("deliver to %s refused: %s", receiptID, message)
+		return c.wrapSent(false), nil
+	}
 	return c.wrapSent(true), nil
 }
 
@@ -131,8 +160,14 @@ func (c *ctx) wrapSent(result any) any {
 // ---------------------------------------------------------------------------
 
 // entryMessageIncoming stores the recipient's copy of a message and marks the
-// sender as having something new.
+// sender as having something new. It is the second half of a send, reached from
+// message_outgoing on the sender's node, and is not part of the client surface:
+// only the sender's own root node may ask, so no client writes into anyone
+// else's store.
 func entryMessageIncoming(c *ctx) (any, error) {
+	c.debugf("peer request: sid=%t nodeappcode=%t author=%q",
+		c.sid() != "", c.str("nodeappcode") != "", c.str("author"))
+
 	senderID := c.str("senderid")
 	receiptID := c.str("receiptid")
 
@@ -145,6 +180,17 @@ func entryMessageIncoming(c *ctx) (any, error) {
 	// that node.
 	if err := c.requireRootNode(receiptID); err != nil {
 		return map[string]any{"success": false, "error": "User host not found"}, nil
+	}
+
+	// Only the sender's own root may deliver here: the platform-injected node
+	// app code names it, and a sender this node has never seen is pulled once
+	// so their root can be resolved.
+	senderRoot, err := c.userRootNode(senderID)
+	if err != nil {
+		return c.wrapErrString(err), nil
+	}
+	if err := c.requirePeerCall(senderRoot); err != nil {
+		return c.wrapErrString(err), nil
 	}
 
 	authSid, err := c.authSid()

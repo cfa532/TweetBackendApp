@@ -888,43 +888,70 @@ The iOS client uses a **smart retry strategy** for IP resolution:
 
 ## Message Endpoints
 
+Messages follow the same delegation as comments and engagement: the sender
+calls `message_outgoing` on their OWN root node with their `usersid`, and that
+node delivers the recipient's copy through the peer-only `message_incoming` on
+the recipient's node. A node advertises this in `health` as
+`messageDelegation: true`; a node without it still takes the old form — the
+client writing `message_incoming` on the recipient's node directly.
+
+### Message Outgoing
+**Endpoint:** `message_outgoing` — called on the sender's root node
+
+Stores the sender's copy, then delivers the recipient's copy through the
+guarded peer path. The recipient's copy is the delivery, so a refused or
+unreachable recipient node fails the send (`{"sent": false}`).
+
+**Input Parameters:**
+- `aid` (string): App ID
+- `usersid` (string): the sender's Leither session on this node
+- `userid` (string): the sender's user ID
+- `receiptid` (string): the recipient's user ID
+- `msg` (string): JSON string of the message object
+
+**Output Schema:** `{"success": boolean, "data": {"sent": boolean}}`
+
+### Message Incoming (node to node)
+**Endpoint:** `message_incoming` — reached from `message_outgoing` on the
+sender's node; not part of the client surface
+
+Stores the recipient's copy and marks the unread indicator. Only the sender's
+own root node may deliver here: the platform-injected node app code must name
+it, and a sender this node has never seen is pulled once to resolve the root. A
+bare client call is refused with `Not called from a peer node`.
+
+**Input Parameters:**
+- `aid` (string): App ID
+- `sid` (string, local hop only): the application author's session
+- `senderid` (string): the sender's user ID
+- `receiptid` (string): the recipient's user ID
+- `msg` (string): JSON string of the message object
+
+**Output Schema:** `{"success": boolean}`
+
 ### Message Check
 **Endpoint:** `message_check`
 
+Reports the newest unread message from each correspondent, for notifications;
+does not mark anything read. Read-only.
+
 **Input Parameters:**
 - `aid` (string): App ID
 - `userid` (string): User ID
 
-**Output Schema:** Message check result
+**Output Schema:** Array of unread message objects
 
 ### Message Fetch
-**Endpoint:** `message_fetch`
+**Endpoint:** `message_fetch` — called on the user's root node (it marks the
+conversation read, which writes)
 
 **Input Parameters:**
 - `aid` (string): App ID
+- `usersid` (string): the user's Leither session on this node
 - `userid` (string): User ID
+- `senderid` (string): the correspondent whose messages to fetch
 
-**Output Schema:** Array of messages
-
-### Message Incoming
-**Endpoint:** `message_incoming`
-
-**Input Parameters:**
-- `aid` (string): App ID
-- `userid` (string): User ID
-- `message` (string): Message content
-
-**Output Schema:** No specific return value
-
-### Message Outgoing
-**Endpoint:** `message_outgoing`
-
-**Input Parameters:**
-- `aid` (string): App ID
-- `userid` (string): User ID
-- `message` (string): Message content
-
-**Output Schema:** No specific return value
+**Output Schema:** Array of message objects
 
 ## Utility Endpoints
 

@@ -21,6 +21,9 @@ func entryHealth(c *ctx) (any, error) {
 		// with apply_favorite/apply_bookmark/apply_retweet as the guarded peer
 		// entries on the tweet author's node.
 		"engagementDelegation": true,
+		// messageDelegation says message_outgoing on the sender's root delivers
+		// the recipient's copy itself, through the peer-only message_incoming.
+		"messageDelegation": true,
 		"guestRegistration": config.allowGuests,
 		"message":           "Server is running",
 		"storageFormats":    []string{"database", fileSchema},

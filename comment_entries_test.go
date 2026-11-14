@@ -82,6 +82,10 @@ func (a *commentAPI) GetVar(sid, name string, args ...string) (any, error) {
 		return nil, fmt.Errorf("2:session id is not safe!")
 	case "mminfo":
 		return map[string]any{}, nil
+	case "mmversions":
+		// No committed versions: message-store identities resolve to the
+		// legacy id and open as database objects.
+		return []any{}, nil
 	}
 	return nil, nil
 }
@@ -126,11 +130,13 @@ func (a *commentAPI) MMCreate(sid, appid, ext, mark string, tp byte, right uint6
 		return "", a.createErr
 	}
 	// A deterministic mark resolves the same identity, "{{auto}}" mints a
-	// fresh one — the property tweet and comment submission rely on.
+	// fresh one — the property tweet and comment submission rely on. The ext
+	// is part of the derived id so a message store's legacy Database identity
+	// and its File identity stay distinct objects.
 	if mark == "{{auto}}" {
 		return "new-object", nil
 	}
-	return "mid-" + mark, nil
+	return "mid-" + ext + "-" + mark, nil
 }
 func (a *commentAPI) Hdel(mmsid, key string, fields ...string) (int64, error) {
 	for _, field := range fields {
@@ -142,6 +148,11 @@ func (a *commentAPI) Hdel(mmsid, key string, fields ...string) (int64, error) {
 func (a *commentAPI) Zrem(mmsid, key string, members ...string) (int64, error) {
 	a.calls = append(a.calls, "zrem:"+key)
 	return int64(len(members)), nil
+}
+
+func (a *commentAPI) Zadd(mmsid, key string, args ...lapi.ScorePair) (int64, error) {
+	a.calls = append(a.calls, "zadd:"+key)
+	return int64(len(args)), nil
 }
 func (a *commentAPI) Zcard(mmsid, key string) (int64, error) { return 3, nil }
 func (a *commentAPI) MMAddRef(sid, mid string, fileids ...string) (int, error) {
