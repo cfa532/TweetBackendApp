@@ -26,6 +26,13 @@ type commentAPI struct {
 	authorSid string
 	authorUID string
 
+	// absent simulates an account this node holds no copy of: reading it
+	// fails the way MMOpen does on the real node ("ver is empty"), until
+	// MiMeiSync pulls it (syncErr makes even the pull fail).
+	absent   map[string]bool
+	pulled   map[string]bool
+	syncErr  error
+
 	createErr error
 	calls     []string
 	hdels     []string
@@ -45,6 +52,8 @@ func newCommentAPI(node string) *commentAPI {
 		tweets:   map[string]map[string]any{},
 		sessions: map[string]string{},
 		codes:    map[string]map[string]string{},
+		absent:   map[string]bool{},
+		pulled:   map[string]bool{},
 	}
 }
 
@@ -84,6 +93,9 @@ func (a *commentAPI) SessionGet(sid, key string) (any, error) {
 }
 func (a *commentAPI) Get(mmsid, key string) (any, error) {
 	mid := strings.TrimPrefix(mmsid, "open:")
+	if a.absent[mid] && !a.pulled[mid] {
+		return nil, fmt.Errorf("MMOpen(%s, last): OpenMM ver is empty", mid)
+	}
 	if key == ownerDataKey {
 		return a.users[mid], nil
 	}
@@ -91,6 +103,17 @@ func (a *commentAPI) Get(mmsid, key string) (any, error) {
 		return a.tweets[mid], nil
 	}
 	return nil, nil
+}
+
+// MiMeiSync stands in for the network pull that brings an absent account
+// onto this node.
+func (a *commentAPI) MiMeiSync(sid, dhts, mid string, param map[string]string) error {
+	if a.syncErr != nil {
+		return a.syncErr
+	}
+	a.calls = append(a.calls, "sync:"+mid)
+	a.pulled[mid] = true
+	return nil
 }
 func (a *commentAPI) MMCreate(sid, appid, ext, mark string, tp byte, right uint64) (string, error) {
 	if a.createErr != nil {
@@ -433,6 +456,50 @@ func TestApplyCommentCrossNodeNodeAppCode(t *testing.T) {
 	}
 	if hasCall(api, "create") {
 		t.Fatalf("refused requests still created an object: %v", api.calls)
+	}
+}
+
+// A commenter whose account this node has never seen arrives as an MMOpen
+// error, not an empty record; their account is pulled once so their root —
+// and with it the expected delegating node — can be resolved.
+func TestApplyCommentPullsUnknownCommentAuthor(t *testing.T) {
+	api := newCommentAPI("nodeB")
+	api.addUser("pauthor", "nodeB", "uid-pauthor")
+	api.addUser("writer", "nodeA", "uid-writer")
+	api.authorSid, api.authorUID = "author-session", "uid-author"
+	api.sessions["author-session"] = "uid-author"
+	api.tweets["parent"] = map[string]any{"mid": "parent", "authorId": "pauthor"}
+	api.codes["code-node"] = map[string]string{"nodeid": "nodeA", "forapp": "aid-test"}
+	api.absent["writer"] = true
+	api.createErr = errors.New("stop after the guard")
+
+	ret, err := entryApplyComment(commentCtx(api, "apply_comment", map[string]string{
+		"tweetid":       "parent",
+		"tweetauthorid": "pauthor",
+		"nodeappcode":   "code-node",
+		"comment":       `{"authorId":"writer","content":"hi"}`,
+	}))
+	if err != nil {
+		t.Fatalf("returned error: %v", err)
+	}
+	if !hasCall(api, "sync:writer") {
+		t.Fatalf("absent writer was not pulled, calls: %v", api.calls)
+	}
+	if ok, msg := replyMessage(t, ret); ok || !strings.Contains(msg, "stop after the guard") {
+		t.Fatalf("reply %s / %s, want the guard passed and creation failed", fmt.Sprint(ok), msg)
+	}
+
+	// A writer whose account cannot be pulled is refused before the guard.
+	api.pulled = map[string]bool{}
+	api.syncErr = errors.New("no provider")
+	ret, _ = entryApplyComment(commentCtx(api, "apply_comment", map[string]string{
+		"tweetid":       "parent",
+		"tweetauthorid": "pauthor",
+		"nodeappcode":   "code-node",
+		"comment":       `{"authorId":"writer","content":"hi"}`,
+	}))
+	if ok, msg := replyMessage(t, ret); ok || msg != "User writer is not known here" {
+		t.Fatalf("reply %s / %s, want unknown-user refusal", fmt.Sprint(ok), msg)
 	}
 }
 

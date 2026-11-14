@@ -154,14 +154,12 @@ func (c *ctx) callCommentPeer(authSid, parentHost, entry string, params map[stri
 
 // userRootNode resolves the node that may delegate for a user: their own
 // root. The parent author's node may hold no copy of a commenter's account
-// (a user object does not follow the user's comments), so an absent copy is
-// pulled once, the way the recovery entries do.
+// (a user object does not follow the user's comments), and a node without a
+// copy reports that as an MMOpen error rather than an empty record — either
+// way, the account is pulled once, the way the recovery entries do.
 func (c *ctx) userRootNode(userID string) (string, error) {
-	user, err := c.loadUser(userID)
-	if err != nil {
-		return "", err
-	}
-	if user != nil && user.hasValidHost() {
+	user, loadErr := c.loadUser(userID)
+	if loadErr == nil && user != nil && user.hasValidHost() {
 		return user.hostID(), nil
 	}
 	authSid, err := c.authSid()
@@ -169,7 +167,7 @@ func (c *ctx) userRootNode(userID string) (string, error) {
 		return "", err
 	}
 	if err := c.mimeiSync(authSid, userID, nil); err != nil {
-		c.warnf("sync for root of user %s failed: %v", userID, err)
+		c.warnf("load (%v) and sync for root of user %s failed: %v", loadErr, userID, err)
 		return "", fmt.Errorf("User %s is not known here", userID)
 	}
 	user, err = c.loadUser(userID)
