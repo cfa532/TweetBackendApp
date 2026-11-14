@@ -90,7 +90,7 @@ func entryAddComment(c *ctx) (any, error) {
 	if err != nil {
 		return respErr(err), nil
 	}
-	reply, err := c.callCommentPeer(authSid, parentHost, "apply_comment", map[string]string{
+	reply, err := c.callPeerEntry(authSid, parentHost, "apply_comment", map[string]string{
 		"tweetid":       tweetID,
 		"tweetauthorid": parentAuthorID,
 		"comment":       jsonStringify(comment),
@@ -132,7 +132,7 @@ func (c *ctx) createQuotedRetweet() string {
 	return mapStr(ret, "mid")
 }
 
-// callCommentPeer reaches a comment peer entry on the parent author's node:
+// callPeerEntry reaches a guarded peer entry on another party's node:
 // directly when this is that node, otherwise through a cross-node call.
 //
 // The author session in sid survives only the local callEntry; a cross-node
@@ -140,7 +140,7 @@ func (c *ctx) createQuotedRetweet() string {
 // identifies its caller by the nodeappcode the platform injects there. The
 // node-set author uid travels along for the local guard, which compares
 // against it rather than logging in as the author again.
-func (c *ctx) callCommentPeer(authSid, parentHost, entry string, params map[string]string) (any, error) {
+func (c *ctx) callPeerEntry(authSid, parentHost, entry string, params map[string]string) (any, error) {
 	params[reqAppID] = c.appID()
 	params[reqAppVer] = verLast
 	params[reqSid] = authSid
@@ -484,7 +484,7 @@ func entryDeleteComment(c *ctx) (any, error) {
 		if err != nil {
 			return respErr(err), nil
 		}
-		reply, err = c.callCommentPeer(authSid, parentHost, "remove_comment", map[string]string{
+		reply, err = c.callPeerEntry(authSid, parentHost, "remove_comment", map[string]string{
 			"tweetid":   tweetID,
 			"commentid": commentID,
 			"appuserid": appUserID,

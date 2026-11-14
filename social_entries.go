@@ -265,22 +265,14 @@ func (c *ctx) unfollow(authSid, userID, followingID, hostOfOther, nodeID string)
 	return nil
 }
 
-// updateFollowerSide records the relationship on the target's own node.
+// updateFollowerSide records the relationship on the target's own node,
+// through the guarded peer path.
 func (c *ctx) updateFollowerSide(authSid, targetID, actorID, targetHost string, isFollower bool) error {
-	params := map[string]string{
-		reqAppID:     c.appID(),
-		reqAppVer:    verLast,
-		reqSid:       authSid,
-		reqVersion:   c.version(),
+	_, err := c.callPeerEntry(authSid, targetHost, "toggle_follower", map[string]string{
 		"userid":     targetID,
 		"otherid":    actorID,
 		"isfollower": boolParam(isFollower),
-	}
-	if targetHost == c.nodeID() {
-		_, err := c.callEntry("toggle_follower", params)
-		return err
-	}
-	_, err := c.callRemote(targetHost, "toggle_follower", params)
+	})
 	return err
 }
 
@@ -399,7 +391,9 @@ func redactUser(user userObj) map[string]any {
 // ---------------------------------------------------------------------------
 
 // entryToggleFollower records or removes a follower on the followed user's
-// account. It is the second half of a follow and runs on that user's node.
+// account. It is the second half of a follow, reached from toggle_following on
+// the follower's node, and runs on the followed user's node. Only that node
+// may ask: a bare client never legitimately calls this entry.
 func entryToggleFollower(c *ctx) (any, error) {
 	userID := c.str("userid")
 	otherID := c.str("otherid")
@@ -414,6 +408,17 @@ func entryToggleFollower(c *ctx) (any, error) {
 	// to two accounts that live on two different nodes.
 	if err := c.requireRootNode(userID); err != nil {
 		return c.wrapErr(fmt.Errorf("User host not found")), nil
+	}
+
+	// Only the follower's own root may ask this node to record them: the
+	// platform-injected node app code names it, and an account this node has
+	// never seen is pulled once so its root can be resolved.
+	followerRoot, err := c.userRootNode(otherID)
+	if err != nil {
+		return c.wrapErr(err), nil
+	}
+	if err := c.requirePeerCall(followerRoot); err != nil {
+		return c.wrapErr(err), nil
 	}
 
 	authSid, err := c.authSid()

@@ -570,63 +570,144 @@ func (c *ctx) wrapErrBool(err error) any {
 // retweet_added / retweet_removed
 // ---------------------------------------------------------------------------
 
-// entryRetweetAdded records a retweet against the tweet that was retweeted.
+// entryRetweetAdded records a retweet against the tweet that was retweeted,
+// called by the retweeting user on their own root node.
 func entryRetweetAdded(c *ctx) (any, error) {
-	return c.updateRetweetList("retweet_added", true)
+	return c.toggleRetweetList(true)
 }
 
-// entryRetweetRemoved removes a retweet record from the original tweet.
+// entryRetweetRemoved removes a retweet record from the original tweet, called
+// by the retweeting user on their own root node.
 func entryRetweetRemoved(c *ctx) (any, error) {
-	return c.updateRetweetList("retweet_removed", false)
+	return c.toggleRetweetList(false)
 }
 
-// updateRetweetList adds or removes an entry in a tweet's retweet list.
-//
-// The list is keyed by retweet id rather than by user, because one user can
-// retweet the same tweet more than once. The write happens on the original
-// author's node, since the list lives inside their tweet.
-func (c *ctx) updateRetweetList(entry string, add bool) (any, error) {
+// toggleRetweetList asks the original author's node to record or clear a
+// retweet. There is no user-side list for retweets — the retweet itself is a
+// tweet on the retweeter's node — so the entry is a verified delegation and
+// nothing else.
+func (c *ctx) toggleRetweetList(add bool) (any, error) {
 	retweetID := c.str("retweetid")
 	tweetID := c.str("tweetid")
 	appUserID := c.str("appuserid")
 	authorID := c.str("authorid")
 
-	// The list lives inside the author's tweet, so this must be their node.
-	// The failure is reported as it happened: a wrong-node call and an unknown
-	// author are different problems, and collapsing both into one message sent
-	// whoever had to debug it looking for the wrong thing.
-	if err := c.requireRootNode(authorID); err != nil {
+	// The retweeter's session was issued by this node, the retweeter's root.
+	if err := c.requireRootNode(appUserID); err != nil {
 		return c.wrapErr(err), nil
+	}
+	if err := c.requireOwner(appUserID); err != nil {
+		return c.wrapErr(err), nil
+	}
+
+	// Route to the original author's node, preferring this node's own record
+	// of their account over the client's hostid hint.
+	authorHost := c.str("hostid")
+	if author, err := c.loadUser(authorID); err == nil && author != nil && author.hasValidHost() {
+		authorHost = author.hostID()
+	}
+	if authorHost == "" {
+		return c.wrapErr(fmt.Errorf("Author host not found")), nil
 	}
 
 	authSid, err := c.authSid()
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
-	tweetSid, err := c.openMimei(authSid, tweetID, verCur)
+	peerReply, err := c.callPeerEntry(authSid, authorHost, "apply_retweet", map[string]string{
+		"tweetid":   tweetID,
+		"authorid":  authorID,
+		"userid":    appUserID,
+		"retweetid": retweetID,
+		"wanted":    boolParam(add),
+	})
 	if err != nil {
 		return c.wrapErr(err), nil
+	}
+	peer, ok := toMap(peerReply)
+	if !ok || !mapBool(peer, "success") {
+		message := firstNonEmpty(mapStr(peer, "message"), mapStr(peer, "error"))
+		if message == "" {
+			message = "Retweet operation failed"
+		}
+		return c.wrapErr(fmt.Errorf("%s", message)), nil
+	}
+	return c.wrapRetweet(peer["tweet"]), nil
+}
+
+// entryApplyRetweet performs the tweet-side half on the original author's root
+// node, with the same peer guard as the engagement entries. The list is keyed
+// by retweet id rather than by user, because one user can retweet the same
+// tweet more than once.
+func entryApplyRetweet(c *ctx) (any, error) {
+	c.debugf("peer request: sid=%t nodeappcode=%t author=%q",
+		c.sid() != "", c.str("nodeappcode") != "", c.str("author"))
+
+	retweetID := c.str("retweetid")
+	tweetID := c.str("tweetid")
+	userID := c.str("userid")
+	authorID := c.str("authorid")
+	add := c.boolParam("wanted")
+
+	// The list lives inside the author's tweet, so this must be their node.
+	// The failure is reported as it happened: a wrong-node call and an unknown
+	// author are different problems, and collapsing both into one message sent
+	// whoever had to debug it looking for the wrong thing.
+	if err := c.requireRootNode(authorID); err != nil {
+		return respErr(fmt.Errorf("Author host not found")), nil
+	}
+	// The tweet object itself must agree with the named author.
+	tweet, err := c.loadTweet(tweetID)
+	if err != nil {
+		return respErr(err), nil
+	}
+	if tweet == nil {
+		return respErr(fmt.Errorf("Tweet not found")), nil
+	}
+	if tweet.authorID() != authorID {
+		return respErr(fmt.Errorf("Tweet does not belong to the named author")), nil
+	}
+
+	// Only the retweeper's own root may ask this node to touch the list.
+	userRoot, err := c.userRootNode(userID)
+	if err != nil {
+		return respErr(err), nil
+	}
+	if err := c.requirePeerCall(userRoot); err != nil {
+		return respErr(err), nil
+	}
+
+	authSid, err := c.authSid()
+	if err != nil {
+		return respErr(err), nil
+	}
+	tweetSid, err := c.openMimei(authSid, tweetID, verCur)
+	if err != nil {
+		return respErr(err), nil
 	}
 	defer c.closeMimei(tweetSid)
 
 	if add {
-		if err := c.hset(tweetSid, tweetRetweetList, retweetID, appUserID); err != nil {
-			return c.wrapErr(err), nil
+		if err := c.hset(tweetSid, tweetRetweetList, retweetID, userID); err != nil {
+			return respErr(err), nil
 		}
 	} else {
 		if err := c.hdel(tweetSid, tweetRetweetList, retweetID); err != nil {
-			return c.wrapErr(err), nil
+			return respErr(err), nil
 		}
 	}
 
 	if err := c.backupDelRef(authSid, tweetID, ""); err != nil {
-		return c.wrapErr(err), nil
+		return respErr(err), nil
 	}
 	if err := c.mimeiPublish(authSid, tweetID); err != nil {
 		c.warnf("publish %s failed: %v", tweetID, err)
 	}
 
-	return c.wrapRetweet(c.fetchTweetV2(tweetID, appUserID)), nil
+	return c.wrapPassthrough(map[string]any{
+		"success": true,
+		"tweet":   c.fetchTweetV2(tweetID, userID),
+	}), nil
 }
 
 // wrapRetweet wraps the refreshed tweet a retweet change produced.

@@ -5,25 +5,37 @@
 // tweet's list on the author's node, the user's list on the user's node — so a
 // single toggle is two writes on two machines.
 //
-// The tweet side is written first and its resulting state drives the user side,
-// so the two cannot disagree about whether the toggle actually flipped. The
-// entry pairs are:
+// Since caller identity, the engaging user calls toggle_favorite or
+// toggle_bookmark on their OWN root node, signed by their session. That node
+// verifies them, asks the tweet author's node to perform the tweet-side write
+// through a guarded peer entry, and then records the save in the user's own
+// list — delegation first, so a refused or unreachable peer leaves nothing
+// half-written. The peer pairs are:
 //
-//	toggle_bookmark  -> tweet side, then calls toggle_bookmark_by_user
-//	toggle_favorite  -> tweet side, then calls toggle_favorite_by_user
+//	toggle_bookmark  -> apply_bookmark on the tweet author's node
+//	toggle_favorite  -> apply_favorite on the tweet author's node
+//
+// The peer entry admits only the engaging user's own root node (the node app
+// code the platform injects names it), re-derives the tweet's author from the
+// tweet object itself, and then writes the author's list.
 //
 // Bookmarks and favorites differ only in which keys they use, which parameter
 // carries the desired state, and which slot of the tweet's "favorites" triple
 // reports it — so both run through one implementation described by engagementKind.
+//
+// toggle_bookmark_by_user and toggle_favorite_by_user remain registered for
+// older backends' callers but are no longer part of this flow.
 package lapp
 
 import "fmt"
 
 // engagementKind describes one of the two engagement types.
 type engagementKind struct {
-	// entry and byUserEntry are the two entry names involved.
+	// entry and byUserEntry are the entry names of the old, pre-delegation
+	// flow; peerEntry is the guarded peer entry on the tweet author's node.
 	entry       string
 	byUserEntry string
+	peerEntry   string
 	// tweetKey is the list inside the tweet; userKey the list inside the user.
 	tweetKey string
 	userKey  string
@@ -44,6 +56,7 @@ func bookmarkKind() engagementKind {
 	return engagementKind{
 		entry:          "toggle_bookmark",
 		byUserEntry:    "toggle_bookmark_by_user",
+		peerEntry:      "apply_bookmark",
 		tweetKey:       tweetBookmarkList,
 		userKey:        userBookmarkList,
 		stateParam:     "isbookmarked",
@@ -56,6 +69,7 @@ func favoriteKind() engagementKind {
 	return engagementKind{
 		entry:          "toggle_favorite",
 		byUserEntry:    "toggle_favorite_by_user",
+		peerEntry:      "apply_favorite",
 		tweetKey:       tweetLikeList,
 		userKey:        userFavoriteList,
 		stateParam:     "isfavorite",
@@ -67,82 +81,171 @@ func favoriteKind() engagementKind {
 func entryToggleBookmark(c *ctx) (any, error) { return c.toggleEngagement(bookmarkKind()) }
 func entryToggleFavorite(c *ctx) (any, error) { return c.toggleEngagement(favoriteKind()) }
 
+func entryApplyBookmark(c *ctx) (any, error) { return c.applyEngagementPeer(bookmarkKind()) }
+func entryApplyFavorite(c *ctx) (any, error) { return c.applyEngagementPeer(favoriteKind()) }
+
 func entryToggleBookmarkByUser(c *ctx) (any, error) { return c.toggleEngagementByUser(bookmarkKind()) }
 func entryToggleFavoriteByUser(c *ctx) (any, error) { return c.toggleEngagementByUser(favoriteKind()) }
 
 // ---------------------------------------------------------------------------
-// Tweet side
+// Client entry: the engaging user's own node
 // ---------------------------------------------------------------------------
 
-// toggleEngagement updates the tweet's side of an engagement and then the
-// user's side.
+// toggleEngagement records a save on both sides, called by the engaging user
+// on their own root node.
 //
 // The desired state may be stated explicitly, which makes the operation
-// idempotent and lets a client retry safely. When it is omitted the current
-// state is flipped, which is what older clients rely on.
+// idempotent and lets a client retry safely. When it is omitted the user's own
+// list is flipped; with no stated state that list is the one record the user's
+// node owns outright, so it decides.
+//
+// The tweet-side write is delegated before anything is written locally, so a
+// refused or unreachable author node leaves the user's list untouched rather
+// than half of a save behind.
 func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 	userID := c.str(kind.userParam)
 	tweetID := c.str("tweetid")
 	authorID := c.str("authorid")
-	userHostID := c.str("userhostid")
 
+	// The user's own list is written here, so this must be their root node —
+	// and the session must be the user's own.
+	if err := c.requireRootNode(userID); err != nil {
+		return c.wrapErrString(fmt.Errorf("User host not found")), nil
+	}
+	if err := c.requireOwner(userID); err != nil {
+		return c.wrapErrString(err), nil
+	}
+
+	// What state should the save end in? With no stated state, the user's own
+	// list decides, read-only for now: nothing is written until the tweet's
+	// author has performed their half.
 	requested, stateGiven := c.requestedState(kind.stateParam)
+	wanted := requested
+	if !stateGiven {
+		was, err := c.savedTweetState(kind, userID, tweetID)
+		if err != nil {
+			return c.wrapErrString(err), nil
+		}
+		wanted = !was
+	}
 
-	// The tweet lives on its author's root node, so this must be that node.
-	if err := c.requireRootNode(authorID); err != nil {
+	// Route to the tweet author's node, preferring this node's own record of
+	// their account over the client's hostid hint. The target re-checks
+	// everything, so a wrong hint can only fail, never misroute a write.
+	authorHost := c.str("hostid")
+	if author, err := c.loadUser(authorID); err == nil && author != nil && author.hasValidHost() {
+		authorHost = author.hostID()
+	}
+	if authorHost == "" {
 		return c.wrapErrString(fmt.Errorf("Author host not found")), nil
 	}
+
 	authSid, err := c.authSid()
 	if err != nil {
 		return c.wrapErrString(err), nil
 	}
-
-	updatedTweet := c.applyEngagementToTweet(kind, userID, authorID, tweetID, requested, stateGiven)
-	if updatedTweet == nil {
-		// The user's half is mirrored from the tweet's own record below. Without
-		// that record there is nothing to mirror, and reading the missing flag as
-		// false would tell the user's node to drop a save the user still has.
-		// The JavaScript entry failed here too, by dereferencing the absent
-		// tweet.
-		return c.wrapErrString(fmt.Errorf("Failed to read tweet %s after updating it", tweetID)), nil
-	}
-
-	// The user's own list is updated from the state the tweet ended up in, not
-	// from what was requested, so a no-op toggle stays a no-op on both sides.
-	byUserParams := map[string]string{
-		reqAppID:        c.appID(),
-		reqAppVer:       verLast,
-		reqSid:          authSid,
-		"userid":        userID,
-		"tweetid":       tweetID,
-		kind.stateParam: boolParam(engagementFlag(updatedTweet, kind.favoritesIndex)),
-	}
-	// The user's list lives on their own node. Addressing that node directly
-	// matters when this node holds no copy of the user: the entry would then be
-	// unable to resolve where to write and would fail rather than delegate.
-	var updatedUser any
-	if userHostID != "" && userHostID != c.nodeID() {
-		updatedUser, err = c.callRemote(userHostID, kind.byUserEntry, byUserParams)
-	} else {
-		updatedUser, err = c.callEntry(kind.byUserEntry, byUserParams)
-	}
+	peerReply, err := c.callPeerEntry(authSid, authorHost, kind.peerEntry, map[string]string{
+		"tweetid":  tweetID,
+		"authorid": authorID,
+		"userid":   userID,
+		"wanted":   boolParam(wanted),
+	})
 	if err != nil {
-		c.errorf("Failed to call %s: %v, userId=%s, tweetId=%s", kind.byUserEntry, err, userID, tweetID)
 		return c.wrapErrString(err), nil
 	}
+	peer, ok := toMap(peerReply)
+	if !ok || !mapBool(peer, "success") {
+		message := firstNonEmpty(mapStr(peer, "message"), mapStr(peer, "error"))
+		if message == "" {
+			message = "Failed to update the tweet's record of this save"
+		}
+		return c.wrapErrString(fmt.Errorf("%s", message)), nil
+	}
 
-	user, ok := toMap(updatedUser)
-	if !ok || user == nil {
+	// The author's node has performed its half; record the save in the user's
+	// own list (a no-op when the states already agree).
+	updatedUser, err := c.applyEngagementToUser(kind, userID, tweetID, wanted)
+	if err != nil {
+		c.failf(err)
+		return c.wrapErrString(err), nil
+	}
+	if updatedUser == nil {
 		return c.wrapErrString(fmt.Errorf("Failed to update user's saved items")), nil
 	}
-	if has(user, "success") && !mapBool(user, "success") {
-		return c.wrapErrString(fmt.Errorf("Failed to update user's saved items: %s", firstNonEmpty(mapStr(user, "message"), mapStr(user, "error")))), nil
-	}
 
-	c.debugf("local tweet=%s, user=%s", jsonStringify(updatedTweet), jsonStringify(updatedUser))
+	c.debugf("engagement %s: userId=%s, tweetId=%s, wanted=%t", kind.entry, userID, tweetID, wanted)
 	return c.wrapPassthrough(map[string]any{
 		"success": true,
 		"user":    updatedUser,
+		"tweet":   peer["tweet"],
+	}), nil
+}
+
+// savedTweetState reads whether a tweet is in the user's own save list.
+func (c *ctx) savedTweetState(kind engagementKind, userID, tweetID string) (bool, error) {
+	var saved bool
+	err := c.readMimei("", userID, func(mmsid string) error {
+		has, err := c.hhas(mmsid, kind.userKey, tweetID)
+		saved = has
+		return err
+	})
+	return saved, err
+}
+
+// ---------------------------------------------------------------------------
+// Peer entry: the tweet author's node
+// ---------------------------------------------------------------------------
+
+// applyEngagementPeer performs the tweet-side half of a save on the tweet
+// author's root node. It is reached from toggle_favorite and toggle_bookmark
+// on the engaging user's node and is not part of the client surface: the
+// caller must be that node, named by the platform-injected node app code, and
+// the tweet must belong to the author the request names.
+func (c *ctx) applyEngagementPeer(kind engagementKind) (any, error) {
+	c.debugf("peer request: sid=%t nodeappcode=%t author=%q",
+		c.sid() != "", c.str("nodeappcode") != "", c.str("author"))
+
+	userID := c.str("userid")
+	tweetID := c.str("tweetid")
+	authorID := c.str("authorid")
+	wanted := c.boolParam("wanted")
+
+	// The tweet's list lives on its author's root node, so this must be that
+	// node.
+	if err := c.requireRootNode(authorID); err != nil {
+		return respErr(fmt.Errorf("Author host not found")), nil
+	}
+	// The tweet object itself must agree: a request naming this root author
+	// for a tweet that belongs to someone else would write a foreign tweet's
+	// list.
+	tweet, err := c.loadTweet(tweetID)
+	if err != nil {
+		return respErr(err), nil
+	}
+	if tweet == nil {
+		return respErr(fmt.Errorf("Tweet not found")), nil
+	}
+	if tweet.authorID() != authorID {
+		return respErr(fmt.Errorf("Tweet does not belong to the named author")), nil
+	}
+
+	// Only the engaging user's own root may ask this node to record the save.
+	userRoot, err := c.userRootNode(userID)
+	if err != nil {
+		return respErr(err), nil
+	}
+	if err := c.requirePeerCall(userRoot); err != nil {
+		return respErr(err), nil
+	}
+
+	updatedTweet := c.applyEngagementToTweet(kind, userID, authorID, tweetID, wanted, true)
+	if updatedTweet == nil {
+		// Without the tweet's own record there is nothing to mirror, and the
+		// caller must not record a save the tweet never received.
+		return respErr(fmt.Errorf("Failed to read tweet %s after updating it", tweetID)), nil
+	}
+	return c.wrapPassthrough(map[string]any{
+		"success": true,
 		"tweet":   updatedTweet,
 	}), nil
 }
@@ -199,24 +302,14 @@ func (c *ctx) applyEngagementToTweet(kind engagementKind, userID, authorID, twee
 	return c.fetchTweetV2(tweetID, userID)
 }
 
-// engagementFlag reads one slot of a tweet's "favorites" triple.
-func engagementFlag(tweet any, index int) bool {
-	m, ok := toMap(tweet)
-	if !ok {
-		return false
-	}
-	flags := mapArr(m, "favorites")
-	if index >= len(flags) {
-		return false
-	}
-	return toBool(flags[index])
-}
-
 // ---------------------------------------------------------------------------
 // User side
 // ---------------------------------------------------------------------------
 
 // toggleEngagementByUser records or clears a tweet in the user's own list.
+//
+// The pre-delegation form of the user's half, kept for older backends'
+// callers; the new flow writes the list directly on the user's node.
 //
 // Saving also registers the user's node as a provider; Leither synchronizes
 // the tweet so it stays readable if its author's node goes away. Removing does
@@ -244,8 +337,7 @@ func (c *ctx) applyEngagementToUser(kind engagementKind, userID, tweetID string,
 		return nil, err
 	}
 	// The list written here is the user's own, so this must be their root
-	// node. The caller side of this pair addresses it directly, because the
-	// tweet's list and the user's list live on different nodes.
+	// node.
 	if err := c.requireRootNode(userID); err != nil {
 		return nil, err
 	}

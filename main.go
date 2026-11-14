@@ -182,6 +182,9 @@ func entryTable() map[string]entryFunc {
 		"toggle_bookmark_by_user": entryToggleBookmarkByUser,
 		"toggle_favorite":         entryToggleFavorite,
 		"toggle_favorite_by_user": entryToggleFavoriteByUser,
+		"apply_bookmark":          entryApplyBookmark,
+		"apply_favorite":          entryApplyFavorite,
+		"apply_retweet":           entryApplyRetweet,
 
 		// Social graph
 		"toggle_following":                entryToggleFollowing,

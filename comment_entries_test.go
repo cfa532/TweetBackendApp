@@ -32,6 +32,8 @@ type commentAPI struct {
 	absent   map[string]bool
 	pulled   map[string]bool
 	syncErr  error
+	// hashFields is the in-memory hash state behind Hhas/Hset/Hdel.
+	hashFields map[string]bool
 
 	createErr error
 	calls     []string
@@ -47,13 +49,14 @@ type remoteCall struct {
 
 func newCommentAPI(node string) *commentAPI {
 	return &commentAPI{
-		node:     node,
-		users:    map[string]map[string]any{},
-		tweets:   map[string]map[string]any{},
-		sessions: map[string]string{},
-		codes:    map[string]map[string]string{},
-		absent:   map[string]bool{},
-		pulled:   map[string]bool{},
+		node:       node,
+		users:      map[string]map[string]any{},
+		tweets:     map[string]map[string]any{},
+		sessions:   map[string]string{},
+		codes:      map[string]map[string]string{},
+		absent:     map[string]bool{},
+		pulled:     map[string]bool{},
+		hashFields: map[string]bool{},
 	}
 }
 
@@ -125,6 +128,7 @@ func (a *commentAPI) MMCreate(sid, appid, ext, mark string, tp byte, right uint6
 func (a *commentAPI) Hdel(mmsid, key string, fields ...string) (int64, error) {
 	for _, field := range fields {
 		a.hdels = append(a.hdels, mmsid+"/"+key+"/"+field)
+		delete(a.hashFields, strings.TrimPrefix(mmsid, "open:")+"/"+key+"/"+field)
 	}
 	return int64(len(fields)), nil
 }

@@ -16,6 +16,11 @@ func entryHealth(c *ctx) (any, error) {
 		// the writer's own root (add_comment/delete_comment there, peer
 		// apply_comment/remove_comment on the parent author's node).
 		"commentDelegation": true,
+		// engagementDelegation says the same for likes, bookmarks and retweet
+		// counts: toggle_* and retweet_* run on the engaging user's own root,
+		// with apply_favorite/apply_bookmark/apply_retweet as the guarded peer
+		// entries on the tweet author's node.
+		"engagementDelegation": true,
 		"guestRegistration": config.allowGuests,
 		"message":           "Server is running",
 		"storageFormats":    []string{"database", fileSchema},

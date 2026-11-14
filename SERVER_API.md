@@ -508,119 +508,131 @@ the same way as `apply_comment`.
 
 ## Interaction Endpoints
 
+Likes, bookmarks and retweet counts follow the same delegation as comments:
+the engaging user calls the entry on their OWN root node with their `usersid`,
+and that node asks the tweet author's node to perform the tweet-side write
+through a guarded peer entry. A node advertises this in `health` as
+`engagementDelegation: true`; a node without it still takes the old form — the
+request sent straight to the tweet author's node, no session.
+
 ### Toggle Favorite
-**Endpoint:** `toggle_favorite`
+**Endpoint:** `toggle_favorite` — called on the engaging user's root node
 
 **Input Parameters:**
 - `aid` (string): App ID
+- `usersid` (string): the engaging user's Leither session on this node
 - `appuserid` (string): App user favoriting the tweet
 - `tweetid` (string): Tweet ID
 - `authorid` (string): Tweet author ID
 - `userhostid` (string): Host ID of the app user
+- `isfavorite` (string, optional): "true"/"false" makes the toggle idempotent;
+  omitted flips the user's own list
+- `hostid` (string, new form): the tweet author's host, the delegation target
 
 **Output Schema:**
 ```json
 {
+  "success": "boolean",
   "user": "user_object",
-  "isFavorite": "boolean",
-  "count": "number"
+  "tweet": "tweet_object"
 }
 ```
-
-### Toggle Favorite by User
-**Endpoint:** `toggle_favorite_by_user`
-
-**Input Parameters:**
-- `aid` (string): App ID
-- `userid` (string): User ID
-- `tweetid` (string): Tweet ID
-- `isfavorite` (string): "true" or "false"
-
-**Output Schema:** Updated user object
-
-### Toggle Likes
-**Endpoint:** `toggle_likes`
-
-**Input Parameters:**
-- `aid` (string): App ID
-- `userid` (string): User ID
-- `tweetid` (string): Tweet ID
-
-**Output Schema:** No specific return value
 
 ### Toggle Bookmark
-**Endpoint:** `toggle_bookmark`
+**Endpoint:** `toggle_bookmark` — called on the engaging user's root node
+
+Same contract as Toggle Favorite, with `userid` naming the engaging user and
+`isbookmarked` as the state parameter.
+
+### Apply Favorite / Apply Bookmark (node to node)
+**Endpoint:** `apply_favorite` / `apply_bookmark` — reached from the toggle on
+the engaging user's node; not part of the client surface
+
+Performs the tweet-side write on the tweet author's root node. The caller must
+be the engaging user's own root node (`nodeappcode`-bound as with
+`apply_comment`; a local hop carries the author session in `sid`); the tweet
+must belong to the named `authorid`; an account this node has never seen is
+pulled once to resolve the engaging user's root. Refusals: `Not called from a
+peer node`, `Author host not found`, `Tweet does not belong to the named
+author`, `User ... is not known here`.
 
 **Input Parameters:**
 - `aid` (string): App ID
-- `appuserid` (string): App user bookmarking the tweet
+- `sid` (string, local hop only): the application author's session
 - `tweetid` (string): Tweet ID
 - `authorid` (string): Tweet author ID
-- `userhostid` (string): Host ID of the app user
+- `userid` (string): the engaging user
+- `wanted` (string): "true" or "false"
 
-**Output Schema:**
-```json
-{
-  "user": "user_object",
-  "isBookmarked": "boolean",
-  "count": "number"
-}
-```
+**Output Schema:** `{ "success": boolean, "tweet": tweet_object }`
 
-### Toggle Bookmark by User
-**Endpoint:** `toggle_bookmark_by_user`
+### Toggle Favorite by User / Toggle Bookmark by User (legacy)
+**Endpoint:** `toggle_favorite_by_user` / `toggle_bookmark_by_user`
 
-**Input Parameters:**
-- `aid` (string): App ID
-- `userid` (string): User ID
-- `tweetid` (string): Tweet ID
-- `isbookmarked` (string): "true" or "false"
+The pre-delegation user-side halves, kept registered for older callers. The new
+flow writes the user's list directly on the user's node.
 
-**Output Schema:** Updated user object
+### Retweet Added / Retweet Removed
+**Endpoint:** `retweet_added` / `retweet_removed` — called on the retweeting
+user's root node
 
-### Retweet Added
-**Endpoint:** `retweet_added`
+There is no user-side retweet list, so these entries are a verified delegation
+and nothing else: the retweeter's node asks the original author's node to add
+or clear the record.
 
 **Input Parameters:**
 - `aid` (string): App ID
-- `userid` (string): User ID
-- `tweetid` (string): Tweet ID
+- `usersid` (string): the retweeter's Leither session on this node
+- `appuserid` (string): the retweeting user
+- `retweetid` (string): the retweet's own tweet ID
+- `tweetid` (string): the original tweet ID
+- `authorid` (string): the original author ID
+- `hostid` (string, new form): the original author's host, the delegation target
 
-**Output Schema:** No specific return value
+**Output Schema:** the refreshed original tweet.
 
-### Retweet Removed
-**Endpoint:** `retweet_removed`
+### Apply Retweet (node to node)
+**Endpoint:** `apply_retweet` — reached from `retweet_added`/`retweet_removed`
+on the retweeter's node; not part of the client surface
 
-**Input Parameters:**
-- `aid` (string): App ID
-- `userid` (string): User ID
-- `tweetid` (string): Tweet ID
+Same guard and parent-authority check as the engagement peers; the list it
+writes is keyed by retweet id, valued by the retweeting user.
 
-**Output Schema:** No specific return value
+**Input Parameters:** as the engagement peers, plus `retweetid`.
+
+**Output Schema:** `{ "success": boolean, "tweet": tweet_object }`
 
 ## Follow Management Endpoints
 
 ### Toggle Following
-**Endpoint:** `toggle_following`
+**Endpoint:** `toggle_following` — called on the follower's root node
 
 **Input Parameters:**
 - `aid` (string): App ID
+- `usersid` (string): the follower's Leither session on this node
 - `userid` (string): User ID
-- `otherid` (string): Other user ID to follow/unfollow
-- `otherhostid` (string): Host ID of the other user
+- `followingid` (string): Other user ID to follow/unfollow
+- `followingid_hostid` (string): Host ID of the other user
 
-**Output Schema:** No specific return value
+**Output Schema:** `{ "isFollowing": boolean }` (v2-enveloped)
 
-### Toggle Follower
-**Endpoint:** `toggle_follower`
+### Toggle Follower (node to node)
+**Endpoint:** `toggle_follower` — reached from `toggle_following` on the
+follower's node; not part of the client surface
+
+Records or removes a follower on the followed user's root node. Only the
+follower's own root may ask: the platform-injected node app code must name it,
+and an account this node has never seen is pulled once to resolve the root. A
+bare client call is refused with `Not called from a peer node`.
 
 **Input Parameters:**
 - `aid` (string): App ID
-- `userid` (string): User ID
-- `otherid` (string): Other user ID
+- `sid` (string, local hop only): the application author's session
+- `userid` (string): the followed user
+- `otherid` (string): the follower
 - `isfollower` (string): "true" or "false"
 
-**Output Schema:** No specific return value
+**Output Schema:** `{ "success": boolean, "isFollower": boolean }`
 
 ### Get Followers
 **Endpoint:** `get_followers`
