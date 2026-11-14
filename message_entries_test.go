@@ -41,8 +41,10 @@ func TestMessageOutgoingDeliversThroughPeer(t *testing.T) {
 		t.Fatalf("stored copies do not carry the delivery stamp, calls: %v", api.calls)
 	}
 
-	// A peer refusal fails the send rather than leaving it half-delivered.
+	// A peer refusal fails the send rather than leaving it half-delivered,
+	// and nothing is written to the sender's store.
 	api.remote = nil
+	api.calls = nil
 	api.reply = map[string]any{"success": false, "message": "Not called from a peer node"}
 	ret, _ = entryMessageOutgoing(commentCtx(api, "message_outgoing", map[string]string{
 		"userid":    "sender",
@@ -51,6 +53,9 @@ func TestMessageOutgoingDeliversThroughPeer(t *testing.T) {
 	}))
 	if m, ok := toMap(ret); !ok || mapBool(m, "success") {
 		t.Fatalf("refused delivery still reported success: %#v", ret)
+	}
+	if hasCall(api, "zadd:") || hasCall(api, "hset:") || hasCall(api, "backup:") {
+		t.Fatalf("a refused send left a copy in the sender's store, calls: %v", api.calls)
 	}
 }
 

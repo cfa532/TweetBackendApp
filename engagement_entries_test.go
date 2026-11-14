@@ -13,6 +13,7 @@ func (a *commentAPI) Hset(mmsid, key, field string, value any) (int64, error) {
 	id := strings.TrimPrefix(mmsid, "open:") + "/" + key + "/" + field
 	a.calls = append(a.calls, "hset:"+id)
 	a.hashFields[id] = true
+	a.hashValues[id] = value
 	// Messages carry their delivery stamp inside the stored object; recording
 	// it lets the message tests assert it made it in.
 	if m, ok := value.(map[string]any); ok {
@@ -26,10 +27,14 @@ func (a *commentAPI) Hset(mmsid, key, field string, value any) (int64, error) {
 // The store tests hash membership through Hget (a missing field reads nil), so
 // the mock answers from the same in-memory set Hset writes.
 func (a *commentAPI) Hget(mmsid, key, field string) (any, error) {
-	if a.hashFields[strings.TrimPrefix(mmsid, "open:")+"/"+key+"/"+field] {
-		return "member", nil
+	id := strings.TrimPrefix(mmsid, "open:") + "/" + key + "/" + field
+	if !a.hashFields[id] {
+		return nil, nil
 	}
-	return nil, nil
+	if value, ok := a.hashValues[id]; ok {
+		return value, nil
+	}
+	return "member", nil
 }
 
 func (a *commentAPI) Hlen(mmsid, key string) (int64, error) { return 0, nil }
@@ -207,5 +212,84 @@ func TestToggleFollowerPeerGuard(t *testing.T) {
 	}
 	if len(api.calls) != 0 {
 		t.Fatalf("refused toggle_follower still wrote: %v", api.calls)
+	}
+}
+
+// A retweet record belongs to the user it names: another user's node may
+// neither clear it nor take it over, while its owner may clear it, and
+// clearing a record that is not there stays a harmless repeat.
+func TestApplyRetweetRecordBelongsToItsUser(t *testing.T) {
+	api := newCommentAPI("nodeB")
+	api.addUser("pauthor", "nodeB", "uid-pauthor")
+	api.addUser("liker", "nodeA", "uid-liker")
+	api.addUser("other", "nodeA", "uid-other")
+	api.authorSid, api.authorUID = "author-session", "uid-author"
+	api.sessions["author-session"] = "uid-author"
+	api.tweets["parent"] = map[string]any{"mid": "parent", "authorId": "pauthor"}
+	api.codes["code-node"] = map[string]string{"nodeid": "nodeA", "forapp": "aid-test"}
+
+	apply := func(userID, wanted string) (bool, string) {
+		ret, err := entryApplyRetweet(commentCtx(api, "apply_retweet", map[string]string{
+			"tweetid": "parent", "authorid": "pauthor", "userid": userID,
+			"retweetid": "rt-1", "wanted": wanted, "nodeappcode": "code-node",
+		}))
+		if err != nil {
+			t.Fatalf("returned error: %v", err)
+		}
+		m, _ := toMap(ret)
+		return mapBool(m, "success"), mapStr(m, "message")
+	}
+
+	if ok, msg := apply("liker", "true"); !ok {
+		t.Fatalf("owner's record refused: %s", msg)
+	}
+	for _, wanted := range []string{"false", "true"} {
+		api.hdels = nil
+		if ok, msg := apply("other", wanted); ok || msg != "This retweet record belongs to another user" {
+			t.Fatalf("another user's request (wanted=%s): reply %t / %s, want refusal", wanted, ok, msg)
+		}
+		if len(api.hdels) != 0 {
+			t.Fatalf("another user's request removed the record: %v", api.hdels)
+		}
+	}
+	if ok, msg := apply("liker", "false"); !ok {
+		t.Fatalf("owner could not clear their record: %s", msg)
+	}
+	if ok, msg := apply("other", "false"); !ok {
+		t.Fatalf("clearing an absent record must stay harmless: %s", msg)
+	}
+}
+
+// A caller with neither a session nor a node app code is refused before the
+// acting user's account is looked for: resolving it can pull the account from
+// the network, which a bare caller must not be able to set off.
+func TestPeerGuardRefusesBareCallersBeforePulling(t *testing.T) {
+	api := newCommentAPI("nodeB")
+	api.addUser("pauthor", "nodeB", "uid-pauthor")
+	api.authorSid, api.authorUID = "author-session", "uid-author"
+	api.tweets["parent"] = map[string]any{"mid": "parent", "authorId": "pauthor"}
+	api.absent["stranger"] = true
+
+	ret, err := entryApplyFavorite(commentCtx(api, "apply_favorite", map[string]string{
+		"tweetid": "parent", "authorid": "pauthor", "userid": "stranger", "wanted": "true",
+	}))
+	if err != nil {
+		t.Fatalf("returned error: %v", err)
+	}
+	if ok, msg := replyMessage(t, ret); ok || msg != "Not called from a peer node" {
+		t.Fatalf("bare call: reply %t / %s, want peer refusal", ok, msg)
+	}
+	if hasCall(api, "sync:") {
+		t.Fatalf("a bare caller set off an account pull: %v", api.calls)
+	}
+}
+
+// The pre-delegation user-side halves let any caller edit any user's saved
+// lists, and are gone.
+func TestLegacyByUserEntriesAreRemoved(t *testing.T) {
+	for _, name := range []string{"toggle_favorite_by_user", "toggle_bookmark_by_user"} {
+		if _, ok := lookupEntry(name); ok {
+			t.Fatalf("%s is still registered", name)
+		}
 	}
 }

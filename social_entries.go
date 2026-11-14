@@ -413,11 +413,7 @@ func entryToggleFollower(c *ctx) (any, error) {
 	// Only the follower's own root may ask this node to record them: the
 	// platform-injected node app code names it, and an account this node has
 	// never seen is pulled once so its root can be resolved.
-	followerRoot, err := c.userRootNode(otherID)
-	if err != nil {
-		return c.wrapErr(err), nil
-	}
-	if err := c.requirePeerCall(followerRoot); err != nil {
+	if err := c.requirePeerCall(otherID); err != nil {
 		return c.wrapErr(err), nil
 	}
 

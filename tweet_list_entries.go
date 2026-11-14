@@ -669,11 +669,7 @@ func entryApplyRetweet(c *ctx) (any, error) {
 	}
 
 	// Only the retweeper's own root may ask this node to touch the list.
-	userRoot, err := c.userRootNode(userID)
-	if err != nil {
-		return respErr(err), nil
-	}
-	if err := c.requirePeerCall(userRoot); err != nil {
+	if err := c.requirePeerCall(userID); err != nil {
 		return respErr(err), nil
 	}
 
@@ -686,6 +682,17 @@ func entryApplyRetweet(c *ctx) (any, error) {
 		return respErr(err), nil
 	}
 	defer c.closeMimei(tweetSid)
+
+	// A record belongs to the user it names. Another user's node may neither
+	// clear it nor take it over; an absent record is simply added or left
+	// absent, which keeps both requests safe to repeat.
+	recorded, err := c.hget(tweetSid, tweetRetweetList, retweetID)
+	if err != nil {
+		return respErr(err), nil
+	}
+	if owner := toString(recorded); owner != "" && owner != userID {
+		return respErr(fmt.Errorf("This retweet record belongs to another user")), nil
+	}
 
 	if add {
 		if err := c.hset(tweetSid, tweetRetweetList, retweetID, userID); err != nil {

@@ -68,17 +68,28 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 	}
 	// A client-supplied requestid makes submission idempotent: the id is
 	// derived from the mark, so a retry after a lost response resolves the
-	// same tweet instead of creating a second one, and every step below
-	// (list entry, references) already converges on the same mid. Without
-	// one, "{{auto}}" asks Leither for a fresh id, so two tweets with
-	// identical text remain distinct objects.
-	mark := c.str("requestid")
-	if mark == "" {
-		mark = "{{auto}}"
-	}
-	tweetID, err := c.fileObjectID(authSid, "tweet", mark)
+	// same tweet instead of creating a second one. Without one Leither is
+	// asked for a fresh id, so two tweets with identical text remain distinct
+	// objects.
+	requestID := c.str("requestid")
+	authorID := tweet.authorID()
+	tweetID, err := c.fileObjectID(authSid, "tweet", submissionMark("tweet", authorID, requestID))
 	if err != nil {
 		return respErr(fmt.Errorf("MMCreate(tweet): %v", err)), nil
+	}
+	// A named submission may be a repeat of one that already went through.
+	// Leither counts references, so adding them again would leave one behind
+	// when the tweet is deleted. What an earlier attempt committed says which
+	// references it already made: the tweet object carries its attachment
+	// references, the author's list their reference to the tweet.
+	tweetCommitted, authorLists := false, false
+	if requestID != "" {
+		if tweetCommitted, err = c.hasCommittedVersion(authSid, tweetID); err != nil {
+			return respErr(err), nil
+		}
+		if authorLists, err = c.listedInCommitted(authorID, userTweetList, tweetID); err != nil {
+			return respErr(err), nil
+		}
 	}
 
 	tweetSid, err := c.openMimei(authSid, tweetID, verCur)
@@ -95,10 +106,12 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 
 	// Each attachment is its own Mimei; referencing it from the tweet keeps it
 	// alive and carries it along when the tweet is synchronised.
-	for _, attachment := range tweet.attachments() {
-		if mid := mapStr(attachment, "mid"); mid != "" {
-			if err := c.addRef(authSid, tweetID, mid); err != nil {
-				c.warnf("attachment ref %s failed: %v", mid, err)
+	if !tweetCommitted {
+		for _, attachment := range tweet.attachments() {
+			if mid := mapStr(attachment, "mid"); mid != "" {
+				if err := c.addRef(authSid, tweetID, mid); err != nil {
+					c.warnf("attachment ref %s failed: %v", mid, err)
+				}
 			}
 		}
 	}
@@ -110,7 +123,6 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 		c.warnf("publish %s failed: %v", tweetID, err)
 	}
 
-	authorID := tweet.authorID()
 	userSid, err := c.openMimei(authSid, authorID, verCur)
 	if err != nil {
 		return respErr(fmt.Errorf("MMOpen(%s, cur): %v", authorID, err)), nil
@@ -130,15 +142,19 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 	// A retweet points at the quoted tweet. Registering its provider role is
 	// best-effort; Leither synchronizes the quoted tweet after registration.
 	if originalID := tweet.originalTweetID(); originalID != "" {
-		if err := c.addRef(authSid, authorID, originalID); err != nil {
+		if authorLists {
+			c.ensureProvided(authSid, originalID)
+		} else if err := c.addRef(authSid, authorID, originalID); err != nil {
 			c.errorf("Error sync original tweet: %v, tweet=%s", err, jsonStringify(map[string]any(tweet)))
 		} else {
 			c.ensureProvided(authSid, originalID)
 		}
 	}
 
-	if err := c.addRef(authSid, authorID, tweetID); err != nil {
-		return respErr(err), nil
+	if !authorLists {
+		if err := c.addRef(authSid, authorID, tweetID); err != nil {
+			return respErr(err), nil
+		}
 	}
 	if err := c.backupDelRef(authSid, authorID, ""); err != nil {
 		return respErr(err), nil
@@ -149,6 +165,18 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 
 	c.infof("local %s", jsonStringify(map[string]any(tweet)))
 	return c.wrapPassthrough(map[string]any{"success": true, "mid": tweetID}), nil
+}
+
+// submissionMark turns a client's requestid into the creation mark of the
+// object it names. The mark is what the object's id is derived from, so it
+// carries the kind and the author as well: one user's requestid can then never
+// resolve to another user's object, nor a comment's to a tweet's, however the
+// two were chosen. No requestid asks Leither for a fresh id.
+func submissionMark(kind, authorID, requestID string) string {
+	if requestID == "" {
+		return "{{auto}}"
+	}
+	return kind + ":" + authorID + ":" + requestID
 }
 
 // authorizePost decides whether a posting request may proceed.

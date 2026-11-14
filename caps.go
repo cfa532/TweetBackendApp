@@ -113,8 +113,11 @@ func isCapUnsupported(err error) bool {
 // span two owners on two nodes and cannot be split by the caller:
 //
 //	toggle_following  -> toggle_follower on the followed user's node
-//	toggle_bookmark   -> toggle_bookmark_by_user on the acting user's node
-//	toggle_favorite   -> toggle_favorite_by_user on the acting user's node
+//	toggle_bookmark   -> apply_bookmark on the tweet author's node
+//	toggle_favorite   -> apply_favorite on the tweet author's node
+//	retweet_added,
+//	retweet_removed   -> apply_retweet on the original author's node
+//	message_outgoing  -> message_incoming on the recipient's node
 //	toggle_following  -> get_tweet_id_list, reading the followed user's tweets
 //	add_comment       -> apply_comment, writing the comment on the parent
 //	                     author's node

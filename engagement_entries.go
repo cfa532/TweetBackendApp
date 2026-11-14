@@ -22,20 +22,16 @@
 // Bookmarks and favorites differ only in which keys they use, which parameter
 // carries the desired state, and which slot of the tweet's "favorites" triple
 // reports it — so both run through one implementation described by engagementKind.
-//
-// toggle_bookmark_by_user and toggle_favorite_by_user remain registered for
-// older backends' callers but are no longer part of this flow.
 package lapp
 
 import "fmt"
 
 // engagementKind describes one of the two engagement types.
 type engagementKind struct {
-	// entry and byUserEntry are the entry names of the old, pre-delegation
-	// flow; peerEntry is the guarded peer entry on the tweet author's node.
-	entry       string
-	byUserEntry string
-	peerEntry   string
+	// entry is the client entry on the engaging user's node; peerEntry is the
+	// guarded peer entry on the tweet author's node.
+	entry     string
+	peerEntry string
 	// tweetKey is the list inside the tweet; userKey the list inside the user.
 	tweetKey string
 	userKey  string
@@ -55,7 +51,6 @@ type engagementKind struct {
 func bookmarkKind() engagementKind {
 	return engagementKind{
 		entry:          "toggle_bookmark",
-		byUserEntry:    "toggle_bookmark_by_user",
 		peerEntry:      "apply_bookmark",
 		tweetKey:       tweetBookmarkList,
 		userKey:        userBookmarkList,
@@ -68,7 +63,6 @@ func bookmarkKind() engagementKind {
 func favoriteKind() engagementKind {
 	return engagementKind{
 		entry:          "toggle_favorite",
-		byUserEntry:    "toggle_favorite_by_user",
 		peerEntry:      "apply_favorite",
 		tweetKey:       tweetLikeList,
 		userKey:        userFavoriteList,
@@ -83,9 +77,6 @@ func entryToggleFavorite(c *ctx) (any, error) { return c.toggleEngagement(favori
 
 func entryApplyBookmark(c *ctx) (any, error) { return c.applyEngagementPeer(bookmarkKind()) }
 func entryApplyFavorite(c *ctx) (any, error) { return c.applyEngagementPeer(favoriteKind()) }
-
-func entryToggleBookmarkByUser(c *ctx) (any, error) { return c.toggleEngagementByUser(bookmarkKind()) }
-func entryToggleFavoriteByUser(c *ctx) (any, error) { return c.toggleEngagementByUser(favoriteKind()) }
 
 // ---------------------------------------------------------------------------
 // Client entry: the engaging user's own node
@@ -230,11 +221,7 @@ func (c *ctx) applyEngagementPeer(kind engagementKind) (any, error) {
 	}
 
 	// Only the engaging user's own root may ask this node to record the save.
-	userRoot, err := c.userRootNode(userID)
-	if err != nil {
-		return respErr(err), nil
-	}
-	if err := c.requirePeerCall(userRoot); err != nil {
+	if err := c.requirePeerCall(userID); err != nil {
 		return respErr(err), nil
 	}
 
@@ -306,31 +293,12 @@ func (c *ctx) applyEngagementToTweet(kind engagementKind, userID, authorID, twee
 // User side
 // ---------------------------------------------------------------------------
 
-// toggleEngagementByUser records or clears a tweet in the user's own list.
-//
-// The pre-delegation form of the user's half, kept for older backends'
-// callers; the new flow writes the list directly on the user's node.
+// applyEngagementToUser records or clears a tweet in the user's own list.
 //
 // Saving also registers the user's node as a provider; Leither synchronizes
 // the tweet so it stays readable if its author's node goes away. Removing does
 // not reverse that: the copy may be the only one left, and other users' saves
 // may depend on it.
-func (c *ctx) toggleEngagementByUser(kind engagementKind) (any, error) {
-	userID := c.str("userid")
-	tweetID := c.str("tweetid")
-	wanted := c.boolParam(kind.stateParam)
-
-	result, err := c.applyEngagementToUser(kind, userID, tweetID, wanted)
-	if err != nil {
-		c.failf(err)
-		return respErr(err), nil
-	}
-	if result == nil {
-		return respFail("User not found after updating saved items"), nil
-	}
-	return result, nil
-}
-
 func (c *ctx) applyEngagementToUser(kind engagementKind, userID, tweetID string, wanted bool) (any, error) {
 	authSid, err := c.authSid()
 	if err != nil {

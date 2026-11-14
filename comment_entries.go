@@ -240,11 +240,7 @@ func entryApplyComment(c *ctx) (any, error) {
 
 	// The delegating node is the comment writer's own root, and only it may
 	// ask this node to attach the comment.
-	writerRoot, err := c.userRootNode(commentAuthorID)
-	if err != nil {
-		return respErr(err), nil
-	}
-	if err := c.requirePeerCall(writerRoot); err != nil {
+	if err := c.requirePeerCall(commentAuthorID); err != nil {
 		return respErr(err), nil
 	}
 
@@ -254,15 +250,25 @@ func entryApplyComment(c *ctx) (any, error) {
 	}
 	// The comment writer's node names this submission with a requestid; the
 	// id is derived from the mark, so a retried comment resolves the same
-	// object and every step below (list entry, reference) converges. Without
-	// one, "{{auto}}" mints a fresh id, as before.
-	commentMark := c.str("requestid")
-	if commentMark == "" {
-		commentMark = "{{auto}}"
-	}
-	commentID, err := c.fileObjectID(authSid, "tweet", commentMark)
+	// object. Without one a fresh id is minted, as before.
+	requestID := c.str("requestid")
+	commentID, err := c.fileObjectID(authSid, "tweet", submissionMark("comment", commentAuthorID, requestID))
 	if err != nil {
 		return respErr(fmt.Errorf("MMCreate(comment): %v", err)), nil
+	}
+	// A named submission may be a repeat of one that already went through.
+	// Leither counts references, so adding them again would leave one behind
+	// when the comment is deleted. What an earlier attempt committed says
+	// which references it already made: the comment object carries its
+	// attachment references, the parent's list its reference to the comment.
+	commentCommitted, parentLists := false, false
+	if requestID != "" {
+		if commentCommitted, err = c.hasCommittedVersion(authSid, commentID); err != nil {
+			return respErr(err), nil
+		}
+		if parentLists, err = c.listedInCommitted(tweetID, tweetCommentList, commentID); err != nil {
+			return respErr(err), nil
+		}
 	}
 	comment["mid"] = commentID
 	comment["timestamp"] = nowMillis()
@@ -276,10 +282,12 @@ func entryApplyComment(c *ctx) (any, error) {
 	if err := c.setValue(commentSid, tweetContentKey, comment); err != nil {
 		return respErr(err), nil
 	}
-	for _, attachment := range tweetObj(comment).attachments() {
-		if mid := mapStr(attachment, "mid"); mid != "" {
-			if err := c.addRef(authSid, commentID, mid); err != nil {
-				c.warnf("attachment ref %s failed: %v", mid, err)
+	if !commentCommitted {
+		for _, attachment := range tweetObj(comment).attachments() {
+			if mid := mapStr(attachment, "mid"); mid != "" {
+				if err := c.addRef(authSid, commentID, mid); err != nil {
+					c.warnf("attachment ref %s failed: %v", mid, err)
+				}
 			}
 		}
 	}
@@ -302,8 +310,10 @@ func entryApplyComment(c *ctx) (any, error) {
 	if err := c.zadd(tweetSid, tweetCommentList, nowMillis(), commentID); err != nil {
 		return respErr(err), nil
 	}
-	if err := c.addRef(authSid, tweetID, commentID); err != nil {
-		return respErr(err), nil
+	if !parentLists {
+		if err := c.addRef(authSid, tweetID, commentID); err != nil {
+			return respErr(err), nil
+		}
 	}
 	if err := c.backupDelRef(authSid, tweetID, ""); err != nil {
 		return respErr(err), nil
@@ -482,6 +492,11 @@ func entryDeleteComment(c *ctx) (any, error) {
 
 	var reply any
 	if parentHost == c.nodeID() {
+		// The hint alone may have named this node; the deletion happens only
+		// where the parent's author is actually rooted.
+		if err := c.requireRootNode(parentAuthorID); err != nil {
+			return respErr(err), nil
+		}
 		count, err := c.removeCommentChecked(tweetID, commentID, parentAuthorID, appUserID)
 		if err != nil {
 			return respErr(err), nil
@@ -555,11 +570,7 @@ func entryRemoveComment(c *ctx) (any, error) {
 	}
 
 	// Only the deleter's own root may ask this node to remove the comment.
-	deleterRoot, err := c.userRootNode(deleterID)
-	if err != nil {
-		return respErr(err), nil
-	}
-	if err := c.requirePeerCall(deleterRoot); err != nil {
+	if err := c.requirePeerCall(deleterID); err != nil {
 		return respErr(err), nil
 	}
 
@@ -580,6 +591,18 @@ func entryRemoveComment(c *ctx) (any, error) {
 // deleted one: once the versions are gone, the list entry and reference must
 // still go.
 func (c *ctx) removeCommentChecked(tweetID, commentID, parentAuthorID, deleterID string) (int64, error) {
+	// The object must be one of this parent's comments. Being the parent's
+	// author is authority over that parent's thread and nothing else: without
+	// this, the author of any tweet here could name another object on the node
+	// as a "comment" of theirs and have it destroyed.
+	listed, err := c.listedInCommitted(tweetID, tweetCommentList, commentID)
+	if err != nil {
+		return 0, err
+	}
+	if !listed {
+		return 0, fmt.Errorf("Comment not found")
+	}
+
 	comment, err := c.loadTweet(commentID)
 	if err != nil {
 		return 0, err

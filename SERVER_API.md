@@ -576,11 +576,9 @@ author`, `User ... is not known here`.
 
 **Output Schema:** `{ "success": boolean, "tweet": tweet_object }`
 
-### Toggle Favorite by User / Toggle Bookmark by User (legacy)
-**Endpoint:** `toggle_favorite_by_user` / `toggle_bookmark_by_user`
-
-The pre-delegation user-side halves, kept registered for older callers. The new
-flow writes the user's list directly on the user's node.
+`toggle_favorite_by_user` and `toggle_bookmark_by_user`, the pre-delegation
+user-side halves, are removed: they let any caller edit any user's saved lists.
+A node still on the old backend that calls them here is refused.
 
 ### Retweet Added / Retweet Removed
 **Endpoint:** `retweet_added` / `retweet_removed` — called on the retweeting

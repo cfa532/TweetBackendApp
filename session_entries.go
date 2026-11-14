@@ -107,10 +107,11 @@ func (c *ctx) requireOwner(ownerID string) error {
 	return nil
 }
 
-// requirePeerCall rejects a caller that is not this application acting from
-// the expected node. The entries that write a node's own data on a peer's
-// behalf (apply_comment, remove_comment) are not part of the client surface,
-// and a request reaches them in one of two forms:
+// requirePeerCall rejects a caller that is not this application acting for
+// actingUserID from that user's own root node. The entries that write a node's
+// own data on a peer's behalf (apply_comment, remove_comment, apply_favorite,
+// apply_bookmark, apply_retweet, toggle_follower, message_incoming) are not
+// part of the client surface, and a request reaches them in one of two forms:
 //
 //   - Local delegation, an in-process callEntry from another entry of this
 //     app. The caller carries the local author login session in sid, and the
@@ -123,12 +124,17 @@ func (c *ctx) requireOwner(ownerID string) error {
 //     calling node's transport session, so SessionGet(code, "nodeid") names
 //     the calling node. A code minted by an ordinary logged-in user names
 //     that user instead, which is why the resolved node must be the one this
-//     entry expects: the delegating node, the user's own root.
+//     entry expects: the delegating node, the acting user's own root.
+//
+// The acting user's root is resolved here rather than by each entry, and only
+// once the request has shown a code this node minted: resolving it can pull
+// the account from the network, which a caller with nothing to show must not
+// be able to set off.
 //
 // What this still does not do: a code leaked from the expected node is a
 // bearer credential for its remaining lifetime (about an hour), and the
 // check trusts the expected node itself, which is the documented residual.
-func (c *ctx) requirePeerCall(expectedNodeID string) error {
+func (c *ctx) requirePeerCall(actingUserID string) error {
 	const errNotPeer = "Not called from a peer node"
 	if callerSid := c.sid(); callerSid != "" {
 		value, err := c.api.GetVar(callerSid, "userid")
@@ -140,19 +146,24 @@ func (c *ctx) requirePeerCall(expectedNodeID string) error {
 		}
 		return nil
 	}
-	if code := c.str("nodeappcode"); code != "" {
-		friendID, err := c.friendByAppCode(code, "")
-		if err != nil {
-			c.warnf("peer call with an unresolvable node app code: %v", err)
-			return fmt.Errorf(errNotPeer)
-		}
-		if friendID == "" || friendID != expectedNodeID {
-			c.errorf("peer call from node %s, expected %s", friendID, expectedNodeID)
-			return fmt.Errorf(errNotPeer)
-		}
-		return nil
+	code := c.str("nodeappcode")
+	if code == "" {
+		return fmt.Errorf(errNotPeer)
 	}
-	return fmt.Errorf(errNotPeer)
+	friendID, err := c.friendByAppCode(code, "")
+	if err != nil || friendID == "" {
+		c.warnf("peer call with an unresolvable node app code: %v", err)
+		return fmt.Errorf(errNotPeer)
+	}
+	expectedNodeID, err := c.userRootNode(actingUserID)
+	if err != nil {
+		return err
+	}
+	if friendID != expectedNodeID {
+		c.errorf("peer call from node %s, expected %s", friendID, expectedNodeID)
+		return fmt.Errorf(errNotPeer)
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------

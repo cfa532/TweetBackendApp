@@ -284,6 +284,36 @@ func (c *ctx) zcard(mmsid, key string) (int64, error) {
 	return n, nil
 }
 
+// zhas reports whether a sorted set holds a member. It lists the set rather
+// than asking for the member's score or rank, because what those answer for an
+// absent member differs between the two storage formats.
+func (c *ctx) zhas(mmsid, key, member string) (bool, error) {
+	pairs, err := c.zrange(mmsid, key, 0, -1)
+	if err != nil {
+		return false, err
+	}
+	for _, pair := range pairs {
+		if pair.Member == member {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// listedInCommitted reports whether an object's committed version lists a
+// member. It answers two questions that both turn on what has already been
+// committed: whether a comment really belongs to a parent, and whether an
+// earlier attempt of a named submission got as far as its parent.
+func (c *ctx) listedInCommitted(parentID, listKey, member string) (bool, error) {
+	listed := false
+	err := c.readMimei("", parentID, func(mmsid string) error {
+		has, err := c.zhas(mmsid, listKey, member)
+		listed = has
+		return err
+	})
+	return listed, err
+}
+
 // zscore reads a member's score.
 func (c *ctx) zscore(mmsid, key, member string) (int64, error) {
 	if f := c.files[mmsid]; f != nil {

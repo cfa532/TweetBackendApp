@@ -34,6 +34,14 @@ type commentAPI struct {
 	syncErr  error
 	// hashFields is the in-memory hash state behind Hhas/Hset/Hdel.
 	hashFields map[string]bool
+	// hashValues keeps what Hset stored, for the entries that read a field's
+	// value rather than its presence.
+	hashValues map[string]any
+	// members is the in-memory sorted-set state behind Zadd/Zrem/Zrange,
+	// keyed "<mid>/<list>"; committed names objects that already have a
+	// committed version.
+	members   map[string][]string
+	committed map[string]bool
 
 	createErr error
 	calls     []string
@@ -57,7 +65,16 @@ func newCommentAPI(node string) *commentAPI {
 		absent:     map[string]bool{},
 		pulled:     map[string]bool{},
 		hashFields: map[string]bool{},
+		hashValues: map[string]any{},
+		members:    map[string][]string{},
+		committed:  map[string]bool{},
 	}
+}
+
+// list puts a member into one of an object's sorted sets, as an earlier
+// committed write would have.
+func (a *commentAPI) list(mid, key, member string) {
+	a.members[mid+"/"+key] = append(a.members[mid+"/"+key], member)
 }
 
 func (a *commentAPI) addUser(mid, host, authUID string) {
@@ -83,8 +100,11 @@ func (a *commentAPI) GetVar(sid, name string, args ...string) (any, error) {
 	case "mminfo":
 		return map[string]any{}, nil
 	case "mmversions":
-		// No committed versions: message-store identities resolve to the
-		// legacy id and open as database objects.
+		// No committed versions unless a test says otherwise: message-store
+		// identities resolve to the legacy id and open as database objects.
+		if len(args) > 0 && a.committed[args[0]] {
+			return []any{"1", "last"}, nil
+		}
 		return []any{}, nil
 	}
 	return nil, nil
@@ -147,12 +167,35 @@ func (a *commentAPI) Hdel(mmsid, key string, fields ...string) (int64, error) {
 }
 func (a *commentAPI) Zrem(mmsid, key string, members ...string) (int64, error) {
 	a.calls = append(a.calls, "zrem:"+key)
+	listKey := strings.TrimPrefix(mmsid, "open:") + "/" + key
+	kept := a.members[listKey][:0]
+	for _, existing := range a.members[listKey] {
+		removed := false
+		for _, member := range members {
+			removed = removed || member == existing
+		}
+		if !removed {
+			kept = append(kept, existing)
+		}
+	}
+	a.members[listKey] = kept
 	return int64(len(members)), nil
 }
 
 func (a *commentAPI) Zadd(mmsid, key string, args ...lapi.ScorePair) (int64, error) {
 	a.calls = append(a.calls, "zadd:"+key)
+	for _, pair := range args {
+		a.list(strings.TrimPrefix(mmsid, "open:"), key, pair.Member)
+	}
 	return int64(len(args)), nil
+}
+func (a *commentAPI) Zrange(mmsid, key string, start, stop int) ([]lapi.ScorePair, error) {
+	members := a.members[strings.TrimPrefix(mmsid, "open:")+"/"+key]
+	pairs := make([]lapi.ScorePair, 0, len(members))
+	for i, member := range members {
+		pairs = append(pairs, lapi.ScorePair{Score: int64(i), Member: member})
+	}
+	return pairs, nil
 }
 func (a *commentAPI) Zcard(mmsid, key string) (int64, error) { return 3, nil }
 func (a *commentAPI) MMAddRef(sid, mid string, fileids ...string) (int, error) {
@@ -183,6 +226,52 @@ func (a *commentAPI) Debug(string, ...any) {}
 func (a *commentAPI) Info(string, ...any)  {}
 func (a *commentAPI) Warn(string, ...any)  {}
 func (a *commentAPI) Error(string, ...any) {}
+
+// The Files calls behind committing a File object. A submission that runs to
+// completion commits the tweet it created; these let it, and record nothing.
+func (a *commentAPI) FilesLs(sid, path string) ([]lapi.LsLink, error) {
+	// A committed object's root holds its core record; scratch space is empty.
+	if strings.HasPrefix(path, "mm://") && strings.HasSuffix(path, ":"+verLast+"/") {
+		return []lapi.LsLink{{Name: "core.json"}}, nil
+	}
+	return nil, nil
+}
+func (a *commentAPI) FilesMkdir(sid, path string, flush bool) error   { return nil }
+func (a *commentAPI) FilesCopy(sid, src, dst string, flush bool) error {
+	return nil
+}
+func (a *commentAPI) FilesRm(sid, path string, recursive, flush bool) error { return nil }
+func (a *commentAPI) MFOpenTempFile(string) (string, error)                 { return "temp", nil }
+func (a *commentAPI) MFSetData(h string, b []byte, offset int64) (int, error) {
+	return len(b), nil
+}
+func (a *commentAPI) MFTruncate(string, int64) error                  { return nil }
+func (a *commentAPI) MFTemp2Files(h, path string) (string, error)     { return "file-cid", nil }
+func (a *commentAPI) FilesFlush(sid, path string) (string, error)     { return "root-cid", nil }
+func (a *commentAPI) MFSetCid(sid, mid, cid string) (string, error)   { return "1", nil }
+
+// Opening a File object that already has a committed version reads its root
+// and core record. The record names whichever object was asked for.
+func (a *commentAPI) FilesStat(string, string) (*lapi.StatInfo, error) {
+	return &lapi.StatInfo{Type: "directory", Hash: "root-cid"}, nil
+}
+func (a *commentAPI) MMOpenUrl(sid, url string) (string, error) {
+	mid := strings.TrimPrefix(url, "mm://")
+	if cut := strings.Index(mid, ":"+verLast); cut >= 0 {
+		mid = mid[:cut]
+	}
+	return "core:" + mid, nil
+}
+func (a *commentAPI) MFGetSize(h string) (int64, error) {
+	data, _ := a.MFGetData(h, 0, -1)
+	return int64(len(data)), nil
+}
+func (a *commentAPI) MFGetData(h string, start int64, count int) ([]byte, error) {
+	return []byte(jsonStringify(map[string]any{
+		"schema": fileSchema, "kind": "tweet", "mid": strings.TrimPrefix(h, "core:"),
+		"value": map[string]any{"authorId": "author", "content": "hello"},
+	})), nil
+}
 
 // RunMApp stands in for the cross-node hop; a canned reply is returned.
 func (a *commentAPI) RunMApp(entry string, req map[string]string, args []any, opts ...string) (any, error) {
@@ -388,6 +477,7 @@ func TestRemoveCommentAuthority(t *testing.T) {
 	api.sessions["author-session"] = "uid-author"
 	api.tweets["parent"] = map[string]any{"mid": "parent", "authorId": "pauthor"}
 	api.tweets["c1"] = map[string]any{"mid": "c1", "authorId": "writer"}
+	api.list("parent", tweetCommentList, "c1")
 
 	base := func() map[string]string {
 		return map[string]string{
@@ -411,6 +501,9 @@ func TestRemoveCommentAuthority(t *testing.T) {
 		}
 	}
 
+	// The deletion above took the entry out of the list; each case below
+	// starts from a comment that is still attached.
+	api.list("parent", tweetCommentList, "c1")
 	ret, _ = entryRemoveComment(commentCtx(api, "remove_comment", withParam(base(), "appuserid", "stranger")))
 	if ok, msg := replyMessage(t, ret); ok || !strings.Contains(msg, "parent's author may delete") {
 		t.Fatalf("third-party deletion: reply %s / %s, want refusal", fmt.Sprint(ok), msg)
@@ -423,6 +516,7 @@ func TestRemoveCommentAuthority(t *testing.T) {
 		t.Fatalf("parent author cleanup failed: %s", msg)
 	}
 	api.tweets["c1"] = nil
+	api.list("parent", tweetCommentList, "c1")
 	ret, _ = entryRemoveComment(commentCtx(api, "remove_comment", withParam(base(), "appuserid", "writer")))
 	if ok, msg := replyMessage(t, ret); ok || msg != "Comment not found" {
 		t.Fatalf("missing comment by non-owner: reply %s / %s, want Comment not found", fmt.Sprint(ok), msg)
@@ -575,9 +669,10 @@ func TestAddTweetRequestidNamesTheTweet(t *testing.T) {
 			creates = append(creates, strings.TrimPrefix(call, "create:"))
 		}
 	}
-	// Two retries with the same requestid derive the same identity twice; a
-	// submission without one asks for a fresh id.
-	if len(creates) != 3 || creates[0] != "req-1" || creates[1] != "req-1" || creates[2] != "{{auto}}" {
+	// Two retries with the same requestid derive the same identity twice,
+	// from a mark that also carries the kind and the author; a submission
+	// without one asks for a fresh id.
+	if len(creates) != 3 || creates[0] != "tweet:author:req-1" || creates[1] != "tweet:author:req-1" || creates[2] != "{{auto}}" {
 		t.Fatalf("creation marks wrong: %v, first reply: %#v, calls: %v", creates, firstReply, api.calls)
 	}
 }
@@ -626,7 +721,7 @@ func TestAddCommentCarriesRequestidToPeer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("apply_comment returned error: %v", err)
 	}
-	if !hasCall(api, "create:cmt-7") {
+	if !hasCall(api, "create:comment:writer:cmt-7") {
 		t.Fatalf("requestid not used as the comment mark, calls: %v", api.calls)
 	}
 }
@@ -690,6 +785,7 @@ func TestRemoveCommentCrossNodeNodeAppCode(t *testing.T) {
 	api.sessions["author-session"] = "uid-author"
 	api.tweets["parent"] = map[string]any{"mid": "parent", "authorId": "pauthor"}
 	api.tweets["c1"] = map[string]any{"mid": "c1", "authorId": "writer"}
+	api.list("parent", tweetCommentList, "c1")
 	api.codes = map[string]map[string]string{
 		"code-node":  {"nodeid": "nodeA", "forapp": "aid-test"},
 		"code-wrong": {"nodeid": "nodeZ", "forapp": "aid-test"},
@@ -796,6 +892,7 @@ func TestDeleteCommentByParentAuthorRunsLocally(t *testing.T) {
 	api.sessions["sid-pauthor"] = "uid-pauthor"
 	api.tweets["parent"] = map[string]any{"mid": "parent", "authorId": "pauthor"}
 	api.tweets["c1"] = map[string]any{"mid": "c1", "authorId": "writer"}
+	api.list("parent", tweetCommentList, "c1")
 
 	ret, err := entryDeleteComment(commentCtx(api, "delete_comment", map[string]string{
 		"usersid":   "sid-pauthor",
@@ -823,5 +920,89 @@ func TestDeleteCommentByParentAuthorRunsLocally(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("parent author's saved list not cleaned, hdels: %v", api.hdels)
+	}
+}
+
+// The parent's author has authority over their own thread and nothing else: an
+// object that is not one of the parent's comments is not deleted, whoever
+// asks. Without the membership check the author of any tweet on a node could
+// name another user's tweet as a "comment" of theirs and have it destroyed.
+func TestRemoveCommentRefusesObjectsOutsideTheParent(t *testing.T) {
+	api := newCommentAPI("nodeB")
+	api.addUser("pauthor", "nodeB", "uid-pauthor")
+	api.addUser("victim", "nodeB", "uid-victim")
+	api.authorSid, api.authorUID = "author-session", "uid-author"
+	api.sessions["author-session"] = "uid-author"
+	api.tweets["parent"] = map[string]any{"mid": "parent", "authorId": "pauthor"}
+	api.tweets["victims-tweet"] = map[string]any{"mid": "victims-tweet", "authorId": "victim"}
+
+	ret, err := entryDeleteComment(commentCtx(api, "delete_comment", map[string]string{
+		"appuserid": "pauthor",
+		"tweetid":   "parent",
+		"commentid": "victims-tweet",
+	}))
+	if err != nil {
+		t.Fatalf("delete_comment returned error: %v", err)
+	}
+	if ok, msg := replyMessage(t, ret); ok || msg != "Comment not found" {
+		t.Fatalf("foreign object: reply %s / %s, want Comment not found", fmt.Sprint(ok), msg)
+	}
+	for _, forbidden := range []string{"delvers:", "delref:", "zrem:"} {
+		if hasCall(api, forbidden) {
+			t.Fatalf("foreign object was touched (%s), calls: %v", forbidden, api.calls)
+		}
+	}
+}
+
+// A repeated named submission must not add its references a second time:
+// Leither counts them, and a second count would outlive the deletion. A first
+// attempt adds both; a repeat that finds the tweet committed and listed by its
+// author adds neither.
+func TestAddTweetRetryDoesNotRepeatReferences(t *testing.T) {
+	api := newCommentAPI("nodeA")
+	api.addUser("author", "nodeA", "uid-author")
+	api.authorSid, api.authorUID = "author-session", "uid-author"
+	tweetID := "mid-" + fileExtPrefix + "tweet-tweet:author:req-1"
+
+	submit := func() {
+		ret, err := entryAddTweet(commentCtx(api, "add_tweet", map[string]string{
+			"requestid": "req-1",
+			"tweet":     `{"authorId":"author","content":"hello","attachments":[{"mid":"media-1"}]}`,
+		}))
+		if err != nil {
+			t.Fatalf("add_tweet returned error: %v", err)
+		}
+		if ok, msg := replyMessage(t, ret); !ok {
+			t.Fatalf("add_tweet failed: %s", msg)
+		}
+	}
+
+	submit()
+	first := filterCalls(api, "addref:")
+	if len(first) != 2 {
+		t.Fatalf("first attempt should reference the attachment and the tweet, got %v", first)
+	}
+
+	// What the first attempt left committed.
+	api.committed[tweetID] = true
+	api.calls = nil
+	submit()
+	if repeated := filterCalls(api, "addref:"); len(repeated) != 0 {
+		t.Fatalf("repeat added references again: %v", repeated)
+	}
+}
+
+// One user's requestid never resolves to another user's object, nor a
+// comment's to a tweet's: the mark carries the kind and the author.
+func TestSubmissionMarkIsNamespaced(t *testing.T) {
+	tweet := submissionMark("tweet", "alice", "r1")
+	if tweet == submissionMark("tweet", "bob", "r1") {
+		t.Fatalf("two authors share a mark: %s", tweet)
+	}
+	if tweet == submissionMark("comment", "alice", "r1") {
+		t.Fatalf("a tweet and a comment share a mark: %s", tweet)
+	}
+	if submissionMark("tweet", "alice", "") != "{{auto}}" {
+		t.Fatalf("no requestid must ask for a fresh id")
 	}
 }
