@@ -102,9 +102,12 @@ func entryMessageOutgoing(c *ctx) (any, error) {
 	c.debugf("%s outgoing message to %s, msg=%s, msgMid=%s", senderID, receiptID, c.str("msg"), msgMid)
 
 	// The node's clock supplies both the ordering score and the key the message
-	// is stored under, so the two cannot disagree.
+	// is stored under, so the two cannot disagree. The stamp travels inside the
+	// stored object too: clients derive a stable message id from it, so the
+	// same delivered message decodes identically on every read.
 	stamp := nowMillis()
 	member := toString(stamp)
+	msg["stamp"] = member
 	if err := c.zadd(msgSid, receiptID, stamp, member); err != nil {
 		return c.wrapErrBool(err), nil
 	}
@@ -208,9 +211,12 @@ func entryMessageIncoming(c *ctx) (any, error) {
 	defer c.closeMimei(msgSid)
 
 	// The receiving node stamps the message. The sender's clock is not trusted
-	// for this, because the unread comparison depends on it.
+	// for this, because the unread comparison depends on it. The stamp travels
+	// inside the stored object too, so clients can identify the same delivered
+	// message across reads instead of minting a new id per decode.
 	stamp := nowMillis()
 	member := toString(stamp)
+	msg["stamp"] = member
 
 	if err := c.hset(msgSid, userLastIncomingMsg, senderID, member); err != nil {
 		return c.wrapErrString(err), nil

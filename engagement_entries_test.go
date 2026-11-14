@@ -13,6 +13,13 @@ func (a *commentAPI) Hset(mmsid, key, field string, value any) (int64, error) {
 	id := strings.TrimPrefix(mmsid, "open:") + "/" + key + "/" + field
 	a.calls = append(a.calls, "hset:"+id)
 	a.hashFields[id] = true
+	// Messages carry their delivery stamp inside the stored object; recording
+	// it lets the message tests assert it made it in.
+	if m, ok := value.(map[string]any); ok {
+		if stamp, ok := m["stamp"].(string); ok && stamp != "" {
+			a.calls = append(a.calls, "stamped:"+stamp)
+		}
+	}
 	return 1, nil
 }
 

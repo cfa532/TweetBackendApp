@@ -221,6 +221,16 @@ func hasCall(a *commentAPI, prefix string) bool {
 	return false
 }
 
+func filterCalls(a *commentAPI, prefix string) []string {
+	var out []string
+	for _, call := range a.calls {
+		if strings.HasPrefix(call, prefix) {
+			out = append(out, call)
+		}
+	}
+	return out
+}
+
 // add_comment on the writer's root delegates the parent-side write to the
 // parent author's node, carrying the author session the target verifies.
 func TestAddCommentDelegatesToParentAuthorNode(t *testing.T) {

@@ -37,6 +37,9 @@ func TestMessageOutgoingDeliversThroughPeer(t *testing.T) {
 	if !hasCall(api, "zadd:receipt") || !hasCall(api, "hset:mid-") || !strings.Contains(strings.Join(api.calls, " "), "/receipt/") {
 		t.Fatalf("sender's copy not stored, calls: %v", api.calls)
 	}
+	if len(filterCalls(api, "stamped:")) != 1 {
+		t.Fatalf("stored copies do not carry the delivery stamp, calls: %v", api.calls)
+	}
 
 	// A peer refusal fails the send rather than leaving it half-delivered.
 	api.remote = nil
