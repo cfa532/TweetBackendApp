@@ -163,7 +163,7 @@ func entryApplyAdminTweetMutation(c *ctx) (any, error) {
 		return respErr(err), nil
 	}
 	if !listed {
-		return respFail("This item is outside the author's tweet timeline"), nil
+		return respFail("Cannot find the tweet"), nil
 	}
 	switch action {
 	case "update":
