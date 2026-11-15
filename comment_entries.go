@@ -271,6 +271,7 @@ func entryApplyComment(c *ctx) (any, error) {
 		}
 	}
 	comment["mid"] = commentID
+	comment["parentTweetId"] = tweetID
 	comment["timestamp"] = nowMillis()
 
 	commentSid, err := c.openMimei(authSid, commentID, verCur)

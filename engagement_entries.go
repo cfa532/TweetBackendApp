@@ -208,11 +208,8 @@ func (c *ctx) savedTweetState(kind engagementKind, userID, tweetID string) (bool
 // Peer entry: the tweet author's node
 // ---------------------------------------------------------------------------
 
-// applyEngagementPeer performs the tweet-side half of a save on the tweet
-// author's root node. It is reached from toggle_favorite and toggle_bookmark
-// on the engaging user's node and is not part of the client surface: the
-// caller must be that node, named by the platform-injected node app code, and
-// the tweet must belong to the author the request names.
+// applyEngagementPeer performs the tweet-side half of a save on the object's
+// storage root. Only the engaging user's own node can request the write.
 func (c *ctx) applyEngagementPeer(kind engagementKind) (any, error) {
 	c.debugf("peer request: sid=%t nodeappcode=%t author=%q",
 		c.sid() != "", c.str("nodeappcode") != "", c.str("author"))
@@ -222,14 +219,12 @@ func (c *ctx) applyEngagementPeer(kind engagementKind) (any, error) {
 	authorID := c.str("authorid")
 	wanted := c.boolParam("wanted")
 
-	// The tweet's list lives on its author's root node, so this must be that
-	// node.
+	if err := c.requirePeerCall(userID); err != nil {
+		return respErr(err), nil
+	}
 	if err := c.requireRootNode(authorID); err != nil {
 		return respErr(fmt.Errorf("Author host not found")), nil
 	}
-	// The tweet object itself must agree: a request naming this root author
-	// for a tweet that belongs to someone else would write a foreign tweet's
-	// list.
 	tweet, err := c.loadTweet(tweetID)
 	if err != nil {
 		return respErr(err), nil
@@ -237,13 +232,40 @@ func (c *ctx) applyEngagementPeer(kind engagementKind) (any, error) {
 	if tweet == nil {
 		return respErr(fmt.Errorf("Tweet not found")), nil
 	}
-	if tweet.authorID() != authorID {
-		return respErr(fmt.Errorf("Tweet does not belong to the named author")), nil
-	}
 
-	// Only the engaging user's own root may ask this node to record the save.
-	if err := c.requirePeerCall(userID); err != nil {
-		return respErr(err), nil
+	// Comments and replies live on the immediate parent's author's root.
+	// A standalone quote may also carry a parent ID, but is listed in the
+	// quote author's timeline and lives on their own root.
+	storageAuthorID := tweet.authorID()
+	parentID := mapStr(tweet, "parentTweetId")
+	if parentID != "" && tweet.originalTweetID() != "" && storageAuthorID == authorID {
+		listed, err := c.listedInCommitted(storageAuthorID, userTweetList, tweetID)
+		if err != nil {
+			return respErr(err), nil
+		}
+		if listed {
+			parentID = ""
+		}
+	}
+	if parentID != "" {
+		parent, err := c.loadTweet(parentID)
+		if err != nil {
+			return respErr(err), nil
+		}
+		if parent == nil || parent.authorID() != authorID {
+			return respFail("Parent tweet does not belong to the named author"), nil
+		}
+		listed, err := c.listedInCommitted(parentID, tweetCommentList, tweetID)
+		if err != nil {
+			return respErr(err), nil
+		}
+		if !listed {
+			return respFail("Comment not found in its parent"), nil
+		}
+		storageAuthorID = parent.authorID()
+	}
+	if storageAuthorID != authorID {
+		return respFail("Tweet does not belong to the named author"), nil
 	}
 
 	updatedTweet := c.applyEngagementToTweet(kind, userID, authorID, tweetID, wanted, true)
