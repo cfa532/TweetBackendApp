@@ -90,9 +90,9 @@ func entryApplyFavorite(c *ctx) (any, error) { return c.applyEngagementPeer(favo
 // list is flipped; with no stated state that list is the one record the user's
 // node owns outright, so it decides.
 //
-// The tweet-side write is delegated before anything is written locally, so a
-// refused or unreachable author node leaves the user's list untouched rather
-// than half of a save behind.
+// Two-sided writes are delegated before the user's list changes. An explicit
+// removal without an author route may clear the list on its own after strict
+// verification of the account owner's session.
 func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 	userID := c.str(kind.userParam)
 	tweetID := c.str("tweetid")
@@ -103,6 +103,23 @@ func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 	if err := c.requireRootNode(userID); err != nil {
 		return c.wrapErrString(fmt.Errorf("User host not found")), nil
 	}
+
+	// Omitting the author is only valid for an explicit removal. Require a
+	// bound owner so this path cannot become an unauthenticated list write.
+	if authorID == "" && c.str("hostid") == "" && c.str(kind.stateParam) == "false" && tweetID != "" {
+		owner, err := c.loadUser(userID)
+		if err != nil {
+			return c.wrapErrString(err), nil
+		}
+		if owner == nil {
+			return c.wrapErrString(fmt.Errorf("User not found")), nil
+		}
+		if err := c.requireBoundOwner(owner, userID); err != nil {
+			return c.wrapErrString(err), nil
+		}
+		return c.finishEngagement(kind, userID, tweetID, false, nil)
+	}
+
 	if err := c.requireOwner(userID); err != nil {
 		return c.wrapErrString(err), nil
 	}
@@ -153,8 +170,12 @@ func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 		return c.wrapErrString(fmt.Errorf("%s", message)), nil
 	}
 
-	// The author's node has performed its half; record the save in the user's
-	// own list (a no-op when the states already agree).
+	return c.finishEngagement(kind, userID, tweetID, wanted, peer["tweet"])
+}
+
+// finishEngagement updates the user's list and returns the tweet when its
+// author node performed the other half of the write.
+func (c *ctx) finishEngagement(kind engagementKind, userID, tweetID string, wanted bool, tweet any) (any, error) {
 	updatedUser, err := c.applyEngagementToUser(kind, userID, tweetID, wanted)
 	if err != nil {
 		c.failf(err)
@@ -168,7 +189,7 @@ func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 	return c.wrapPassthrough(map[string]any{
 		"success": true,
 		"user":    updatedUser,
-		"tweet":   peer["tweet"],
+		"tweet":   tweet,
 	}), nil
 }
 
