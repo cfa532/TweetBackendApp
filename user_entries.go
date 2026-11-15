@@ -139,6 +139,10 @@ func entryRegister(c *ctx) (any, error) {
 	if !validUsername(user.username()) {
 		return fail(fmt.Errorf("Invalid username format")), nil
 	}
+	if user.username() == adminUsername {
+		return fail(fmt.Errorf("This username is reserved")), nil
+	}
+	delete(user, "adminTweetAccessRevoked")
 	// Registering is how a guest gets an account; an owner's is created when
 	// their device is paired (see sessionLogin).
 	config, err := c.loadNodeConfig()

@@ -23,11 +23,12 @@ func entryHealth(c *ctx) (any, error) {
 		"engagementDelegation": true,
 		// messageDelegation says message_outgoing on the sender's root delivers
 		// the recipient's copy itself, through the peer-only message_incoming.
-		"messageDelegation": true,
-		"guestRegistration": config.allowGuests,
-		"message":           "Server is running",
-		"storageFormats":    []string{"database", fileSchema},
-		"creationFormat":    "mixed",
+		"messageDelegation":    true,
+		"adminTweetDelegation": true,
+		"guestRegistration":    config.allowGuests,
+		"message":              "Server is running",
+		"storageFormats":       []string{"database", fileSchema},
+		"creationFormat":       "mixed",
 		"creationFormats": map[string]string{
 			"user": fileSchema, "tweet": fileSchema, "comment": fileSchema,
 			"messages": "database",

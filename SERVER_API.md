@@ -64,7 +64,30 @@ Writes to the caller's own data accept `usersid` (`add_tweet`, `update_tweet`,
 the account named by the request, otherwise the write is refused. A session
 this node does not know fails with the message `Session invalid`; sign in again
 and repeat the request. A request without `usersid`, or for an account with no
-`authUid`, is still accepted until `ownerSessionRequired` is switched on.
+`authUid`, is generally accepted until `ownerSessionRequired` is switched on.
+Tweet moderation and its account setting require a bound Leither session
+throughout the rollout. Accounts that revoke admin access also require
+identity verification on direct tweet writes, profile edits and account
+deletion, so the legacy unsigned forms cannot bypass revocation.
+
+### Admin tweet delegation
+
+- `admin_tweet_access` runs on the account's root. Send `userid` to read the
+  policy or include `allowed="true"|"false"` and the account's `usersid` to change
+  it. The reply is `{success: true, allowed: boolean}`. Existing accounts allow
+  moderation by default.
+- `admin_mutate_tweet` runs on the existing `admin` account's root with that
+  account's `usersid` and `userid`. Send `authorid`, `tweetid` and `action`
+  (`update` or `delete`). Updates accept the content and optional attachment
+  and flag parameters of `update_tweet`. Successful updates return `mid`;
+  deletions return `tweetid`, using the normal tweet mutation response shapes.
+- The peer-only `apply_admin_tweet_mutation` runs on the author's root. It
+  verifies the admin delegation and checks the author's current policy and
+  tweet-list membership before editing or deleting. It cannot moderate
+  comments or act as the author on other endpoints.
+- `health` advertises `adminTweetDelegation: true`. The username `admin` is
+  reserved from guest registration. An existing administrator can bind by
+  signing in, and a new one can be provisioned as a node owner.
 
 Comments are written through the commenter's own root node, which asks the
 parent author's node to perform the write (see the Comment endpoints). The

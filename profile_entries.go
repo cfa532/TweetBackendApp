@@ -54,9 +54,14 @@ func entrySetAuthorCoreData(c *ctx) (any, error) {
 	}
 	userInDB := userObj(stored)
 
-	// Checked before the migration branch: a migration rewrites the account's
-	// root host, so it is the edit that most needs a verified owner.
-	if err := c.requireOwner(user.mid()); err != nil {
+	// Root and agent-key changes could otherwise bypass tweet revocation or
+	// divert the authority of the admin account during the legacy rollout.
+	if userInDB.adminTweetAccessRevoked() || userInDB.username() == adminUsername {
+		err = c.requireBoundOwner(userInDB, user.mid())
+	} else {
+		err = c.requireOwner(user.mid())
+	}
+	if err != nil {
 		return c.wrapErrUpdate(err), nil
 	}
 
@@ -421,7 +426,12 @@ func entryDeleteAccount(c *ctx) (any, error) {
 	if err := c.requireRootNodeFor(user, userID); err != nil {
 		return c.wrapErrDelete(err), nil
 	}
-	if err := c.requireOwner(userID); err != nil {
+	if user.adminTweetAccessRevoked() || user.username() == adminUsername {
+		err = c.requireBoundOwner(user, userID)
+	} else {
+		err = c.requireOwner(userID)
+	}
+	if err != nil {
 		return c.wrapErrDelete(err), nil
 	}
 

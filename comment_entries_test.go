@@ -189,11 +189,11 @@ func (a *commentAPI) Zadd(mmsid, key string, args ...lapi.ScorePair) (int64, err
 	}
 	return int64(len(args)), nil
 }
-func (a *commentAPI) Zrange(mmsid, key string, start, stop int) ([]lapi.ScorePair, error) {
+func (a *commentAPI) Zrevrange(mmsid, key string, start, stop int) ([]lapi.ScorePair, error) {
 	members := a.members[strings.TrimPrefix(mmsid, "open:")+"/"+key]
 	pairs := make([]lapi.ScorePair, 0, len(members))
-	for i, member := range members {
-		pairs = append(pairs, lapi.ScorePair{Score: int64(i), Member: member})
+	for i := len(members) - 1; i >= 0; i-- {
+		pairs = append(pairs, lapi.ScorePair{Score: int64(i), Member: members[i]})
 	}
 	return pairs, nil
 }

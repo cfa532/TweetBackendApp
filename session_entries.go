@@ -90,10 +90,26 @@ func (c *ctx) requireOwner(ownerID string) error {
 	if owner == nil {
 		return fmt.Errorf("User not found")
 	}
+	return c.checkOwnerUID(owner, ownerID, callerUID, ownerSessionRequired())
+}
+
+// requireBoundOwner is used for operations that need verified identity even
+// during the legacy-write rollout.
+func (c *ctx) requireBoundOwner(owner userObj, ownerID string) error {
+	callerUID, err := c.callerUID()
+	if err != nil {
+		return err
+	}
+	if callerUID == "" {
+		return fmt.Errorf(errSessionInvalid)
+	}
+	return c.checkOwnerUID(owner, ownerID, callerUID, true)
+}
+
+func (c *ctx) checkOwnerUID(owner userObj, ownerID, callerUID string, required bool) error {
 	if owner.authUID() == "" {
-		// An account created before sessions existed has nothing to compare
-		// against until its user signs in once and binds it (see login).
-		if ownerSessionRequired() {
+		// A legacy account is bound on its first session login.
+		if required {
 			return fmt.Errorf("Account %s is not bound to an identity; sign in again", ownerID)
 		}
 		return nil

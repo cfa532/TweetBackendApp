@@ -286,9 +286,10 @@ func (c *ctx) zcard(mmsid, key string) (int64, error) {
 
 // zhas reports whether a sorted set holds a member. It lists the set rather
 // than asking for the member's score or rank, because what those answer for an
-// absent member differs between the two storage formats.
+// absent member differs between the two storage formats. Use the same
+// full ranked range as the timeline and comment list reads.
 func (c *ctx) zhas(mmsid, key, member string) (bool, error) {
-	pairs, err := c.zrange(mmsid, key, 0, -1)
+	pairs, err := c.zrevrange(mmsid, key, 0, -1)
 	if err != nil {
 		return false, err
 	}

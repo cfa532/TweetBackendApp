@@ -28,22 +28,17 @@ import (
 // update_tweet
 // ---------------------------------------------------------------------------
 
-// entryUpdateTweet edits a tweet's content and, optionally, its attachments and
-// flags. Only the author may edit, and only the fields supplied are changed.
+// entryUpdateTweet is the author's direct edit on their root node.
 func entryUpdateTweet(c *ctx) (any, error) {
-	appUserID := c.str("appuserid")
-	tweetID := c.str("tweetid")
-	content := c.str("content")
-
-	// Only the author edits, and the tweet lives on their root node; the reply
-	// shape for a rejection is part of the client contract.
-	if err := c.requireRootNode(appUserID); err != nil {
+	authorID := c.str("appuserid")
+	if err := c.requireDirectTweetOwner(authorID); err != nil {
 		return respErr(err), nil
 	}
-	if err := c.requireOwner(appUserID); err != nil {
-		return respErr(err), nil
-	}
+	return c.updateTweet(authorID, c.str("tweetid"))
+}
 
+// updateTweet is shared by the authorized owner and admin paths.
+func (c *ctx) updateTweet(authorID, tweetID string) (any, error) {
 	authSid, err := c.authSid()
 	if err != nil {
 		return respErr(err), nil
@@ -62,8 +57,8 @@ func entryUpdateTweet(c *ctx) (any, error) {
 		return respErr(fmt.Errorf("Tweet not found")), nil
 	}
 	tweet := tweetObj(stored)
-	if tweet.authorID() != appUserID {
-		return respErr(fmt.Errorf("Only the tweet author can update content")), nil
+	if tweet.authorID() != authorID {
+		return respFail("Tweet does not belong to the named author"), nil
 	}
 
 	// Attachments are reconciled only when supplied, so a client that only
@@ -92,7 +87,7 @@ func entryUpdateTweet(c *ctx) (any, error) {
 		}
 		tweet["isPrivate"] = value
 	}
-	tweet["content"] = content
+	tweet["content"] = c.str("content")
 
 	if err := c.setValue(tweetSid, tweetContentKey, map[string]any(tweet)); err != nil {
 		return respErr(err), nil
@@ -184,11 +179,7 @@ func entryToggleTweetPrivacy(c *ctx) (any, error) {
 	appUserID := c.str("appuserid")
 	tweetID := c.str("tweetid")
 
-	// Only the author flips this, and the tweet lives on their root node.
-	if err := c.requireRootNode(appUserID); err != nil {
-		return c.wrapErr(err), nil
-	}
-	if err := c.requireOwner(appUserID); err != nil {
+	if err := c.requireDirectTweetOwner(appUserID); err != nil {
 		return c.wrapErr(err), nil
 	}
 

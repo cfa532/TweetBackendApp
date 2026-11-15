@@ -185,12 +185,12 @@ func (c *ctx) authorizePost(tweet tweetObj, user userObj, agentAuth map[string]a
 		// The signature covers the author and content, so an agent cannot take a
 		// signature issued for one user and post as another.
 		//
-		// A well-formed but unverifiable signature is accepted here, as
-		// add_tweet.js did; verify_agent_token refuses the same signature.
+		// Keep legacy verification for accounts that have not opted out.
+		// A named submission can also rewrite an existing tweet.
 		result := c.verifyAgentAuth(agentAuth, map[string]any{
 			"authorId": tweet.authorID(),
 			"content":  tweet.content(),
-		}, true)
+		}, !user.adminTweetAccessRevoked())
 		if !result.valid {
 			c.warnf("Agent authentication failed: %s", result.reason)
 			return fmt.Errorf("Agent authentication failed: %s", result.reason)
@@ -201,6 +201,10 @@ func (c *ctx) authorizePost(tweet tweetObj, user userObj, agentAuth map[string]a
 		c.infof("Agent authentication successful for user %s", tweet.authorID())
 		c.debugf("Authorized via agent")
 		return nil
+	}
+
+	if user.adminTweetAccessRevoked() {
+		return c.requireBoundOwner(user, tweet.authorID())
 	}
 
 	// No app code means the request came from a client rather than a peer
@@ -590,10 +594,18 @@ func entryDeleteTweet(c *ctx) (any, error) {
 	if err := c.requireRootNodeFor(user, userID); err != nil {
 		return respErr(err), nil
 	}
-	if err := c.requireOwner(userID); err != nil {
+	if tweetAuthorID == userID && user.adminTweetAccessRevoked() {
+		err = c.requireBoundOwner(user, userID)
+	} else {
+		err = c.requireOwner(userID)
+	}
+	if err != nil {
 		return respErr(err), nil
 	}
+	return c.deleteTweet(userID, tweetAuthorID, tweetID, false)
+}
 
+func (c *ctx) deleteTweet(userID, tweetAuthorID, tweetID string, delegated bool) (any, error) {
 	authSid, err := c.authSid()
 	if err != nil {
 		return respErr(err), nil
@@ -637,6 +649,9 @@ func entryDeleteTweet(c *ctx) (any, error) {
 		c.warnf("publish %s failed: %v", userID, err)
 	}
 	c.debugf("Delete tweet %s %s", tweetID, jsonStringify(map[string]any(deleted)))
+	if delegated {
+		c.unlinkDelegatedRetweet(authSid, deleted)
+	}
 
 	return c.wrapDelete(map[string]any{"tweetid": tweetID, "success": true}), nil
 }
