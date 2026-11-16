@@ -403,7 +403,7 @@ func (c *ctx) applyEngagementToUser(kind engagementKind, userID, tweetID string,
 		return nil, err
 	}
 	c.debugf("local tweetId=%s, userData=%s", tweetID, jsonStringify(updatedUser))
-	return c.wrapNotNull(updatedUser, "User not found"), nil
+	return updatedUser, nil
 }
 
 // requestedState reads an optional desired-state parameter, reporting both the

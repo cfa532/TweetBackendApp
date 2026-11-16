@@ -67,6 +67,9 @@ func TestToggleFavoriteDelegatesToAuthorNode(t *testing.T) {
 	if !ok || !mapBool(m, "success") {
 		t.Fatalf("toggle_favorite failed: %#v", ret)
 	}
+	if user, ok := toMap(m["user"]); !ok || mapStr(user, "mid") != "liker" {
+		t.Fatalf("toggle_favorite returned an invalid user record: %#v", m["user"])
+	}
 	if api.remote == nil || api.remote.entry != "apply_favorite" {
 		t.Fatalf("no delegation to apply_favorite: %#v", api.remote)
 	}
