@@ -153,16 +153,16 @@ version code 160, package MiMei data version 229, and Tweet backend version
 The Android repository's `docs/SERVER_UPGRADE_SYSTEM.md` is the detailed
 operator runbook.
 
-Copy the production Go sources into `/home/pi/demo/twbe/` on gen8. The target
-directory must stay named `twbe` because its name determines the AppID. Exclude
-tests, local module files, and documentation from the MApp package:
+Stage the production Go sources with an embedded build ID, then copy that
+directory's contents into `/home/pi/demo/twbe/` on gen8. The target directory
+must stay named `twbe` because its name determines the AppID. The staging
+script includes only production Go sources and prints the ID that `health`
+will return as `buildId`.
 
 ```bash
-rsync -av -e 'ssh -p 220' \
-  --exclude='*_test.go' \
-  --include='*.go' \
-  --exclude='*' \
-  ./ pi@gen8.leither.uk:/home/pi/demo/twbe/
+tweet_mapp_stage=$(mktemp -d)
+python3 stage_mapp.py "$tweet_mapp_stage"
+rsync -av -e 'ssh -p 220' "$tweet_mapp_stage/" pi@gen8.leither.uk:/home/pi/demo/twbe/
 ```
 
 Compare at least one changed file hash before publishing, then run the existing
@@ -170,15 +170,16 @@ gen8 script. Its `uploadapp` / `backup` / `mimei publish` sequence remains the
 authoritative publisher:
 
 ```bash
-shasum -a 256 file_entries.go
+shasum -a 256 "$tweet_mapp_stage/build_id.go"
 ssh -p 220 pi@gen8.leither.uk \
-  'shasum -a 256 /home/pi/demo/twbe/file_entries.go'
+  'shasum -a 256 /home/pi/demo/twbe/build_id.go'
 ssh -p 220 pi@gen8.leither.uk 'cd /home/pi/demo && ./twbe.sh'
 ```
 
 The final command must report a new numbered version and successful MiMei
 publication. Address verification calls by numbered version first, then confirm
-that `last` returns the same result. Both must advertise `database` and
+that `last` returns the same result. Both must return the staged `buildId`
+and advertise `database` and
 `tweet-file-v1` through `health`, with `creationFormat: "mixed"` and per-object `creationFormats`. Verify
 serving/root nodes as well; if needed, synchronize only the application MID
 from gen8 before checking File tweet and comment reads.

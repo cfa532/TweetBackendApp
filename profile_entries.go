@@ -9,11 +9,6 @@ import (
 	"Leither/lapi"
 )
 
-// savedItemSyncGrace is how long a saved tweet whose content has not arrived is
-// left alone. A tweet saved moments ago may simply still be synchronising, and
-// removing it then would lose a bookmark the user just made.
-const savedItemSyncGraceMillis = int64(5 * 60 * 1000)
-
 // ---------------------------------------------------------------------------
 // set_author_core_data
 // ---------------------------------------------------------------------------
@@ -245,37 +240,19 @@ func (c *ctx) wrapErrList(err error) any {
 
 // savedTweets resolves one page of a user's bookmark or favorite list.
 //
-// The read is deliberately local: routine list loading must not force
-// synchronisation, which is what the explicit recovery entries are for. An
-// entry whose tweet is not held here yields a null in its place so the client
-// can show a gap rather than silently renumbering the page.
-//
-// On the account's own root node this doubles as the only cleanup path for
-// memberships whose tweet no longer exists anywhere. That cleanup is guarded
-// three ways — root node only, older than the grace period, and unchanged since
-// the page snapshot — because deleting a live bookmark is not recoverable.
+// Preserve the ID of an unreadable saved item so it can still be removed.
 func (c *ctx) savedTweets(listType string) ([]any, error) {
 	userID := c.str("userid")
 	appUserID := c.str("appuserid")
 	pageNumber := c.intParam("pn", 0)
 	pageSize := c.intParam("ps", 0)
 	startRank := int(pageNumber * pageSize)
-	nodeID := c.nodeID()
 
 	readSid, err := c.openMimei("", userID, verLast)
 	if err != nil {
 		return nil, fmt.Errorf("MMOpen(%s, last): %v", userID, err)
 	}
 	defer c.closeMimei(readSid)
-
-	isRootNode := false
-	if owner, err := c.getObject(readSid, ownerDataKey); err != nil {
-		// A failed ownership check degrades to a read-only response; it must
-		// never stop the list itself from loading.
-		c.errorf("failed to resolve root node for userId=%s: %v", userID, err)
-	} else if host := userObj(owner).hostID(); host != "" && host == nodeID {
-		isRootNode = true
-	}
 
 	items, err := c.hgetall(readSid, listType)
 	if err != nil {
@@ -288,111 +265,14 @@ func (c *ctx) savedTweets(listType string) ([]any, error) {
 		return a > b
 	})
 
-	fetchTweet := func(tweetID string) any {
-		tweet, err := c.callEntry("get_tweet", map[string]string{
-			reqAppID:    c.appID(),
-			reqAppVer:   verLast,
-			"appuserid": appUserID,
-			"tweetid":   tweetID,
-		})
-		if err != nil {
-			return nil
-		}
-		return tweet
-	}
-
-	// The writable handle is opened only if a removal actually becomes
-	// necessary, so an ordinary page read stays a read.
-	var writeSid, authSid string
-	openWritable := func() string {
-		if !isRootNode {
-			return ""
-		}
-		if writeSid != "" {
-			return writeSid
-		}
-		sid, err := c.authSid()
-		if err != nil {
-			c.errorf("failed to open write session for userId=%s: %v", userID, err)
-			isRootNode = false
-			return ""
-		}
-		mmsid, err := c.openMimei(sid, userID, verCur)
-		if err != nil {
-			c.errorf("failed to open write session for userId=%s: %v", userID, err)
-			isRootNode = false
-			return ""
-		}
-		authSid, writeSid = sid, mmsid
-		return writeSid
-	}
-	defer func() {
-		if writeSid != "" {
-			c.closeMimei(writeSid)
-		}
-	}()
-
 	out := []any{}
-	didModify := false
-	// Scanning continues past a removal so the caller still receives a full
-	// page and the next page does not skip an item shifted by the deletion.
 	for index := startRank; index < len(items) && int64(len(out)) < pageSize; index++ {
-		item := items[index]
-		tweetID := item.Field
-
-		if tweet := fetchTweet(tweetID); tweet != nil {
-			out = append(out, tweet)
-			continue
+		tweetID := items[index].Field
+		item := c.fetchTweetV2(tweetID, appUserID)
+		if item == nil {
+			item = map[string]any{"mid": tweetID, "savedTweetUnavailable": true}
 		}
-
-		savedAt, savedAtOK := toInt64(item.Value)
-		if !isRootNode || !savedAtOK || nowMillis()-savedAt < savedItemSyncGraceMillis {
-			out = append(out, nil)
-			continue
-		}
-		writable := openWritable()
-		if writable == "" {
-			out = append(out, nil)
-			continue
-		}
-
-		// Re-read from the writable handle: a changed timestamp means the item
-		// was saved again after this page's snapshot was taken.
-		current, err := c.hget(writable, listType, tweetID)
-		if err != nil {
-			out = append(out, nil)
-			continue
-		}
-		if current == nil {
-			continue
-		}
-		if currentSavedAt, ok := toInt64(current); !ok || currentSavedAt != savedAt {
-			out = append(out, nil)
-			continue
-		}
-
-		// The content may have arrived since the first lookup.
-		if tweet := fetchTweet(tweetID); tweet != nil {
-			out = append(out, tweet)
-			continue
-		}
-
-		if err := c.hdel(writable, listType, tweetID); err != nil {
-			c.errorf("failed to remove stale tweetId=%s: %v", tweetID, err)
-			out = append(out, nil)
-			continue
-		}
-		didModify = true
-		c.warnf("removed stale tweetId=%s from %s on root node=%s, savedAt=%d, userId=%s",
-			tweetID, listType, nodeID, savedAt, userID)
-	}
-
-	if didModify {
-		if err := c.backupDelRef(authSid, userID, ""); err != nil {
-			c.errorf("failed to persist/publish cleanup for userId=%s: %v", userID, err)
-		} else if err := c.mimeiPublish(authSid, userID); err != nil {
-			c.errorf("failed to persist/publish cleanup for userId=%s: %v", userID, err)
-		}
+		out = append(out, item)
 	}
 	return out, nil
 }
@@ -404,7 +284,7 @@ func (c *ctx) savedTweets(listType string) ([]any, error) {
 // entryDeleteAccount removes an account and its tweets.
 //
 // Deletion runs on the account's root node. Tweets are deleted first so each
-// one goes through delete_tweet and has its own references and list entries
+// one uses the normal tweet deletion path to have its references and list entries
 // cleaned up; the account is then withdrawn from the network and its stored
 // versions dropped.
 func entryDeleteAccount(c *ctx) (any, error) {
@@ -435,28 +315,27 @@ func entryDeleteAccount(c *ctx) (any, error) {
 		return c.wrapErrDelete(err), nil
 	}
 
-	// A failure to delete the tweets must not stop the account itself from
-	// being removed; the user asked for the account to go.
-	if err := c.deleteUserTweets(userID); err != nil {
-		c.errorf("Failed to delete tweets: %v, userId=%s, request=%s", err, userID, c.requestJSON())
-	}
-
 	authSid, err := c.authSid()
 	if err != nil {
 		return c.wrapErrDelete(err), nil
 	}
+
+	// Keep the account and its remaining tweet references available for retry.
+	if err := c.deleteUserTweets(authSid, userID); err != nil {
+		return c.wrapErrDelete(err), nil
+	}
 	if err := c.mimeiUnpublish(authSid, userID); err != nil {
-		c.errorf("Failed to unpublish user %s: %v", userID, err)
+		return c.wrapErrDelete(fmt.Errorf("Failed to unpublish account: %v", err)), nil
 	}
 	if err := c.delVersions(authSid, userID); err != nil {
-		c.errorf("Failed to delete user versions %s: %v", userID, err)
+		return c.wrapErrDelete(err), nil
 	}
 	c.debugf("Deleted account %s", userID)
 	return c.wrapPassthrough(map[string]any{"success": true}), nil
 }
 
 // deleteUserTweets deletes every tweet listed by an account.
-func (c *ctx) deleteUserTweets(userID string) error {
+func (c *ctx) deleteUserTweets(authSid, userID string) error {
 	var ids []string
 	err := c.readMimei("", userID, func(mmsid string) error {
 		pairs, err := c.zrange(mmsid, userTweetList, 0, -1)
@@ -470,13 +349,28 @@ func (c *ctx) deleteUserTweets(userID string) error {
 		return err
 	}
 	for _, tweetID := range ids {
-		if _, err := c.callEntry("delete_tweet", map[string]string{
-			reqAppID:  c.appID(),
-			reqAppVer: verLast,
-			"tweetid": tweetID,
-			"userid":  userID,
-		}); err != nil {
-			c.warnf("delete_tweet %s failed: %v", tweetID, err)
+		// The account and its timeline are read on their authoritative root.
+		// If a prior attempt deleted the tweet but could not update the account,
+		// finish removing its reference and list entries.
+		exists, err := c.hasCommittedVersion(authSid, tweetID)
+		if err != nil {
+			return fmt.Errorf("Failed to inspect tweet %s: %v", tweetID, err)
+		}
+		authorID := userID
+		if !exists {
+			if err := c.delRef(authSid, userID, tweetID); err != nil {
+				return err
+			}
+			authorID = ""
+		}
+		result, err := c.deleteTweet(userID, authorID, tweetID, false)
+		if err != nil {
+			return fmt.Errorf("Failed to delete tweet %s: %v", tweetID, err)
+		}
+		reply, _ := toMap(result)
+		if !mapBool(reply, "success") {
+			message := firstNonEmpty(mapStr(reply, "message"), mapStr(reply, "error"), "No confirmation from delete_tweet")
+			return fmt.Errorf("Failed to delete tweet %s: %s", tweetID, message)
 		}
 	}
 	return nil

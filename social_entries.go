@@ -51,32 +51,26 @@ func entryToggleFollowing(c *ctx) (any, error) {
 		}
 		return nil
 	}
-	ok := func(result any) any {
-		if !enveloped {
-			return result
+	ok := func(following bool) any {
+		if enveloped {
+			return respOK(map[string]any{"isFollowing": following})
 		}
-		if result == nil {
-			return respFail("Operation failed")
-		}
-		if b, isBool := result.(bool); isBool {
-			return respOK(map[string]any{"isFollowing": b})
-		}
-		if m, isMap := toMap(result); isMap {
-			if _, isEnvelope := m["success"]; isEnvelope {
-				// A delegated call already produced the envelope; nesting it
-				// again would hide isFollowing from the client.
-				return m
-			}
-		}
-		return respOK(result)
+		return following
 	}
 
 	userID := c.str("userid")
 	followingID := c.str("followingid")
 	followingHostID := c.str("followingid_hostid")
 
+	if userID == "" || followingID == "" {
+		return fail(fmt.Errorf("Missing user ID or following ID")), nil
+	}
 	if userID == followingID {
 		return fail(fmt.Errorf("Cannot follow yourself")), nil
+	}
+	state := c.str("isfollowing")
+	if state != "" && state != "true" && state != "false" {
+		return fail(fmt.Errorf("Invalid isfollowing state")), nil
 	}
 
 	nodeID := c.nodeID()
@@ -85,7 +79,6 @@ func entryToggleFollowing(c *ctx) (any, error) {
 	if err != nil {
 		c.errorf("getUser failed for userId %s, will try hostId hint: %v", userID, err)
 	}
-	c.debugf("user=%s toggle %s on host=%s", jsonStringify(redactUser(user)), followingID, followingHostID)
 
 	// The caller may supply the actor's host directly. That matters right after
 	// registration, when the account exists but has not reached this node yet.
@@ -118,61 +111,64 @@ func entryToggleFollowing(c *ctx) (any, error) {
 		return fail(err), nil
 	}
 
-	// The target's account is needed to find the node holding its follower
-	// list. If this node has no copy, pull one.
-	followed, err := c.loadUser(followingID)
-	if err != nil {
-		c.errorf("getUser failed for mid=%s: %v", followingID, err)
-	}
-	c.debugf("followed user=%s with id=%s", jsonStringify(redactUser(followed)), followingID)
-	if followed == nil {
-		if err := c.mimeiSync(authSid, followingID, nil); err != nil {
-			c.errorf("Failed to sync followed user %s from nid=%s: %v", followingID, followingHostID, err)
-		} else if err := c.mimeiProvide(authSid, followingID); err != nil {
-			c.errorf("Failed to sync followed user %s from nid=%s: %v", followingID, followingHostID, err)
-		}
-		followed, _ = c.loadUser(followingID)
-		if followed == nil {
-			c.errorf("cannot get followed user %s after sync (nid=%s)", followingID, followingHostID)
-			return fail(fmt.Errorf("Cannot get followed user")), nil
-		}
-	}
-	hostOfOther := followed.hostID()
-	if hostOfOther == "" {
-		c.errorf("missing host for followed user %s", jsonStringify(map[string]any{
-			"userId": userID, "followingId": followingID,
-		}))
-		return fail(fmt.Errorf("Missing host for followed user")), nil
-	}
-
-	readSid, err := c.openMimei(authSid, userID, verLast)
+	wasFollowing, err := c.followingState(authSid, userID, followingID, verLast)
 	if err != nil {
 		return fail(err), nil
 	}
-	isFollowing, err := c.hhas(readSid, userFollowingsList, followingID)
-	c.closeMimei(readSid)
-	if err != nil {
-		return fail(err), nil
+	wanted := state == "true" || (state == "" && !wasFollowing)
+	if wanted == wasFollowing {
+		// A failed backup may have left a different state in the writable version.
+		current, err := c.followingState(authSid, userID, followingID, verCur)
+		if err != nil {
+			return fail(err), nil
+		}
+		if current == wanted {
+			return ok(wanted), nil
+		}
 	}
 
-	if isFollowing {
-		err = c.unfollow(authSid, userID, followingID, hostOfOther, nodeID)
+	if wanted {
+		if followingHostID == "" {
+			followingHostID, err = c.userRootNode(followingID)
+			if err != nil {
+				return fail(err), nil
+			}
+		}
+		err = c.follow(authSid, userID, followingID, followingHostID)
 	} else {
-		err = c.follow(authSid, userID, followingID, hostOfOther, nodeID)
+		err = c.unfollow(authSid, userID, followingID)
 	}
 	if err != nil {
 		return fail(err), nil
 	}
+	c.infof("following list confirmed actor=%s target=%s following=%t", userID, followingID, wanted)
 
-	return ok(!isFollowing), nil
+	peerStartedAt := nowMillis()
+	err = c.updateFollowerSide(authSid, followingID, userID, followingHostID, wanted)
+	if err != nil {
+		c.warnf("follower-side update failed actor=%s target=%s following=%t elapsedMs=%d: %v",
+			userID, followingID, wanted, nowMillis()-peerStartedAt, err)
+	} else {
+		c.infof("follower-side update confirmed actor=%s target=%s following=%t elapsedMs=%d",
+			userID, followingID, wanted, nowMillis()-peerStartedAt)
+	}
+	return ok(wanted), nil
+}
+
+func (c *ctx) followingState(authSid, userID, followingID, version string) (bool, error) {
+	userSid, err := c.openMimei(authSid, userID, version)
+	if err != nil {
+		return false, err
+	}
+	defer c.closeMimei(userSid)
+	return c.hhas(userSid, userFollowingsList, followingID)
 }
 
 // follow records the relationship and seeds the actor's feed.
 //
 // The target's tweet list is fetched before anything is written, so a failure
 // to reach the target's node leaves no half-made relationship behind.
-func (c *ctx) follow(authSid, userID, followingID, hostOfOther, nodeID string) error {
-	c.debugf("%s following %s, host: %s, node: %s", userID, followingID, hostOfOther, nodeID)
+func (c *ctx) follow(authSid, userID, followingID, hostOfOther string) error {
 
 	pairs, err := c.targetTweetList(authSid, followingID, hostOfOther)
 	if err != nil {
@@ -204,21 +200,14 @@ func (c *ctx) follow(authSid, userID, followingID, hostOfOther, nodeID string) e
 	if err := c.mimeiPublish(authSid, userID); err != nil {
 		c.warnf("publish %s failed: %v", userID, err)
 	}
-	c.debugf("relationship persisted actor=%s target=%s tweetCount=%d", userID, followingID, len(pairs))
-
 	// Register the followed account when needed; Leither keeps the provider
 	// copy and its direct tweet references synchronized.
 	c.ensureProvided(authSid, followingID)
-
-	if err := c.updateFollowerSide(authSid, followingID, userID, hostOfOther, true); err != nil {
-		c.errorf("toggle_follower failed: %v, %s", err, c.requestJSON())
-	}
 	return nil
 }
 
 // unfollow removes the relationship and the seeded feed entries.
-func (c *ctx) unfollow(authSid, userID, followingID, hostOfOther, nodeID string) error {
-	c.debugf("%s unfollowing %s. Host: %s, Node: %s", userID, followingID, hostOfOther, nodeID)
+func (c *ctx) unfollow(authSid, userID, followingID string) error {
 
 	// Only the same window that following seeded is removed; anything older was
 	// never added by the follow.
@@ -259,21 +248,36 @@ func (c *ctx) unfollow(authSid, userID, followingID, hostOfOther, nodeID string)
 
 	// The local copy of the unfollowed account is deliberately kept: another
 	// followed user may reference it, and it may be the only copy here.
-	if err := c.updateFollowerSide(authSid, followingID, userID, hostOfOther, false); err != nil {
-		c.errorf("toggle_follower: %v, %s", err, c.requestJSON())
-	}
 	return nil
 }
 
 // updateFollowerSide records the relationship on the target's own node,
 // through the guarded peer path.
 func (c *ctx) updateFollowerSide(authSid, targetID, actorID, targetHost string, isFollower bool) error {
-	_, err := c.callPeerEntry(authSid, targetHost, "toggle_follower", map[string]string{
+	if targetHost == "" {
+		var err error
+		targetHost, err = c.userHostID(targetID)
+		if err != nil {
+			return fmt.Errorf("resolve root for followed user %s: %w", targetID, err)
+		}
+		if targetHost == "" {
+			return fmt.Errorf("root not found for followed user %s", targetID)
+		}
+	}
+	reply, err := c.callPeerEntry(authSid, targetHost, "toggle_follower", map[string]string{
 		"userid":     targetID,
 		"otherid":    actorID,
 		"isfollower": boolParam(isFollower),
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	peer, _ := toMap(reply)
+	if !mapBool(peer, "success") {
+		message := firstNonEmpty(mapStr(peer, "message"), mapStr(peer, "error"), "follower update not confirmed")
+		return fmt.Errorf("target node %s: %s", targetHost, message)
+	}
+	return nil
 }
 
 // targetTweetList reads a user's public tweet list, from their own node when
@@ -367,21 +371,6 @@ func scorePairMembers(value any) []string {
 		if p.Member != "" {
 			out = append(out, p.Member)
 		}
-	}
-	return out
-}
-
-// redactUser prepares an account for a log line, without its credential.
-func redactUser(user userObj) map[string]any {
-	if user == nil {
-		return nil
-	}
-	out := map[string]any{}
-	for k, v := range user {
-		out[k] = v
-	}
-	if _, ok := out["password"]; ok {
-		out["password"] = "[redacted]"
 	}
 	return out
 }
@@ -544,7 +533,7 @@ func (c *ctx) recoverUser(userID string) any {
 
 	if authSid, err := c.authSid(); err != nil {
 		c.errorf("failed to sync/provide userId=%s: %v", userID, err)
-	} else if err := c.mimeiSync(authSid, userID, nil); err != nil {
+	} else if err := c.mimeiSync(authSid, userID, ""); err != nil {
 		c.errorf("failed to sync/provide userId=%s: %v", userID, err)
 	} else if err := c.mimeiProvide(authSid, userID); err != nil {
 		c.errorf("failed to sync/provide userId=%s: %v", userID, err)

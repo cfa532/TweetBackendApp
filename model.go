@@ -72,6 +72,9 @@ func (t tweetObj) originalTweetID() string { return mapStr(t, "originalTweetId")
 // originalAuthorID names the author of the quoted tweet.
 func (t tweetObj) originalAuthorID() string { return mapStr(t, "originalAuthorId") }
 
+// quotedCommentID names the comment whose content the quote post carries.
+func (t tweetObj) quotedCommentID() string { return mapStr(t, "quotedCommentId") }
+
 // isPrivate reports whether the tweet is visible only to its author.
 func (t tweetObj) isPrivate() bool { return mapBool(t, "isPrivate") }
 

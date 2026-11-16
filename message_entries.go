@@ -7,10 +7,9 @@
 //	Zset  <otherUserId>              server timestamp -> same timestamp as member
 //	Hash  <otherUserId>[timestamp]   the message itself
 //
-// Sending writes twice: the sender's node stores its own copy through
-// message_outgoing and then asks the recipient's node to store the recipient's
-// copy through message_incoming, a peer entry no client may call. Neither node
-// needs the other to read its own history afterwards.
+// Sending delivers to the recipient's node first through message_incoming,
+// then records the sender's copy through message_outgoing. Each copy can be
+// written again with the same request ID without creating a second message.
 //
 // Two indicators drive the unread badge, both on the recipient's Mimei:
 //
@@ -26,6 +25,9 @@ import "fmt"
 
 // messageScanLimit bounds how many messages one fetch returns.
 const messageScanLimit = 1000
+
+const messageRequestStamps = "message_request_stamps"
+const messageRequestIDLimit = 128
 
 // Preserve existing Database and File message identities. New message stores
 // use the Database identity, regardless of the owner's storage format.
@@ -76,6 +78,11 @@ func entryMessageOutgoing(c *ctx) (any, error) {
 		return c.wrapErrBool(err), nil
 	}
 
+	requestID := firstNonEmpty(c.str("requestid"), mapStr(msg, "id"))
+	if len(requestID) > messageRequestIDLimit {
+		return c.wrapErrBool(fmt.Errorf("Message request ID is too long")), nil
+	}
+
 	// The sender's message store lives on their root node, so this must be that
 	// node. The legacy reply to either rejection is a bare false; the log names
 	// which one it was.
@@ -104,6 +111,7 @@ func entryMessageOutgoing(c *ctx) (any, error) {
 		"senderid":  senderID,
 		"receiptid": receiptID,
 		"msg":       c.str("msg"),
+		"requestid": requestID,
 	})
 	if err != nil {
 		c.errorf("deliver to %s failed: %v", receiptID, err)
@@ -115,31 +123,7 @@ func entryMessageOutgoing(c *ctx) (any, error) {
 		return c.wrapSent(false), nil
 	}
 
-	msgMid, err := c.messageMimeiID(authSid, senderID)
-	if err != nil {
-		return c.wrapErrBool(err), nil
-	}
-	msgSid, err := c.openMimei(authSid, msgMid, verCur)
-	if err != nil {
-		return c.wrapErrBool(err), nil
-	}
-	defer c.closeMimei(msgSid)
-	c.debugf("%s outgoing message to %s, msg=%s, msgMid=%s", senderID, receiptID, c.str("msg"), msgMid)
-
-	// The node's clock supplies both the ordering score and the key the message
-	// is stored under, so the two cannot disagree. The stamp travels inside the
-	// stored object too: clients derive a stable message id from it, so the
-	// same delivered message decodes identically on every read.
-	stamp := nowMillis()
-	member := toString(stamp)
-	msg["stamp"] = member
-	if err := c.zadd(msgSid, receiptID, stamp, member); err != nil {
-		return c.wrapErrBool(err), nil
-	}
-	if err := c.hset(msgSid, receiptID, member, msg); err != nil {
-		return c.wrapErrBool(err), nil
-	}
-	if err := c.backupDelRef(authSid, msgMid, ""); err != nil {
+	if err := c.storeMessage(authSid, senderID, receiptID, requestID, msg, false); err != nil {
 		return c.wrapErrBool(err), nil
 	}
 	return c.wrapSent(true), nil
@@ -199,39 +183,96 @@ func entryMessageIncoming(c *ctx) (any, error) {
 	if err != nil {
 		return c.wrapErrString(err), nil
 	}
-	msgMid, err := c.messageMimeiID(authSid, receiptID)
-	if err != nil {
-		return c.wrapErrString(err), nil
+	requestID := firstNonEmpty(c.str("requestid"), mapStr(msg, "id"))
+	if len(requestID) > messageRequestIDLimit {
+		return c.wrapErrString(fmt.Errorf("Message request ID is too long")), nil
 	}
-	msgSid, err := c.openMimei(authSid, msgMid, verCur)
-	if err != nil {
-		return c.wrapErrString(err), nil
-	}
-	defer c.closeMimei(msgSid)
-
-	// The receiving node stamps the message. The sender's clock is not trusted
-	// for this, because the unread comparison depends on it. The stamp travels
-	// inside the stored object too, so clients can identify the same delivered
-	// message across reads instead of minting a new id per decode.
-	stamp := nowMillis()
-	member := toString(stamp)
-	msg["stamp"] = member
-
-	if err := c.hset(msgSid, userLastIncomingMsg, senderID, member); err != nil {
-		return c.wrapErrString(err), nil
-	}
-	c.debugf("%s to %s, msg=%s", senderID, receiptID, c.str("msg"))
-
-	if err := c.zadd(msgSid, senderID, stamp, member); err != nil {
-		return c.wrapErrString(err), nil
-	}
-	if err := c.hset(msgSid, senderID, member, msg); err != nil {
-		return c.wrapErrString(err), nil
-	}
-	if err := c.backupDelRef(authSid, msgMid, ""); err != nil {
+	if err := c.storeMessage(authSid, receiptID, senderID, requestID, msg, true); err != nil {
 		return c.wrapErrString(err), nil
 	}
 	return c.wrapPassthrough(map[string]any{"success": true}), nil
+}
+
+// storeMessage uses the same node-assigned stamp for every attempt at writing
+// one copy. The request index and message are backed up in the same MiMei.
+func (c *ctx) storeMessage(authSid, ownerID, otherID, requestID string, msg map[string]any, incoming bool) error {
+	msgMid, err := c.messageMimeiID(authSid, ownerID)
+	if err != nil {
+		return err
+	}
+	msgSid, err := c.openMimei(authSid, msgMid, verCur)
+	if err != nil {
+		return err
+	}
+	defer c.closeMimei(msgSid)
+
+	member, err := c.messageStamp(msgSid, otherID, requestID, incoming)
+	if err != nil {
+		return err
+	}
+	stamp, ok := toInt64(member)
+	if !ok {
+		return fmt.Errorf("Invalid stored message stamp")
+	}
+
+	stored, err := c.hhas(msgSid, otherID, member)
+	if err != nil {
+		return err
+	}
+	if !stored {
+		msg["stamp"] = member
+		if err := c.zadd(msgSid, otherID, stamp, member); err != nil {
+			return err
+		}
+		if err := c.hset(msgSid, otherID, member, msg); err != nil {
+			return err
+		}
+	}
+
+	if incoming {
+		newest, err := c.hget(msgSid, userLastIncomingMsg, otherID)
+		if err != nil {
+			return err
+		}
+		if current, _ := toInt64(newest); stamp > current {
+			if err := c.hset(msgSid, userLastIncomingMsg, otherID, member); err != nil {
+				return err
+			}
+		}
+	}
+	return c.backupDelRef(authSid, msgMid, "")
+}
+
+func (c *ctx) messageStamp(msgSid, otherID, requestID string, incoming bool) (string, error) {
+	var requestKey string
+	if requestID != "" {
+		// Self-messages also need distinct keys for the two copies.
+		requestKey = jsonStringify([]any{incoming, otherID, requestID})
+		value, err := c.hget(msgSid, messageRequestStamps, requestKey)
+		if err != nil {
+			return "", err
+		}
+		if value != nil {
+			return toString(value), nil
+		}
+	}
+
+	for stamp := nowMillis(); ; stamp++ {
+		member := toString(stamp)
+		stored, err := c.hhas(msgSid, otherID, member)
+		if err != nil {
+			return "", err
+		}
+		if stored {
+			continue
+		}
+		if requestKey != "" {
+			if err := c.hset(msgSid, messageRequestStamps, requestKey, member); err != nil {
+				return "", err
+			}
+		}
+		return member, nil
+	}
 }
 
 // ---------------------------------------------------------------------------

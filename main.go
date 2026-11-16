@@ -109,7 +109,15 @@ func RunMApp(Entry string, Request map[string]string, args []any, wr io.Writer) 
 		// between container and local invocation.
 		return nil, fmt.Errorf("unknown entry %q (request carried: %v)", entry, requestKeys(Request))
 	}
-	return handler(c)
+	result, err := handler(c)
+	if len(c.postCommit) != 0 {
+		worker := newCtx(c.api, c.entry, map[string]string{
+			reqAppID: c.appID(), reqVersion: versionV2, "author": c.str("author"),
+		}, nil, nil)
+		worker.background = true
+		go worker.finishPostCommit(c.postCommit)
+	}
+	return result, err
 }
 
 // requestKeys lists the parameter names a request arrived with, sorted so the

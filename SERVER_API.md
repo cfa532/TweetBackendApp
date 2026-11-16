@@ -2,6 +2,11 @@
 
 This document describes all endpoints available in the TweetBackendApp server, including their expected inputs and output data schemas.
 
+## Health
+
+The `health` endpoint returns capability flags and `buildId`, a SHA-256 ID
+embedded in the staged Go source. Unstamped local source reports `development`.
+
 ## Authentication Endpoints
 
 ### Login
@@ -216,11 +221,10 @@ the node's owners have run `tweet-owner.sh --guests deny`.
 - `hostid` (string): Host ID where tweet should be published
 - `tweet` (string): JSON string of tweet object
 - `requestid` (string, optional): a caller-generated id naming this
-  submission. The tweet's Mimei id is derived from it, so a retry after a
-  lost response resolves the same tweet instead of creating a duplicate —
-  every step of the entry (list entry, references) converges on the same id.
-  Without one, a fresh id is minted on every accepted request and a retry
-  creates a second tweet.
+  submission. Retry with the same payload on the same write root. A retry of
+  a committed tweet preserves its MID and timestamp and can finish linking it
+  to the author's account. A different payload for that ID is rejected.
+  Without one, each accepted request creates a new tweet.
 - `nodeappcode` (string, optional): Node app code for peer validation
 
 **Tweet Object Schema:**
@@ -398,6 +402,8 @@ identifies the tweet author.
 - `aid` (string): App ID
 - `tweetid` (string): Tweet ID to refresh
 - `appuserid` (string): App user ID
+- `hostid` (string, optional): Authoritative storage root node ID. For a comment,
+  use its parent's author's root. Passed to Leither as `SourcePeer` when supplied.
 
 **Output Schema:** Updated tweet object
 
@@ -443,9 +449,10 @@ request sent straight to the parent author's node, no session.
 - `comment` (string): JSON string of comment object (same as tweet object); its
   `authorId` is the writer and names the account the session must control
 - `requestid` (string, optional): a caller-generated id naming this
-  submission; the comment's id is derived from it, so a retried comment
-  resolves the same object instead of creating a duplicate. A quote-comment's
-  retweet half is named `<requestid>-quote`.
+  submission. Retry with the same payload and parent on the same write root.
+  A retry of a committed comment preserves its MID and timestamp and can
+  finish linking it to the parent. A different payload or parent for that
+  committed ID is rejected. A quote-comment's retweet half is named `<requestid>-quote`.
 
 **Output Schema:**
 ```json
@@ -548,26 +555,49 @@ through a guarded peer entry. A node advertises this in `health` as
 `engagementDelegation: true`; a node without it still takes the old form — the
 request sent straight to the tweet author's node, no session.
 
+A local bookmark, favorite or retweet can succeed for a retained copy when the
+author's root can no longer open the original. A peer failure leaves the
+committed local action intact. New `add_tweet` and `delete_tweet` responses do not
+wait for the retweet count update. A confirmed deletion can return `peerUpdateDeferred: true`
+so clients can leave unlinking the original to the backend.
+
+`get_tweet` reads the viewer's personal save flags from that viewer's
+committed account copy when present. `viewerSavedStateAtRoot` marks flags read
+on the viewer's own root. Tweet counts come from the tweet copy.
+In `get_user_meta` bookmark and favorite pages, `{"mid": "...", "savedTweetUnavailable": true}` preserves the identity of an
+item with an unreadable tweet payload so it can be removed by ID.
+
 ### Toggle Favorite
 **Endpoint:** `toggle_favorite` — called on the engaging user's root node
+
+The user's root returns `success: true` with the user record and the committed
+`saved` value once its saved-list write commits. The `tweet` field is null.
+Publication, provider registration and the guarded tweet-side update run after
+the local response is ready. The user's root uses `hostid` when supplied, or
+uses `hostIds[0]` from the named storage author's profile. The peer checks
+its root and the live tweet before writing its counters.
+The user’s root advertises this behavior as `independentSavedTweetWrites` in
+`health`.
 
 **Input Parameters:**
 - `aid` (string): App ID
 - `usersid` (string): the engaging user's Leither session on this node
 - `appuserid` (string): App user favoriting the tweet
 - `tweetid` (string): Tweet ID
-- `authorid` (string): Tweet author ID
+- `authorid` (string): Tweet storage author ID. If omitted, an explicit state
+  and a verified owner session are required for the saved-list write.
+- `hostid` (string, optional): `hostIds[0]` from the storage author's profile.
+  Providing it skips the profile lookup on the engaging user's node.
 - `userhostid` (string): Host ID of the app user
 - `isfavorite` (string, optional): "true"/"false" makes the toggle idempotent;
   omitted flips the user's own list
-- `hostid` (string, new form): the tweet author's host, the delegation target
 
 **Output Schema:**
 ```json
 {
   "success": "boolean",
   "user": "user_object",
-  "tweet": "tweet_object"
+  "tweet": "tweet_object or null"
 }
 ```
 
@@ -607,9 +637,15 @@ A node still on the old backend that calls them here is refused.
 **Endpoint:** `retweet_added` / `retweet_removed` — called on the retweeting
 user's root node
 
-There is no user-side retweet list, so these entries are a verified delegation
-and nothing else: the retweeter's node asks the original author's node to add
-or clear the record.
+Posting a retweet or quote through `add_tweet` commits the tweet and its
+writer's timeline before asking the original's storage root to register it.
+Clients may supply `originalauthorhostid` from `originalAuthorId`'s profile.
+The successful response includes `originalRetweetCount` when the peer confirms
+its write. Peer failures are logged and the committed retweet ID is returned.
+
+`retweet_added` remains available for older clients and checks that the retweet
+matches the original and appears in the requester's committed timeline.
+`retweet_removed` asks the original's storage root to clear the record.
 
 **Input Parameters:**
 - `aid` (string): App ID
@@ -643,7 +679,13 @@ writes is keyed by retweet id, valued by the retweeting user.
 - `usersid` (string): the follower's Leither session on this node
 - `userid` (string): User ID
 - `followingid` (string): Other user ID to follow/unfollow
-- `followingid_hostid` (string): Host ID of the other user
+- `followingid_hostid` (optional string) The other user's `hostIds[0]`, when known.
+- `isfollowing` (optional string) Set the desired state with `"true"` or `"false"`.
+  Omitting it toggles the committed state for older clients.
+
+An explicit unfollow needs only the target's user ID. The actor's root commits
+its own relationship before attempting the follower-side update. Missing roots
+and peer failures are logged after the local commit.
 
 **Output Schema:** `{ "isFollowing": boolean }` (v2-enveloped)
 
@@ -919,9 +961,9 @@ client writing `message_incoming` on the recipient's node directly.
 ### Message Outgoing
 **Endpoint:** `message_outgoing` — called on the sender's root node
 
-Stores the sender's copy, then delivers the recipient's copy through the
-guarded peer path. The recipient's copy is the delivery, so a refused or
-unreachable recipient node fails the send (`{"sent": false}`).
+Delivers the recipient's copy through the guarded peer path before storing the
+sender's copy. A refused or unreachable recipient node fails the send
+(`{"sent": false}`). Retries of a send reuse the same request ID.
 
 **Input Parameters:**
 - `aid` (string): App ID
@@ -929,6 +971,7 @@ unreachable recipient node fails the send (`{"sent": false}`).
 - `userid` (string): the sender's user ID
 - `receiptid` (string): the recipient's user ID
 - `msg` (string): JSON string of the message object
+- `requestid` (string, optional): stable send ID, up to 128 bytes. Uses the ID in `msg` when omitted.
 
 **Output Schema:** `{"success": boolean, "data": {"sent": boolean}}`
 
@@ -947,6 +990,7 @@ bare client call is refused with `Not called from a peer node`.
 - `senderid` (string): the sender's user ID
 - `receiptid` (string): the recipient's user ID
 - `msg` (string): JSON string of the message object
+- `requestid` (string, optional): stable send ID, up to 128 bytes. Uses the ID in `msg` when omitted.
 
 **Output Schema:** `{"success": boolean}`
 

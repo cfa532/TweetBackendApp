@@ -45,6 +45,7 @@ import (
 	"Leither/lapi"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // ---------------------------------------------------------------------------
@@ -164,16 +165,17 @@ func normalizeRemoteResult(ret any) any {
 
 // mimeiSync pulls an object's current data from the network onto this node.
 //
-// This is MiMeiSync(sid, "", mid, {}), the same call the JavaScript made.
+// SourcePeer directs Leither to the authoritative node when the caller knows it.
 // BEMMSync is not used as a substitute: it is the node's internal entry point,
 // takes no session, and reaches the identical SyncMiMei, so falling back to it
 // would buy nothing and would hide a node that stopped offering MiMeiSync.
-func (c *ctx) mimeiSync(sid, mid string, param map[string]string) error {
+func (c *ctx) mimeiSync(sid, mid, sourcePeer string) error {
 	if mid == "" {
 		return fmt.Errorf("mimeiSync: empty mid")
 	}
-	if param == nil {
-		param = map[string]string{}
+	param := map[string]string{}
+	if sourcePeer != "" {
+		param["SourcePeer"] = sourcePeer
 	}
 	s, ok := c.api.(mimeiSyncer)
 	if !ok {
@@ -183,6 +185,11 @@ func (c *ctx) mimeiSync(sid, mid string, param map[string]string) error {
 		return fmt.Errorf("MiMeiSync(%s): %v", mid, err)
 	}
 	return nil
+}
+
+// The MApp wait can end while Leither's sync worker is still running.
+func syncStillRunning(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "mapp call bounded")
 }
 
 // mimeiProvide announces that this node serves a copy of mid.

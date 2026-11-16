@@ -9,6 +9,7 @@ func entryHealth(c *ctx) (any, error) {
 	config, _ := c.loadNodeConfig()
 	return map[string]any{
 		"success": true,
+		"buildId": backendBuildID,
 		// userSessions tells a client this node checks "usersid", so it should
 		// sign in to Leither here rather than send a password to be stored.
 		"userSessions": true,
@@ -20,7 +21,8 @@ func entryHealth(c *ctx) (any, error) {
 		// counts: toggle_* and retweet_* run on the engaging user's own root,
 		// with apply_favorite/apply_bookmark/apply_retweet as the guarded peer
 		// entries on the tweet author's node.
-		"engagementDelegation": true,
+		"engagementDelegation":        true,
+		"independentSavedTweetWrites": true,
 		// messageDelegation says message_outgoing on the sender's root delivers
 		// the recipient's copy itself, through the peer-only message_incoming.
 		"messageDelegation":    true,

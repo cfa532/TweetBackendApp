@@ -101,9 +101,11 @@ func entryUpdateFollowingTweets(c *ctx) (any, error) {
 func (c *ctx) pullFeedFromRoot(userID, rootHost string, lastScore int64) (any, error) {
 	authSid, err := c.authSid()
 	if err == nil {
-		err = c.mimeiSync(authSid, userID, nil)
+		err = c.mimeiSync(authSid, userID, rootHost)
 	}
-	if err != nil {
+	if syncStillRunning(err) {
+		c.debugf("feed sync continues userId=%s hostId=%s", userID, rootHost)
+	} else if err != nil {
 		return respErrField(c, err), nil
 	}
 

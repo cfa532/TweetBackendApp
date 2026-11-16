@@ -174,26 +174,3 @@ func entryApplyAdminTweetMutation(c *ctx) (any, error) {
 		return respFail("Expected an update or delete action"), nil
 	}
 }
-
-// unlinkDelegatedRetweet runs on the deleted retweet's author's root. Only
-// that node can remove the author's entry from the original's retweet list.
-func (c *ctx) unlinkDelegatedRetweet(authSid string, deleted tweetObj) {
-	originalID, originalAuthorID := deleted.originalTweetID(), deleted.originalAuthorID()
-	if originalID == "" || originalAuthorID == "" {
-		return
-	}
-	originalRoot, err := c.userRootNode(originalAuthorID)
-	if err != nil {
-		c.warnf("Cannot find original tweet's root after deleting %s: %v", deleted.mid(), err)
-		return
-	}
-	reply, err := c.callPeerEntry(authSid, originalRoot, "apply_retweet", map[string]string{
-		"tweetid": originalID, "authorid": originalAuthorID, "userid": deleted.authorID(),
-		"retweetid": deleted.mid(), "wanted": "false",
-	})
-	response, _ := toMap(reply)
-	if err != nil || !mapBool(response, "success") {
-		c.warnf("Could not unlink deleted retweet %s from %s: %v %s",
-			deleted.mid(), originalID, err, mapStr(response, "message"))
-	}
-}

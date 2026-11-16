@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 
@@ -29,9 +30,9 @@ type commentAPI struct {
 	// absent simulates an account this node holds no copy of: reading it
 	// fails the way MMOpen does on the real node ("ver is empty"), until
 	// MiMeiSync pulls it (syncErr makes even the pull fail).
-	absent   map[string]bool
-	pulled   map[string]bool
-	syncErr  error
+	absent  map[string]bool
+	pulled  map[string]bool
+	syncErr error
 	// hashFields is the in-memory hash state behind Hhas/Hset/Hdel.
 	hashFields map[string]bool
 	// hashValues keeps what Hset stored, for the entries that read a field's
@@ -51,8 +52,9 @@ type commentAPI struct {
 }
 
 type remoteCall struct {
-	entry string
-	req   map[string]string
+	entry      string
+	req        map[string]string
+	priorCalls []string
 }
 
 func newCommentAPI(node string) *commentAPI {
@@ -228,7 +230,7 @@ func (a *commentAPI) Warn(string, ...any)  {}
 func (a *commentAPI) Error(string, ...any) {}
 
 // The Files calls behind committing a File object. A submission that runs to
-// completion commits the tweet it created; these let it, and record nothing.
+// completion commits the tweet it created. Record when the CID is committed.
 func (a *commentAPI) FilesLs(sid, path string) ([]lapi.LsLink, error) {
 	// A committed object's root holds its core record; scratch space is empty.
 	if strings.HasPrefix(path, "mm://") && strings.HasSuffix(path, ":"+verLast+"/") {
@@ -236,7 +238,7 @@ func (a *commentAPI) FilesLs(sid, path string) ([]lapi.LsLink, error) {
 	}
 	return nil, nil
 }
-func (a *commentAPI) FilesMkdir(sid, path string, flush bool) error   { return nil }
+func (a *commentAPI) FilesMkdir(sid, path string, flush bool) error { return nil }
 func (a *commentAPI) FilesCopy(sid, src, dst string, flush bool) error {
 	return nil
 }
@@ -245,10 +247,13 @@ func (a *commentAPI) MFOpenTempFile(string) (string, error)                 { re
 func (a *commentAPI) MFSetData(h string, b []byte, offset int64) (int, error) {
 	return len(b), nil
 }
-func (a *commentAPI) MFTruncate(string, int64) error                  { return nil }
-func (a *commentAPI) MFTemp2Files(h, path string) (string, error)     { return "file-cid", nil }
-func (a *commentAPI) FilesFlush(sid, path string) (string, error)     { return "root-cid", nil }
-func (a *commentAPI) MFSetCid(sid, mid, cid string) (string, error)   { return "1", nil }
+func (a *commentAPI) MFTruncate(string, int64) error              { return nil }
+func (a *commentAPI) MFTemp2Files(h, path string) (string, error) { return "file-cid", nil }
+func (a *commentAPI) FilesFlush(sid, path string) (string, error) { return "root-cid", nil }
+func (a *commentAPI) MFSetCid(sid, mid, cid string) (string, error) {
+	a.calls = append(a.calls, "commit:"+mid)
+	return "1", nil
+}
 
 // Opening a File object that already has a committed version reads its root
 // and core record. The record names whichever object was asked for.
@@ -267,15 +272,16 @@ func (a *commentAPI) MFGetSize(h string) (int64, error) {
 	return int64(len(data)), nil
 }
 func (a *commentAPI) MFGetData(h string, start int64, count int) ([]byte, error) {
+	mid := strings.TrimPrefix(h, "core:")
 	return []byte(jsonStringify(map[string]any{
-		"schema": fileSchema, "kind": "tweet", "mid": strings.TrimPrefix(h, "core:"),
-		"value": map[string]any{"authorId": "author", "content": "hello"},
+		"schema": fileSchema, "kind": "tweet", "mid": mid,
+		"value": a.tweets[mid],
 	})), nil
 }
 
 // RunMApp stands in for the cross-node hop; a canned reply is returned.
 func (a *commentAPI) RunMApp(entry string, req map[string]string, args []any, opts ...string) (any, error) {
-	a.remote = &remoteCall{entry: entry, req: req}
+	a.remote = &remoteCall{entry: entry, req: req, priorCalls: append([]string(nil), a.calls...)}
 	if a.reply == nil {
 		return nil, errors.New("no canned reply")
 	}
@@ -636,6 +642,38 @@ func TestApplyCommentPullsUnknownCommentAuthor(t *testing.T) {
 	}
 }
 
+func TestAddRetweetCommitsBeforePeerRefusal(t *testing.T) {
+	api := newCommentAPI("nodeA")
+	api.addUser("author", "nodeA", "uid-author")
+	api.authorSid, api.authorUID = "author-session", "uid-author"
+	api.reply = respFail("Original unavailable")
+	retweetID := "mid-" + fileExtPrefix + "tweet-tweet:author:retweet-1"
+	c := commentCtx(api, "add_tweet", map[string]string{
+		"requestid":            "retweet-1",
+		"tweet":                `{"authorId":"author","originalTweetId":"original","originalAuthorId":"original-author"}`,
+		"originalauthorhostid": "nodeB",
+	})
+	ret, err := entryAddTweet(c)
+	reply, _ := toMap(ret)
+	if err != nil || !mapBool(reply, "success") || mapStr(reply, "mid") != retweetID {
+		t.Fatalf("expected the committed retweet ID after peer refusal, got %#v, err=%v", ret, err)
+	}
+	if _, ok := reply["originalRetweetCount"]; ok {
+		t.Fatal("peer refusal returned an unconfirmed count")
+	}
+	if api.remote != nil || len(c.postCommit) != 1 {
+		t.Fatal("retweet response waited for peer registration")
+	}
+	c.finishPostCommit(c.postCommit)
+	if api.remote == nil || api.remote.entry != "apply_retweet" || api.remote.req[reqNodeID] != "nodeB" || api.remote.req["retweetid"] != retweetID {
+		t.Fatalf("expected a registration on the original root, got %#v", api.remote)
+	}
+	prior := api.remote.priorCalls
+	if !slices.Contains(prior, "commit:"+retweetID) || !slices.Contains(prior, "backup:author") {
+		t.Fatalf("peer called before both local commits: %v", api.remote.priorCalls)
+	}
+}
+
 // A submission's requestid names the object deterministically: the same id on
 // a retry resolves the same tweet instead of creating a second one. Without
 // one, a fresh id is minted, as before.
@@ -821,7 +859,6 @@ func TestRemoveCommentCrossNodeNodeAppCode(t *testing.T) {
 	}
 }
 
-
 // delete_comment runs on the deleter's root and delegates the parent-side
 // removal to the parent author's node; a refusal there reaches the client
 // unchanged and leaves the deleter's saved lists alone.
@@ -964,20 +1001,24 @@ func TestAddTweetRetryDoesNotRepeatReferences(t *testing.T) {
 	api.authorSid, api.authorUID = "author-session", "uid-author"
 	tweetID := "mid-" + fileExtPrefix + "tweet-tweet:author:req-1"
 
-	submit := func() {
+	submit := func(payload string) (bool, string) {
 		ret, err := entryAddTweet(commentCtx(api, "add_tweet", map[string]string{
 			"requestid": "req-1",
-			"tweet":     `{"authorId":"author","content":"hello","attachments":[{"mid":"media-1"}]}`,
+			"tweet":     payload,
 		}))
 		if err != nil {
 			t.Fatalf("add_tweet returned error: %v", err)
 		}
-		if ok, msg := replyMessage(t, ret); !ok {
-			t.Fatalf("add_tweet failed: %s", msg)
-		}
+		return replyMessage(t, ret)
 	}
 
-	submit()
+	payload := map[string]any{
+		"authorId": "author", "content": "hello",
+		"attachments": []any{map[string]any{"mid": "media-1"}},
+	}
+	if ok, msg := submit(jsonStringify(payload)); !ok {
+		t.Fatalf("initial add_tweet failed: %s", msg)
+	}
 	first := filterCalls(api, "addref:")
 	if len(first) != 2 {
 		t.Fatalf("first attempt should reference the attachment and the tweet, got %v", first)
@@ -985,10 +1026,30 @@ func TestAddTweetRetryDoesNotRepeatReferences(t *testing.T) {
 
 	// What the first attempt left committed.
 	api.committed[tweetID] = true
+	api.tweets[tweetID] = fileCoreRecord(tweetContentKey, payload)
+	api.tweets[tweetID]["mid"] = tweetID
+	api.tweets[tweetID]["timestamp"] = int64(1)
+	payload["timestamp"] = int64(2)
+	payload["favoriteCount"] = int64(3)
 	api.calls = nil
-	submit()
-	if repeated := filterCalls(api, "addref:"); len(repeated) != 0 {
-		t.Fatalf("repeat added references again: %v", repeated)
+	if ok, msg := submit(jsonStringify(payload)); !ok {
+		t.Fatalf("matching retry failed: %s", msg)
+	}
+	for _, prefix := range []string{"addref:", "zadd:", "commit:", "backup:"} {
+		if writes := filterCalls(api, prefix); len(writes) != 0 {
+			t.Fatalf("matching retry rewrote committed state: %v", writes)
+		}
+	}
+
+	api.calls = nil
+	payload["attachments"] = []any{map[string]any{"mid": "media-2"}}
+	if ok, msg := submit(jsonStringify(payload)); ok || msg != submissionConflict {
+		t.Fatalf("changed retry: success=%t message=%q", ok, msg)
+	}
+	for _, prefix := range []string{"addref:", "zadd:", "commit:", "backup:"} {
+		if writes := filterCalls(api, prefix); len(writes) != 0 {
+			t.Fatalf("conflicting retry mutated stored state: %v", writes)
+		}
 	}
 }
 

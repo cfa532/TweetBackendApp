@@ -29,7 +29,11 @@
 // name the caller gave.
 package lapp
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 // ---------------------------------------------------------------------------
 // add_comment
@@ -79,9 +83,16 @@ func entryAddComment(c *ctx) (any, error) {
 	// by its writer, and the comment itself with the quote fields stripped.
 	// The retweet half is created before anything is delegated, so a failed
 	// delegation leaves nothing half-attached on the parent author's node.
-	retweetID := ""
+	var retweet map[string]any
 	if mapStr(comment, "originalTweetId") != "" && mapStr(comment, "originalAuthorId") != "" {
-		retweetID = c.createQuotedRetweet()
+		originalHost := ""
+		if mapStr(comment, "originalTweetId") == tweetID && mapStr(comment, "originalAuthorId") == parentAuthorID {
+			originalHost = parentHost
+		}
+		retweet, err = c.createQuotedRetweet(originalHost)
+		if err != nil {
+			return respErr(err), nil
+		}
 		delete(comment, "originalTweetId")
 		delete(comment, "originalAuthorId")
 	}
@@ -99,9 +110,12 @@ func entryAddComment(c *ctx) (any, error) {
 	if err != nil {
 		return respErr(err), nil
 	}
-	if retweetID != "" {
+	if retweetID := mapStr(retweet, "mid"); retweetID != "" {
 		if m, ok := toMap(reply); ok {
 			m["retweetid"] = retweetID
+			if count, ok := retweet["originalRetweetCount"]; ok {
+				m["originalRetweetCount"] = count
+			}
 		}
 	}
 	// A peer failure arrives as an envelope of its own and must reach the
@@ -110,7 +124,7 @@ func entryAddComment(c *ctx) (any, error) {
 }
 
 // createQuotedRetweet creates the retweet half of a quote-comment and returns
-// its id. The retweet belongs to the writer of the comment, and add_comment now
+// its creation result. The retweet belongs to the writer of the comment, and add_comment now
 // runs on the writer's root node, so the tweet is created right here through
 // add_tweet, which checks the writer's session itself. A requestid from the
 // comment submission names the quote half deterministically ("-quote"), so a
@@ -118,11 +132,12 @@ func entryAddComment(c *ctx) (any, error) {
 //
 // Best effort, as it has always been: a comment whose quoted retweet could not
 // be created is still a comment, and the caller reports an empty retweet id.
-func (c *ctx) createQuotedRetweet() string {
+func (c *ctx) createQuotedRetweet(originalHost string) (map[string]any, error) {
 	params := map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"tweet":   c.str("comment"),
+		reqAppID:               c.appID(),
+		reqAppVer:              verLast,
+		"tweet":                c.str("comment"),
+		"originalauthorhostid": originalHost,
 	}
 	if requestID := c.str("requestid"); requestID != "" {
 		params["requestid"] = requestID + "-quote"
@@ -130,13 +145,16 @@ func (c *ctx) createQuotedRetweet() string {
 	ret, err := c.callEntryMap("add_tweet", params)
 	if err != nil {
 		c.warnf("quoted tweet creation failed: %v", err)
-		return ""
+		return nil, nil
 	}
 	if !mapBool(ret, "success") {
+		if mapStr(ret, "message") == submissionConflict {
+			return nil, fmt.Errorf("%s", submissionConflict)
+		}
 		c.warnf("quoted tweet creation failed: %s", jsonStringify(ret))
-		return ""
+		return nil, nil
 	}
-	return mapStr(ret, "mid")
+	return ret, nil
 }
 
 // callPeerEntry reaches a guarded peer entry on another party's node:
@@ -153,10 +171,29 @@ func (c *ctx) callPeerEntry(authSid, parentHost, entry string, params map[string
 	params[reqSid] = authSid
 	params["author"] = c.str("author")
 	params[reqVersion] = c.version()
-	if parentHost == c.nodeID() {
+	if parentHost != c.nodeID() {
+		return c.callRemote(parentHost, entry, params)
+	}
+	if !c.background {
 		return c.callEntry(entry, params)
 	}
-	return c.callRemote(parentHost, entry, params)
+	// A background job has left the caller's app lock. Even a same-node
+	// peer mutation must go through Leither's normal app dispatch.
+	reply, err := c.callRemote(parentHost, entry, params)
+	for attempt := 0; attempt < 3; attempt++ {
+		message := ""
+		if err != nil {
+			message = err.Error()
+		} else if response, ok := toMap(reply); ok && !mapBool(response, "success") {
+			message = firstNonEmpty(mapStr(response, "message"), mapStr(response, "error"))
+		}
+		if !strings.Contains(message, "app busy") {
+			break
+		}
+		time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)
+		reply, err = c.callRemote(parentHost, entry, params)
+	}
+	return reply, err
 }
 
 // userRootNode resolves the node that may delegate for a user: their own
@@ -173,7 +210,7 @@ func (c *ctx) userRootNode(userID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := c.mimeiSync(authSid, userID, nil); err != nil {
+	if err := c.mimeiSync(authSid, userID, ""); err != nil {
 		c.warnf("load (%v) and sync for root of user %s failed: %v", loadErr, userID, err)
 		return "", fmt.Errorf("User %s is not known here", userID)
 	}
@@ -256,77 +293,32 @@ func entryApplyComment(c *ctx) (any, error) {
 	if err != nil {
 		return respErr(fmt.Errorf("MMCreate(comment): %v", err)), nil
 	}
-	// A named submission may be a repeat of one that already went through.
-	// Leither counts references, so adding them again would leave one behind
-	// when the comment is deleted. What an earlier attempt committed says
-	// which references it already made: the comment object carries its
-	// attachment references, the parent's list its reference to the comment.
-	commentCommitted, parentLists := false, false
-	if requestID != "" {
-		if commentCommitted, err = c.hasCommittedVersion(authSid, commentID); err != nil {
-			return respErr(err), nil
-		}
+	comment["parentTweetId"] = tweetID
+	commentCommitted, err := c.commitSubmission(authSid, commentID, requestID, tweetObj(comment), false)
+	if err != nil {
+		return respErr(err), nil
+	}
+
+	parentLists := false
+	if commentCommitted {
 		if parentLists, err = c.listedInCommitted(tweetID, tweetCommentList, commentID); err != nil {
 			return respErr(err), nil
 		}
 	}
-	comment["mid"] = commentID
-	comment["parentTweetId"] = tweetID
-	comment["timestamp"] = nowMillis()
-
-	commentSid, err := c.openMimei(authSid, commentID, verCur)
-	if err != nil {
-		return respErr(fmt.Errorf("MMOpen(%s, cur): %v", commentID, err)), nil
+	var count int64
+	if parentLists {
+		err = c.readMimei(authSid, tweetID, func(mmsid string) error {
+			var readErr error
+			count, readErr = c.zcard(mmsid, tweetCommentList)
+			return readErr
+		})
+	} else {
+		count, err = c.linkSubmittedComment(authSid, tweetID, commentID, tweetObj(comment).timestamp())
 	}
-	defer c.closeMimei(commentSid)
-
-	if err := c.setValue(commentSid, tweetContentKey, comment); err != nil {
-		return respErr(err), nil
-	}
-	if !commentCommitted {
-		for _, attachment := range tweetObj(comment).attachments() {
-			if mid := mapStr(attachment, "mid"); mid != "" {
-				if err := c.addRef(authSid, commentID, mid); err != nil {
-					c.warnf("attachment ref %s failed: %v", mid, err)
-				}
-			}
-		}
-	}
-	if err := c.backupDelRef(authSid, commentID, ""); err != nil {
-		return respErr(err), nil
-	}
-	if err := c.mimeiPublish(authSid, commentID); err != nil {
-		c.warnf("publish %s failed: %v", commentID, err)
-	}
-
-	// The parent gains both a list entry, for paging, and a reference, which is
-	// what carries the comment when the parent is synchronised. Both are
-	// required; neither replaces the other.
-	tweetSid, err := c.openMimei(authSid, tweetID, verCur)
-	if err != nil {
-		return respErr(fmt.Errorf("MMOpen(%s, cur): %v", tweetID, err)), nil
-	}
-	defer c.closeMimei(tweetSid)
-
-	if err := c.zadd(tweetSid, tweetCommentList, nowMillis(), commentID); err != nil {
-		return respErr(err), nil
-	}
-	if !parentLists {
-		if err := c.addRef(authSid, tweetID, commentID); err != nil {
-			return respErr(err), nil
-		}
-	}
-	if err := c.backupDelRef(authSid, tweetID, ""); err != nil {
-		return respErr(err), nil
-	}
-	if err := c.mimeiPublish(authSid, tweetID); err != nil {
-		c.warnf("publish %s failed: %v", tweetID, err)
-	}
-
-	count, err := c.commentCount(tweetID)
 	if err != nil {
 		return respErr(err), nil
 	}
+
 	return c.wrapPassthrough(map[string]any{
 		"success":   true,
 		"mid":       commentID,
@@ -335,18 +327,32 @@ func entryApplyComment(c *ctx) (any, error) {
 	}), nil
 }
 
-// commentCount reads a parent's comment count from its committed version.
-func (c *ctx) commentCount(tweetID string) (int64, error) {
-	var count int64
-	err := c.readMimei("", tweetID, func(mmsid string) error {
-		n, err := c.zcard(mmsid, tweetCommentList)
-		if err != nil {
-			return err
-		}
-		count = n
-		return nil
-	})
-	return count, err
+// linkSubmittedComment gives the parent both the paginated list entry and
+// the native reference that carries the comment when the parent synchronizes.
+func (c *ctx) linkSubmittedComment(authSid, tweetID, commentID string, score int64) (int64, error) {
+	tweetSid, err := c.openMimei(authSid, tweetID, verCur)
+	if err != nil {
+		return 0, fmt.Errorf("MMOpen(%s, cur): %v", tweetID, err)
+	}
+	defer c.closeMimei(tweetSid)
+
+	if err := c.zadd(tweetSid, tweetCommentList, score, commentID); err != nil {
+		return 0, err
+	}
+	if err := c.addRef(authSid, tweetID, commentID); err != nil {
+		return 0, err
+	}
+	count, err := c.zcard(tweetSid, tweetCommentList)
+	if err != nil {
+		return 0, err
+	}
+	if err := c.backupDelRef(authSid, tweetID, ""); err != nil {
+		return 0, err
+	}
+	if err := c.mimeiPublish(authSid, tweetID); err != nil {
+		c.warnf("publish %s failed: %v", tweetID, err)
+	}
+	return count, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -378,13 +384,8 @@ func entryGetComments(c *ctx) (any, error) {
 		return c.wrapErrList(err), nil
 	}
 
-	isHome := false
-	if authorID := tweetObj(parent).authorID(); authorID == "" {
-		c.debugf("no parentTweet/authorId for tweetId=%s, skipping stale-comment cleanup", tweetID)
-	} else {
-		isHome = c.isHomeNode(authorID)
-		c.debugf("tweetId=%s authorId=%s isHomeNode=%t", tweetID, authorID, isHome)
-	}
+	authorID := tweetObj(parent).authorID()
+	isHome := authorID != "" && c.isHomeNode(authorID)
 
 	pairs, err := c.zrevrange(readSid, tweetCommentList, startRank, endRank)
 	if err != nil {
@@ -394,55 +395,17 @@ func entryGetComments(c *ctx) (any, error) {
 	// One slot per scanned entry, always: dropping an unresolved comment would
 	// shorten the page and make the client conclude the thread had ended.
 	comments := make([]any, 0, len(pairs))
-	var stale []string
 	for _, pair := range pairs {
 		commentID := pair.Member
 		if comment := c.fetchTweetV2(commentID, appUserID); comment != nil {
 			comments = append(comments, comment)
-			continue
-		}
-		if isHome {
-			stale = append(stale, commentID)
+		} else if isHome {
 			comments = append(comments, nil)
-			continue
-		}
-		c.debugf("commentId=%s unresolved on tweetId=%s but this is not the home node; keeping stub",
-			commentID, tweetID)
-		comments = append(comments, map[string]any{"mid": commentID})
-	}
-
-	// Best-effort: the page is already built and must be returned regardless.
-	if isHome && len(stale) > 0 {
-		if err := c.pruneComments(tweetID, stale, pageNumber); err != nil {
-			c.errorf("failed to remove stale commentIds for tweetId=%s: %v", tweetID, err)
+		} else {
+			comments = append(comments, map[string]any{"mid": commentID})
 		}
 	}
 	return c.wrap(comments), nil
-}
-
-// pruneComments removes list entries whose comment no longer exists.
-func (c *ctx) pruneComments(tweetID string, commentIDs []string, page int64) error {
-	authSid, err := c.authSid()
-	if err != nil {
-		return err
-	}
-	writeSid, err := c.openMimei(authSid, tweetID, verCur)
-	if err != nil {
-		return fmt.Errorf("MMOpen(%s, cur): %v", tweetID, err)
-	}
-	defer c.closeMimei(writeSid)
-
-	for _, commentID := range commentIDs {
-		c.warnf("removing stale commentId=%s from tweetId=%s", commentID, tweetID)
-		if err := c.zrem(writeSid, tweetCommentList, commentID); err != nil {
-			return err
-		}
-	}
-	c.warnf("removed %d stale commentId(s) from tweetId=%s, page=%d", len(commentIDs), tweetID, page)
-	if err := c.backupDelRef(authSid, tweetID, ""); err != nil {
-		return err
-	}
-	return c.mimeiPublish(authSid, tweetID)
 }
 
 // ---------------------------------------------------------------------------
@@ -588,9 +551,7 @@ func entryRemoveComment(c *ctx) (any, error) {
 
 // removeCommentChecked performs a deletion on the node that holds the comment,
 // after verifying the deleter is the comment's author or the parent's author.
-// Each step is isolated because a partly deleted comment is worse than a fully
-// deleted one: once the versions are gone, the list entry and reference must
-// still go.
+// Keep the membership until the comment object has been removed.
 func (c *ctx) removeCommentChecked(tweetID, commentID, parentAuthorID, deleterID string) (int64, error) {
 	// The object must be one of this parent's comments. Being the parent's
 	// author is authority over that parent's thread and nothing else: without
@@ -626,47 +587,45 @@ func (c *ctx) removeCommentChecked(tweetID, commentID, parentAuthorID, deleterID
 	if err != nil {
 		return 0, err
 	}
-	if err := c.destroyComment(authSid, commentID); err != nil {
-		c.errorf("Failed to delete comment versions %s: %v", commentID, err)
-	}
-	if err := c.detachComment(authSid, tweetID, commentID); err != nil {
-		c.errorf("Failed to remove comment from tweet %s: %v", tweetID, err)
-	}
-
-	count, err := c.commentCount(tweetID)
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
-// destroyComment removes the comment object itself.
-func (c *ctx) destroyComment(authSid, commentID string) error {
-	return c.delVersions(authSid, commentID)
-}
-
-// detachComment removes the parent's reference and list entry, then republishes
-// the parent so other nodes stop offering the comment.
-func (c *ctx) detachComment(authSid, tweetID, commentID string) error {
 	tweetSid, err := c.openMimei(authSid, tweetID, verCur)
 	if err != nil {
-		return fmt.Errorf("MMOpen(%s, cur): %v", tweetID, err)
+		return 0, fmt.Errorf("MMOpen(%s, cur): %v", tweetID, err)
 	}
 	defer c.closeMimei(tweetSid)
 
-	detachErr := c.delRef(authSid, tweetID, commentID)
-	if err := c.zrem(tweetSid, tweetCommentList, commentID); err != nil && detachErr == nil {
-		detachErr = err
+	// Prepare the count before destroying the comment. Use the writable list
+	// so a retry after a partial removal does not subtract the entry twice.
+	pairs, err := c.zrevrange(tweetSid, tweetCommentList, 0, -1)
+	if err != nil {
+		return 0, err
+	}
+	count := int64(len(pairs))
+	for _, pair := range pairs {
+		if pair.Member == commentID {
+			count--
+			break
+		}
 	}
 
-	// The parent is republished even if a removal failed: whatever did change
-	// must become visible.
-	if err := c.backupDelRef(authSid, tweetID, ""); err != nil {
-		c.errorf("Failed to backup/publish tweet %s: %v", tweetID, err)
-	} else if err := c.mimeiPublish(authSid, tweetID); err != nil {
-		c.errorf("Failed to backup/publish tweet %s: %v", tweetID, err)
+	// Retain the parent's membership if removing the object itself fails.
+	if comment != nil {
+		if err := c.delVersions(authSid, commentID); err != nil {
+			return 0, err
+		}
 	}
-	return detachErr
+	if err := c.delRef(authSid, tweetID, commentID); err != nil {
+		return 0, err
+	}
+	if err := c.zrem(tweetSid, tweetCommentList, commentID); err != nil {
+		return 0, err
+	}
+	if err := c.backupDelRef(authSid, tweetID, ""); err != nil {
+		return 0, err
+	}
+	if err := c.mimeiPublish(authSid, tweetID); err != nil {
+		c.warnf("publish %s failed: %v", tweetID, err)
+	}
+	return count, nil
 }
 
 // forgetSavedComment drops a deleted comment from the requesting user's saved

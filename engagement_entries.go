@@ -7,10 +7,9 @@
 //
 // Since caller identity, the engaging user calls toggle_favorite or
 // toggle_bookmark on their OWN root node, signed by their session. That node
-// verifies them, asks the tweet author's node to perform the tweet-side write
-// through a guarded peer entry, and then records the save in the user's own
-// list — delegation first, so a refused or unreachable peer leaves nothing
-// half-written. The peer pairs are:
+// verifies them and commits the user's own list. It then asks the tweet
+// author's node to update its record through a guarded peer entry. The peer
+// update is best effort. The peer pairs are:
 //
 //	toggle_bookmark  -> apply_bookmark on the tweet author's node
 //	toggle_favorite  -> apply_favorite on the tweet author's node
@@ -38,10 +37,8 @@ type engagementKind struct {
 	// stateParam names the request parameter carrying the desired state.
 	stateParam string
 	// userParam names the request parameter carrying the acting user's id.
-	userParam string
-	// favoritesIndex is this kind's slot in the get_tweet "favorites" triple,
-	// which is ordered [isFavorite, isBookmarked, hasRetweeted].
-	favoritesIndex int
+	userParam      string
+	userCountField string
 }
 
 // bookmarkKind and favoriteKind are functions, not package-level variables:
@@ -56,7 +53,7 @@ func bookmarkKind() engagementKind {
 		userKey:        userBookmarkList,
 		stateParam:     "isbookmarked",
 		userParam:      "userid",
-		favoritesIndex: 1,
+		userCountField: "bookmarksCount",
 	}
 }
 
@@ -68,7 +65,7 @@ func favoriteKind() engagementKind {
 		userKey:        userFavoriteList,
 		stateParam:     "isfavorite",
 		userParam:      "appuserid",
-		favoritesIndex: 0,
+		userCountField: "favoritesCount",
 	}
 }
 
@@ -90,10 +87,10 @@ func entryApplyFavorite(c *ctx) (any, error) { return c.applyEngagementPeer(favo
 // list is flipped; with no stated state that list is the one record the user's
 // node owns outright, so it decides.
 //
-// Two-sided writes are delegated before the user's list changes. An explicit
-// removal without an author route may clear the list on its own after strict
-// verification of the account owner's session.
+// The user's saved list determines the result. A save without a known tweet
+// author requires an explicit state and a verified account owner.
 func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
+	startedAt := nowMillis()
 	userID := c.str(kind.userParam)
 	tweetID := c.str("tweetid")
 	authorID := c.str("authorid")
@@ -104,30 +101,25 @@ func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 		return c.wrapErrString(fmt.Errorf("User host not found")), nil
 	}
 
-	// Omitting the author is only valid for an explicit removal. Require a
-	// bound owner so this path cannot become an unauthenticated list write.
-	if authorID == "" && c.str("hostid") == "" && c.str(kind.stateParam) == "false" && tweetID != "" {
+	if tweetID == "" {
+		return c.wrapErrString(fmt.Errorf("Missing tweet ID")), nil
+	}
+	requested, stateGiven := c.requestedState(kind.stateParam)
+	if authorID == "" {
+		if !stateGiven {
+			return c.wrapErrString(fmt.Errorf("A save without an author requires an explicit state")), nil
+		}
 		owner, err := c.loadUser(userID)
 		if err != nil {
 			return c.wrapErrString(err), nil
 		}
-		if owner == nil {
-			return c.wrapErrString(fmt.Errorf("User not found")), nil
-		}
 		if err := c.requireBoundOwner(owner, userID); err != nil {
 			return c.wrapErrString(err), nil
 		}
-		return c.finishEngagement(kind, userID, tweetID, false, nil)
-	}
-
-	if err := c.requireOwner(userID); err != nil {
+	} else if err := c.requireOwner(userID); err != nil {
 		return c.wrapErrString(err), nil
 	}
 
-	// What state should the save end in? With no stated state, the user's own
-	// list decides, read-only for now: nothing is written until the tweet's
-	// author has performed their half.
-	requested, stateGiven := c.requestedState(kind.stateParam)
 	wanted := requested
 	if !stateGiven {
 		was, err := c.savedTweetState(kind, userID, tweetID)
@@ -137,20 +129,69 @@ func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 		wanted = !was
 	}
 
-	// Route to the tweet author's node, preferring this node's own record of
-	// their account over the client's hostid hint. The target re-checks
-	// everything, so a wrong hint can only fail, never misroute a write.
-	authorHost := c.str("hostid")
-	if author, err := c.loadUser(authorID); err == nil && author != nil && author.hasValidHost() {
-		authorHost = author.hostID()
-	}
-	if authorHost == "" {
-		return c.wrapErrString(fmt.Errorf("Author host not found")), nil
-	}
-
 	authSid, err := c.authSid()
 	if err != nil {
 		return c.wrapErrString(err), nil
+	}
+	updatedUser, committed, err := c.applyEngagementToUser(kind, authSid, userID, tweetID, wanted)
+	if err != nil {
+		return c.wrapErrString(err), nil
+	}
+
+	c.infof("saved list confirmed userId=%s tweetId=%s saved=%t elapsedMs=%d",
+		userID, tweetID, wanted, nowMillis()-startedAt)
+
+	authorHost := c.str("hostid")
+	c.afterCommit(func(work *ctx) {
+		if committed {
+			work.publishCommitted(authSid, userID)
+		}
+		if authorID != "" {
+			work.deliverSavedState(kind, authSid, userID, tweetID, authorID, authorHost)
+		}
+		if wanted {
+			work.ensureProvided(authSid, tweetID)
+		}
+	})
+
+	return c.wrapPassthrough(map[string]any{
+		"success": true,
+		"user":    updatedUser,
+		"tweet":   nil,
+		"saved":   wanted,
+	}), nil
+}
+
+// Deliver the committed state. If another save finishes while our peer call
+// is in flight, re-send the newer state so a slow earlier call cannot win.
+func (c *ctx) deliverSavedState(kind engagementKind, authSid, userID, tweetID, authorID, authorHost string) {
+	wanted, err := c.savedTweetState(kind, userID, tweetID)
+	for err == nil {
+		if err = c.updateEngagementPeer(kind, authSid, userID, tweetID, authorID, authorHost, wanted); err != nil {
+			break
+		}
+		c.infof("tweet-side update confirmed userId=%s tweetId=%s saved=%t", userID, tweetID, wanted)
+		next, readErr := c.savedTweetState(kind, userID, tweetID)
+		if readErr == nil && next == wanted {
+			return
+		}
+		wanted, err = next, readErr
+	}
+	c.warnf("tweet-side update failed after local commit userId=%s tweetId=%s: %v", userID, tweetID, err)
+}
+
+func (c *ctx) updateEngagementPeer(kind engagementKind, authSid, userID, tweetID, authorID, authorHost string, wanted bool) error {
+	// A caller that knows the root can spare this node a profile read.
+	// The peer independently verifies the tweet's storage author and root.
+	if authorHost == "" {
+		var err error
+		authorHost, err = c.userHostID(authorID)
+		if err != nil {
+			return fmt.Errorf("resolve root for tweet storage author %s: %w", authorID, err)
+		}
+	}
+	if authorHost == "" {
+		return fmt.Errorf("root not found for tweet storage author %s", authorID)
 	}
 	peerReply, err := c.callPeerEntry(authSid, authorHost, kind.peerEntry, map[string]string{
 		"tweetid":  tweetID,
@@ -159,38 +200,40 @@ func (c *ctx) toggleEngagement(kind engagementKind) (any, error) {
 		"wanted":   boolParam(wanted),
 	})
 	if err != nil {
-		return c.wrapErrString(err), nil
+		return err
 	}
-	peer, ok := toMap(peerReply)
-	if !ok || !mapBool(peer, "success") {
-		message := firstNonEmpty(mapStr(peer, "message"), mapStr(peer, "error"))
-		if message == "" {
-			message = "Failed to update the tweet's record of this save"
-		}
-		return c.wrapErrString(fmt.Errorf("%s", message)), nil
+	peer, _ := toMap(peerReply)
+	if !mapBool(peer, "success") {
+		message := firstNonEmpty(mapStr(peer, "message"), mapStr(peer, "error"), "The tweet's node did not confirm the update")
+		return fmt.Errorf("%s", message)
 	}
-
-	return c.finishEngagement(kind, userID, tweetID, wanted, peer["tweet"])
+	return nil
 }
 
-// finishEngagement updates the user's list and returns the tweet when its
-// author node performed the other half of the write.
-func (c *ctx) finishEngagement(kind engagementKind, userID, tweetID string, wanted bool, tweet any) (any, error) {
-	updatedUser, err := c.applyEngagementToUser(kind, userID, tweetID, wanted)
-	if err != nil {
-		c.failf(err)
-		return c.wrapErrString(err), nil
+// viewerSavedFlags reads both personal flags from the viewer's committed
+// account copy. A tweet replica can carry older tweet-side membership.
+func (c *ctx) viewerSavedFlags(userID, tweetID string) (favorite, bookmark, atRoot, known bool) {
+	if userID == "" || userID == "000000000000000000000000000" {
+		return false, false, false, false
 	}
-	if updatedUser == nil {
-		return c.wrapErrString(fmt.Errorf("Failed to update user's saved items")), nil
-	}
-
-	c.debugf("engagement %s: userId=%s, tweetId=%s, wanted=%t", kind.entry, userID, tweetID, wanted)
-	return c.wrapPassthrough(map[string]any{
-		"success": true,
-		"user":    updatedUser,
-		"tweet":   tweet,
-	}), nil
+	err := c.readMimei("", userID, func(mmsid string) error {
+		account, err := c.getObject(mmsid, ownerDataKey)
+		if err != nil {
+			return err
+		}
+		if account == nil {
+			return fmt.Errorf("viewer account unavailable")
+		}
+		root := userObj(account).hostID()
+		atRoot = root != "" && root == c.nodeID()
+		favorite, err = c.hhas(mmsid, userFavoriteList, tweetID)
+		if err != nil {
+			return err
+		}
+		bookmark, err = c.hhas(mmsid, userBookmarkList, tweetID)
+		return err
+	})
+	return favorite, bookmark, atRoot && err == nil, err == nil
 }
 
 // savedTweetState reads whether a tweet is in the user's own save list.
@@ -233,59 +276,70 @@ func (c *ctx) applyEngagementPeer(kind engagementKind) (any, error) {
 		return respErr(fmt.Errorf("Tweet not found")), nil
 	}
 
-	// Comments and replies live on the immediate parent's author's root.
-	// A standalone quote may also carry a parent ID, but is listed in the
-	// quote author's timeline and lives on their own root.
-	storageAuthorID := tweet.authorID()
-	parentID := mapStr(tweet, "parentTweetId")
-	if parentID != "" && tweet.originalTweetID() != "" && storageAuthorID == authorID {
-		listed, err := c.listedInCommitted(storageAuthorID, userTweetList, tweetID)
-		if err != nil {
-			return respErr(err), nil
-		}
-		if listed {
-			parentID = ""
-		}
-	}
-	if parentID != "" {
-		parent, err := c.loadTweet(parentID)
-		if err != nil {
-			return respErr(err), nil
-		}
-		if parent == nil || parent.authorID() != authorID {
-			return respFail("Parent tweet does not belong to the named author"), nil
-		}
-		listed, err := c.listedInCommitted(parentID, tweetCommentList, tweetID)
-		if err != nil {
-			return respErr(err), nil
-		}
-		if !listed {
-			return respFail("Comment not found in its parent"), nil
-		}
-		storageAuthorID = parent.authorID()
-	}
-	if storageAuthorID != authorID {
-		return respFail("Tweet does not belong to the named author"), nil
+	if err := c.requireTweetStorageAuthor(tweet, tweetID, authorID); err != nil {
+		return respErr(err), nil
 	}
 
 	updatedTweet := c.applyEngagementToTweet(kind, userID, authorID, tweetID, wanted, true)
 	if updatedTweet == nil {
-		// Without the tweet's own record there is nothing to mirror, and the
-		// caller must not record a save the tweet never received.
 		return respErr(fmt.Errorf("Failed to read tweet %s after updating it", tweetID)), nil
 	}
+	c.infof("tweet-side record confirmed userId=%s tweetId=%s saved=%t", userID, tweetID, wanted)
 	return c.wrapPassthrough(map[string]any{
 		"success": true,
 		"tweet":   updatedTweet,
 	}), nil
 }
 
+// tweetStorageAuthor identifies the root owner from committed references.
+// A standalone quote may carry a parent ID and still belong to its own author.
+func (c *ctx) tweetStorageAuthor(tweet tweetObj, tweetID, expectedAuthorID string) (string, error) {
+	authorID := tweet.authorID()
+	parentID := mapStr(tweet, "parentTweetId")
+	if parentID == "" {
+		return authorID, nil
+	}
+	if tweet.originalTweetID() != "" && (expectedAuthorID == "" || expectedAuthorID == authorID) {
+		listed, err := c.listedInCommitted(authorID, userTweetList, tweetID)
+		if err != nil {
+			return "", err
+		}
+		if listed {
+			return authorID, nil
+		}
+	}
+	parent, err := c.loadTweet(parentID)
+	if err != nil {
+		return "", err
+	}
+	if parent == nil || parent.authorID() == "" {
+		return "", fmt.Errorf("Parent tweet not found")
+	}
+	listed, err := c.listedInCommitted(parentID, tweetCommentList, tweetID)
+	if err != nil {
+		return "", err
+	}
+	if !listed {
+		return "", fmt.Errorf("Comment not found in its parent")
+	}
+	return parent.authorID(), nil
+}
+
+func (c *ctx) requireTweetStorageAuthor(tweet tweetObj, tweetID, authorID string) error {
+	ownerID, err := c.tweetStorageAuthor(tweet, tweetID, authorID)
+	if err != nil {
+		return err
+	}
+	if ownerID != authorID {
+		return fmt.Errorf("Tweet does not belong to the named author")
+	}
+	return nil
+}
+
 // applyEngagementToTweet flips or sets the tweet's record of this user, and
 // returns the tweet as it now stands.
 //
-// Every failure inside is logged and yields a nil tweet, so the individual steps
-// stay self-contained; the caller decides what an absent tweet means, and it
-// abandons the toggle rather than mirroring a state it never read.
+// Failures are logged and return a nil tweet to the peer caller.
 func (c *ctx) applyEngagementToTweet(kind engagementKind, userID, authorID, tweetID string, requested, stateGiven bool) any {
 	authSid, err := c.authSid()
 	if err != nil {
@@ -337,73 +391,56 @@ func (c *ctx) applyEngagementToTweet(kind engagementKind, userID, authorID, twee
 // ---------------------------------------------------------------------------
 
 // applyEngagementToUser records or clears a tweet in the user's own list.
-//
-// Saving also registers the user's node as a provider; Leither synchronizes
-// the tweet so it stays readable if its author's node goes away. Removing does
-// not reverse that: the copy may be the only one left, and other users' saves
-// may depend on it.
-func (c *ctx) applyEngagementToUser(kind engagementKind, userID, tweetID string, wanted bool) (any, error) {
-	authSid, err := c.authSid()
-	if err != nil {
-		return nil, err
-	}
-	// The list written here is the user's own, so this must be their root
-	// node.
-	if err := c.requireRootNode(userID); err != nil {
-		return nil, err
-	}
-
+func (c *ctx) applyEngagementToUser(kind engagementKind, authSid, userID, tweetID string, wanted bool) (any, bool, error) {
 	userSid, err := c.openMimei(authSid, userID, verCur)
 	if err != nil {
-		return nil, fmt.Errorf("MMOpen(%s, cur): %v", userID, err)
+		return nil, false, fmt.Errorf("MMOpen(%s, cur): %v", userID, err)
 	}
 	defer c.closeMimei(userSid)
 
 	was, err := c.hhas(userSid, kind.userKey, tweetID)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	changed := wanted != was
+	// Prepare the user payload before writing so the commit is the last
+	// required storage step.
+	updatedUser, err := c.userCoreData(userSid, userID)
+	if err != nil {
+		return nil, false, err
+	}
+	if updatedUser == nil {
+		return nil, false, fmt.Errorf("User not found")
+	}
 
-	if changed {
+	if wanted == was {
+		// A failed backup can leave matching data in the writable version.
+		// Acknowledge a no-op only if the committed list already matches.
+		committed, err := c.savedTweetState(kind, userID, tweetID)
+		if err != nil {
+			return nil, false, err
+		}
+		if committed == wanted {
+			return updatedUser, false, nil
+		}
+	} else {
+		count := mapInt(updatedUser, kind.userCountField, 0)
 		if wanted {
-			// The value is the save time, which the saved-item listing uses to
-			// order the list and to age out entries that never resolve.
 			err = c.hset(userSid, kind.userKey, tweetID, nowMillis())
+			count++
 		} else {
 			err = c.hdel(userSid, kind.userKey, tweetID)
+			count--
 		}
 		if err != nil {
-			c.errorf("Failed to update %s list: %v, userId=%s, tweetId=%s", kind.userKey, err, userID, tweetID)
-			return nil, err
+			return nil, false, err
 		}
-		if err := c.backupDelRef(authSid, userID, ""); err != nil {
-			c.errorf("Failed to update %s list: %v, userId=%s, tweetId=%s", kind.userKey, err, userID, tweetID)
-			return nil, err
-		}
-		if err := c.mimeiPublish(authSid, userID); err != nil {
-			c.errorf("Failed to publish user %s: %v", userID, err)
-		}
+		updatedUser[kind.userCountField] = count
 	}
 
-	if wanted {
-		// Provider status, rather than the list or the author's location,
-		// decides whether this node needs to register the saved tweet.
-		c.ensureProvided(authSid, tweetID)
+	if err := c.backupDelRef(authSid, userID, ""); err != nil {
+		return nil, false, err
 	}
-	// Un-saving deliberately does not unprovide or delete the local copy: this
-	// node may hold the only reachable copy of the tweet.
-
-	updatedUser, err := c.callEntry("get_user_core_data", map[string]string{
-		reqAppID:  c.appID(),
-		reqAppVer: verLast,
-		"userid":  userID,
-	})
-	if err != nil {
-		return nil, err
-	}
-	c.debugf("local tweetId=%s, userData=%s", tweetID, jsonStringify(updatedUser))
-	return updatedUser, nil
+	return updatedUser, true, nil
 }
 
 // requestedState reads an optional desired-state parameter, reporting both the

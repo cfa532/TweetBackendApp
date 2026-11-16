@@ -39,27 +39,28 @@ func (a *commentAPI) Hget(mmsid, key, field string) (any, error) {
 
 func (a *commentAPI) Hlen(mmsid, key string) (int64, error) { return 0, nil }
 
-// toggle_favorite on the engaging user's own root delegates the tweet-side
-// write to the author's node before anything is recorded locally.
+// toggle_favorite updates the user's list and delegates the tweet-side write
+// to the author's node.
 func TestToggleFavoriteDelegatesToAuthorNode(t *testing.T) {
 	api := newCommentAPI("nodeA")
 	api.addUser("liker", "nodeA", "uid-liker")
-	api.addUser("pauthor", "nodeB", "uid-pauthor")
+	api.absent["pauthor"] = true
 	api.authorSid, api.authorUID = "author-session", "uid-author"
 	api.sessions["author-session"] = "uid-author"
 	api.sessions["sid-liker"] = "uid-liker"
 	api.tweets["parent"] = map[string]any{"mid": "parent", "authorId": "pauthor"}
 	api.reply = map[string]any{"success": true, "tweet": map[string]any{"mid": "parent", "favoriteCount": int64(1)}}
 
-	ret, err := entryToggleFavorite(commentCtx(api, "toggle_favorite", map[string]string{
-		"usersid":       "sid-liker",
-		"appuserid":     "liker",
-		"tweetid":       "parent",
-		"authorid":      "pauthor",
-		"isfavorite":    "true",
-		"hostid":        "nodeB",
-		"userhostid":    "nodeA",
-	}))
+	c := commentCtx(api, "toggle_favorite", map[string]string{
+		"usersid":    "sid-liker",
+		"appuserid":  "liker",
+		"tweetid":    "parent",
+		"authorid":   "pauthor",
+		"isfavorite": "true",
+		"hostid":     "nodeB",
+		"userhostid": "nodeA",
+	})
+	ret, err := entryToggleFavorite(c)
 	if err != nil {
 		t.Fatalf("toggle_favorite returned error: %v", err)
 	}
@@ -70,15 +71,82 @@ func TestToggleFavoriteDelegatesToAuthorNode(t *testing.T) {
 	if user, ok := toMap(m["user"]); !ok || mapStr(user, "mid") != "liker" {
 		t.Fatalf("toggle_favorite returned an invalid user record: %#v", m["user"])
 	}
+	if api.remote != nil || len(c.postCommit) != 1 || m["tweet"] != nil {
+		t.Fatalf("favorite response waited for the peer update: %#v", ret)
+	}
+	c.finishPostCommit(c.postCommit)
 	if api.remote == nil || api.remote.entry != "apply_favorite" {
 		t.Fatalf("no delegation to apply_favorite: %#v", api.remote)
 	}
 	req := api.remote.req
-	if req["userid"] != "liker" || req["wanted"] != "true" || req["sid"] != "author-session" {
+	if req[reqNodeID] != "nodeB" || req["userid"] != "liker" || req["wanted"] != "true" || req["sid"] != "author-session" {
 		t.Fatalf("delegation params wrong: %#v", req)
 	}
 	if !hasCall(api, "hset:liker/"+userFavoriteList+"/parent") {
 		t.Fatalf("user's own list not written, calls: %v", api.calls)
+	}
+}
+
+func TestSavedListCommitsWhenPeerFails(t *testing.T) {
+	for _, kind := range []engagementKind{bookmarkKind(), favoriteKind()} {
+		t.Run(kind.entry, func(t *testing.T) {
+			api := newCommentAPI("nodeA")
+			api.addUser("saver", "nodeA", "uid-saver")
+			api.addUser("author", "nodeB", "uid-author")
+			api.authorSid = "author-session"
+			api.sessions["sid-saver"] = "uid-saver"
+			api.reply = respFail("Peer refused the tweet update")
+
+			for _, wanted := range []bool{true, false} {
+				c := commentCtx(api, kind.entry, map[string]string{
+					kind.userParam:  "saver",
+					kind.stateParam: boolParam(wanted),
+					"usersid":       "sid-saver",
+					"tweetid":       "post",
+					"authorid":      "author",
+				})
+				ret, err := c.toggleEngagement(kind)
+				reply, _ := toMap(ret)
+				user, _ := toMap(reply["user"])
+				if err != nil || !mapBool(reply, "success") || mapStr(user, "mid") != "saver" || reply["tweet"] != nil {
+					t.Fatalf("saved-list write did not succeed independently: reply=%#v, err=%v", ret, err)
+				}
+				if api.hashFields["saver/"+kind.userKey+"/post"] != wanted || !hasCall(api, "backup:saver") {
+					t.Fatalf("saved list was not committed, calls: %v", api.calls)
+				}
+				api.remote = nil
+				c.finishPostCommit(c.postCommit)
+				if api.remote == nil || api.remote.entry != kind.peerEntry {
+					t.Fatalf("the tweet-side update was not attempted")
+				}
+			}
+		})
+	}
+}
+
+func TestToggleBookmarkRemovesSavedTweetWithMissingAuthor(t *testing.T) {
+	api := newCommentAPI("nodeA")
+	api.addUser("saver", "nodeA", "uid-saver")
+	api.absent["deleted-author"] = true
+	api.authorSid = "author-session"
+	api.sessions["sid-saver"] = "uid-saver"
+	bookmark := "saver/" + userBookmarkList + "/post"
+	api.hashFields[bookmark] = true
+
+	ret, err := entryToggleBookmark(commentCtx(api, "toggle_bookmark", map[string]string{
+		"usersid":      "sid-saver",
+		"userid":       "saver",
+		"tweetid":      "post",
+		"authorid":     "deleted-author",
+		"isbookmarked": "false",
+	}))
+	reply, _ := toMap(ret)
+	user, _ := toMap(reply["user"])
+	if err != nil || !mapBool(reply, "success") || mapStr(user, "mid") != "saver" || reply["tweet"] != nil {
+		t.Fatalf("bookmark removal did not succeed: reply=%#v, err=%v", ret, err)
+	}
+	if api.hashFields[bookmark] || !hasCall(api, "backup:saver") || api.remote != nil {
+		t.Fatalf("expected a committed local removal, calls: %v, remote: %#v", api.calls, api.remote)
 	}
 }
 
@@ -96,10 +164,10 @@ func TestApplyFavoritePeerGuard(t *testing.T) {
 
 	req := func(tweetid, code string) map[string]string {
 		return map[string]string{
-			"tweetid":  tweetid,
-			"authorid": "pauthor",
-			"userid":   "liker",
-			"wanted":   "true",
+			"tweetid":     tweetid,
+			"authorid":    "pauthor",
+			"userid":      "liker",
+			"wanted":      "true",
 			"nodeappcode": code,
 		}
 	}
@@ -150,12 +218,12 @@ func TestApplyRetweetPeerGuard(t *testing.T) {
 	api.codes["code-node"] = map[string]string{"nodeid": "nodeA", "forapp": "aid-test"}
 
 	ret, err := entryApplyRetweet(commentCtx(api, "apply_retweet", map[string]string{
-		"tweetid":      "parent",
-		"authorid":     "pauthor",
-		"userid":       "liker",
-		"retweetid":    "rt-1",
-		"wanted":       "true",
-		"nodeappcode":  "code-node",
+		"tweetid":     "parent",
+		"authorid":    "pauthor",
+		"userid":      "liker",
+		"retweetid":   "rt-1",
+		"wanted":      "true",
+		"nodeappcode": "code-node",
 	}))
 	if err != nil {
 		t.Fatalf("returned error: %v", err)
@@ -176,6 +244,48 @@ func TestApplyRetweetPeerGuard(t *testing.T) {
 	}
 }
 
+func TestExplicitUnfollowCommitsWithoutPeerConfirmation(t *testing.T) {
+	for _, host := range []string{"", "nodeB"} {
+		t.Run("target-root="+host, func(t *testing.T) {
+			api := newCommentAPI("nodeA")
+			api.addUser("actor", "nodeA", "uid-actor")
+			api.absent["target"] = true
+			api.authorSid = "author-session"
+			api.sessions["sid-actor"] = "uid-actor"
+			api.reply = respFail("Target refused the follower update")
+			relationship := "actor/" + userFollowingsList + "/target"
+			api.hashFields[relationship] = true
+			req := map[string]string{
+				"version":            versionV2,
+				"usersid":            "sid-actor",
+				"userid":             "actor",
+				"followingid":        "target",
+				"followingid_hostid": host,
+				"isfollowing":        "false",
+			}
+			for attempt := 0; attempt < 2; attempt++ {
+				api.remote = nil
+				ret, err := entryToggleFollowing(commentCtx(api, "toggle_following", req))
+				reply, _ := toMap(ret)
+				data, _ := toMap(reply["data"])
+				if err != nil || !mapBool(reply, "success") || data["isFollowing"] != false || api.hashFields[relationship] {
+					t.Fatalf("unfollow did not stay committed: %#v, err=%v", ret, err)
+				}
+				if attempt == 0 && host != "" {
+					if api.remote == nil || api.remote.entry != "toggle_follower" || api.remote.req[reqNodeID] != host {
+						t.Fatalf("unfollow did not use the supplied target root: %#v", api.remote)
+					}
+				} else if api.remote != nil {
+					t.Fatalf("unexpected peer update: %#v", api.remote)
+				}
+			}
+			if !hasCall(api, "backup:actor") {
+				t.Fatalf("local relationship was not backed up: %v", api.calls)
+			}
+		})
+	}
+}
+
 // toggle_follower admits only the follower's own root; a follower this node
 // has never seen is pulled once.
 func TestToggleFollowerPeerGuard(t *testing.T) {
@@ -188,9 +298,9 @@ func TestToggleFollowerPeerGuard(t *testing.T) {
 	api.codes["code-node"] = map[string]string{"nodeid": "nodeA", "forapp": "aid-test"}
 
 	ret, err := entryToggleFollower(commentCtx(api, "toggle_follower", map[string]string{
-		"userid":     "target",
-		"otherid":    "follower",
-		"isfollower": "true",
+		"userid":      "target",
+		"otherid":     "follower",
+		"isfollower":  "true",
 		"nodeappcode": "code-node",
 	}))
 	if err != nil {

@@ -366,25 +366,28 @@ func (c *ctx) fileSetValue(f *fileStore, key string, value any) error {
 		if !ok {
 			return fmt.Errorf("core data must be an object")
 		}
-		core := map[string]any{}
-		for k, v := range record {
-			core[k] = v
-		}
-		// Counts and UI membership flags are projections of the directories.
-		// Exclude them when accepting a full client model as core data.
-		delete(core, "storageFormat")
-		fields := []string{"favorites", "bookmarkCount", "favoriteCount", "commentCount", "retweetCount"}
-		if key == ownerDataKey {
-			fields = []string{"tweetCount", "followingCount", "followersCount", "bookmarksCount", "favoritesCount", "commentsCount",
-				"fansList", "followingList", "bookmarkedTweets", "favoriteTweets", "repliedTweets", "commentsList", "topTweets", "userBlackList"}
-		}
-		for _, field := range fields {
-			delete(core, field)
-		}
-		entry["value"] = core
+		entry["value"] = fileCoreRecord(key, record)
 		entry["schema"], entry["kind"], entry["mid"] = fileSchema, f.kind, f.mid
 	}
 	return c.fileSet(f, scalarPath(key), entry)
+}
+
+// fileCoreRecord projects a client model onto the fields stored in core.json.
+func fileCoreRecord(key string, record map[string]any) map[string]any {
+	core := make(map[string]any, len(record))
+	for k, v := range record {
+		core[k] = v
+	}
+	delete(core, "storageFormat")
+	fields := []string{"favorites", "bookmarkCount", "favoriteCount", "commentCount", "retweetCount"}
+	if key == ownerDataKey {
+		fields = []string{"tweetCount", "followingCount", "followersCount", "bookmarksCount", "favoritesCount", "commentsCount",
+			"fansList", "followingList", "bookmarkedTweets", "favoriteTweets", "repliedTweets", "commentsList", "topTweets", "userBlackList"}
+	}
+	for _, field := range fields {
+		delete(core, field)
+	}
+	return core
 }
 
 // A message's value and order score share one entry. Hash/set APIs are kept at

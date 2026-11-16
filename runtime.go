@@ -28,6 +28,8 @@ type ctx struct {
 	nodeIDCache  string
 	files        map[string]*fileStore
 	createdFiles map[string]string
+	postCommit   []func(*ctx)
+	background   bool
 }
 
 func newCtx(api lapi.LApi, entry string, req map[string]string, args []any, wr io.Writer) *ctx {
@@ -180,7 +182,34 @@ func (c *ctx) callEntry(entry string, params map[string]string) (any, error) {
 
 	sub := newCtx(c.api, entry, params, nil, c.wr)
 	sub.nodeIDCache = c.nodeIDCache
-	return handler(sub)
+	result, err := handler(sub)
+	c.postCommit = append(c.postCommit, sub.postCommit...)
+	return result, err
+}
+
+func (c *ctx) publishCommitted(authSid, mid string) {
+	if err := c.mimeiPublish(authSid, mid); err != nil {
+		c.warnf("publish %s failed: %v", mid, err)
+	}
+}
+
+// afterCommit records best-effort work for the top-level invocation. The
+// worker uses a fresh context without open handles or the response writer.
+func (c *ctx) afterCommit(work func(*ctx)) {
+	c.postCommit = append(c.postCommit, work)
+}
+
+func (c *ctx) finishPostCommit(jobs []func(*ctx)) {
+	for _, job := range jobs {
+		func() {
+			defer func() {
+				if failure := recover(); failure != nil {
+					c.warnf("post-commit work interrupted: %v", failure)
+				}
+			}()
+			job(c)
+		}()
+	}
 }
 
 // callEntryMap runs another entry and decodes its reply as an object.
@@ -246,7 +275,7 @@ func redactParam(key, value string) string {
 		return value
 	}
 	switch key {
-	case "password", reqUserSid, "nodeappcode":
+	case "password", reqSid, reqUserSid, "nodeappcode":
 		// A user session is a bearer credential for as long as it lives, and
 		// so is a node app code on the node that minted it.
 		return redactedMark

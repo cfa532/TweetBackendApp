@@ -428,54 +428,11 @@ func entryGetUserID(c *ctx) (any, error) {
 // means this node has no copy, and finding one elsewhere is get_user's job.
 func entryGetUserCoreData(c *ctx) (any, error) {
 	userID := c.str("userid")
-	nodeID := c.nodeID()
-
 	var result map[string]any
 	err := c.readMimei("", userID, func(mmsid string) error {
-		stored, err := c.getObject(mmsid, ownerDataKey)
-		if err != nil {
-			return err
-		}
-		if stored == nil {
-			c.errorf("User %s not found on node %s", userID, nodeID)
-			return nil
-		}
-		user := userObj(stored)
-
-		// hostIds is reported as [root node, this node] so the client knows both
-		// where the account is authoritative and where this copy came from.
-		root := user.hostID()
-		user["hostIds"] = strSlice([]string{root, nodeID})
-
-		counts := []struct {
-			field string
-			key   string
-			zset  bool
-		}{
-			{"tweetCount", userTweetList, true},
-			{"followingCount", userFollowingsList, false},
-			{"followersCount", userFollowersList, false},
-			{"bookmarksCount", userBookmarkList, false},
-			{"favoritesCount", userFavoriteList, false},
-			{"commentsCount", userCommentList, false},
-		}
-		for _, spec := range counts {
-			var n int64
-			var err error
-			if spec.zset {
-				n, err = c.zcard(mmsid, spec.key)
-			} else {
-				n, err = c.hlen(mmsid, spec.key)
-			}
-			if err != nil {
-				return err
-			}
-			user[spec.field] = n
-		}
-
-		user.stripPassword()
-		result = map[string]any(user)
-		return nil
+		data, err := c.userCoreData(mmsid, userID)
+		result = data
+		return err
 	})
 	if err != nil {
 		return c.wrapErr(err), nil
@@ -485,6 +442,53 @@ func entryGetUserCoreData(c *ctx) (any, error) {
 	}
 	c.debugf("user=%s", jsonStringify(result))
 	return c.wrapNotNull(result, "User not found"), nil
+}
+
+func (c *ctx) userCoreData(mmsid, userID string) (map[string]any, error) {
+	nodeID := c.nodeID()
+	stored, err := c.getObject(mmsid, ownerDataKey)
+	if err != nil {
+		return nil, err
+	}
+	if stored == nil {
+		c.errorf("User %s not found on node %s", userID, nodeID)
+		return nil, nil
+	}
+	user := userObj(stored)
+
+	// hostIds is reported as [root node, this node] so the client knows both
+	// where the account is authoritative and where this copy came from.
+	root := user.hostID()
+	user["hostIds"] = strSlice([]string{root, nodeID})
+
+	counts := []struct {
+		field string
+		key   string
+		zset  bool
+	}{
+		{"tweetCount", userTweetList, true},
+		{"followingCount", userFollowingsList, false},
+		{"followersCount", userFollowersList, false},
+		{"bookmarksCount", userBookmarkList, false},
+		{"favoritesCount", userFavoriteList, false},
+		{"commentsCount", userCommentList, false},
+	}
+	for _, spec := range counts {
+		var n int64
+		var err error
+		if spec.zset {
+			n, err = c.zcard(mmsid, spec.key)
+		} else {
+			n, err = c.hlen(mmsid, spec.key)
+		}
+		if err != nil {
+			return nil, err
+		}
+		user[spec.field] = n
+	}
+
+	user.stripPassword()
+	return map[string]any(user), nil
 }
 
 // ---------------------------------------------------------------------------
@@ -547,7 +551,7 @@ func entrySyncUser(c *ctx) (any, error) {
 		return c.wrapErr(err), nil
 	}
 	userID := c.str(reqMID)
-	if err := c.mimeiSync(authSid, userID, nil); err != nil {
+	if err := c.mimeiSync(authSid, userID, ""); err != nil {
 		return c.wrapErr(err), nil
 	}
 	if migrating {
@@ -609,9 +613,11 @@ func entryResyncUser(c *ctx) (any, error) {
 		// Leither's background replication.
 		authSid, err := c.authSid()
 		if err == nil {
-			err = c.mimeiSync(authSid, userID, nil)
+			err = c.mimeiSync(authSid, userID, rootHost)
 		}
-		if err != nil {
+		if syncStillRunning(err) {
+			c.debugf("sync continues userId=%s hostId=%s", userID, rootHost)
+		} else if err != nil {
 			syncErr = err.Error()
 		}
 		if syncErr != "" {

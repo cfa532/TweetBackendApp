@@ -79,9 +79,7 @@ func (c *ctx) present(key string) bool {
 // get_user_core_data: that entry reports hostIds as [root, this node], so the
 // two being equal means this node is the root.
 //
-// List entries use this to decide whether they may prune stale entries. A
-// failure to determine it is not fatal — the caller simply skips the cleanup and
-// still returns its list.
+// Comment pages use this to choose the placeholder for an unavailable comment.
 func (c *ctx) isHomeNode(userID string) bool {
 	owner, err := c.callEntryMap("get_user_core_data", map[string]string{
 		reqAppID:  c.appID(),
@@ -94,23 +92,6 @@ func (c *ctx) isHomeNode(userID string) bool {
 	}
 	hosts := userObj(owner).hostIDs()
 	return len(hosts) > 1 && hosts[0] != "" && hosts[0] == hosts[1]
-}
-
-// openWriterFor opens a writable handle on a user's account, used by the list
-// entries that prune stale members. It returns empty strings when a writable
-// handle cannot be obtained, which the callers treat as "skip the cleanup".
-func (c *ctx) openWriterFor(userID string) (authSid, mmsid string) {
-	sid, err := c.authSid()
-	if err != nil {
-		c.errorf("failed to open write session for userId=%s: %v", userID, err)
-		return "", ""
-	}
-	handle, err := c.openMimei(sid, userID, verCur)
-	if err != nil {
-		c.errorf("failed to open write session for userId=%s: %v", userID, err)
-		return "", ""
-	}
-	return sid, handle
 }
 
 // fetchTweetV2 reads a tweet through get_tweet and unwraps the v2 envelope,

@@ -6,7 +6,10 @@
 // is synchronised to another node.
 package lapp
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // ---------------------------------------------------------------------------
 // add_tweet
@@ -77,94 +80,133 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 	if err != nil {
 		return respErr(fmt.Errorf("MMCreate(tweet): %v", err)), nil
 	}
-	// A named submission may be a repeat of one that already went through.
-	// Leither counts references, so adding them again would leave one behind
-	// when the tweet is deleted. What an earlier attempt committed says which
-	// references it already made: the tweet object carries its attachment
-	// references, the author's list their reference to the tweet.
-	tweetCommitted, authorLists := false, false
-	if requestID != "" {
-		if tweetCommitted, err = c.hasCommittedVersion(authSid, tweetID); err != nil {
-			return respErr(err), nil
-		}
+	originalID := tweet.originalTweetID()
+	if commentID := tweet.quotedCommentID(); commentID != "" &&
+		(commentID == originalID || originalID == "" || tweet.originalAuthorID() == "") {
+		return respFail("Quoted comment requires its parent tweet and author"), nil
+	}
+	tweetCommitted, err := c.commitSubmission(authSid, tweetID, requestID, tweet, originalID != "")
+	if err != nil {
+		return respErr(err), nil
+	}
+	authorLists := false
+	if tweetCommitted {
 		if authorLists, err = c.listedInCommitted(authorID, userTweetList, tweetID); err != nil {
 			return respErr(err), nil
 		}
 	}
-
-	tweetSid, err := c.openMimei(authSid, tweetID, verCur)
-	if err != nil {
-		return respErr(fmt.Errorf("MMOpen(%s, cur): %v", tweetID, err)), nil
-	}
-	defer c.closeMimei(tweetSid)
-
-	tweet["mid"] = tweetID
-	tweet["timestamp"] = nowMillis()
-	if err := c.setValue(tweetSid, tweetContentKey, map[string]any(tweet)); err != nil {
-		return respErr(err), nil
-	}
-
-	// Each attachment is its own Mimei; referencing it from the tweet keeps it
-	// alive and carries it along when the tweet is synchronised.
-	if !tweetCommitted {
-		for _, attachment := range tweet.attachments() {
-			if mid := mapStr(attachment, "mid"); mid != "" {
-				if err := c.addRef(authSid, tweetID, mid); err != nil {
-					c.warnf("attachment ref %s failed: %v", mid, err)
-				}
-			}
-		}
-	}
-
-	if err := c.backupDelRef(authSid, tweetID, ""); err != nil {
-		return respErr(err), nil
-	}
-	if err := c.mimeiPublish(authSid, tweetID); err != nil {
-		c.warnf("publish %s failed: %v", tweetID, err)
-	}
-
-	userSid, err := c.openMimei(authSid, authorID, verCur)
-	if err != nil {
-		return respErr(fmt.Errorf("MMOpen(%s, cur): %v", authorID, err)), nil
-	}
-	defer c.closeMimei(userSid)
-
-	// The same score puts the tweet in the author's own list and in the feed
-	// their followers read.
-	score := nowMillis()
-	if err := c.zadd(userSid, userTweetList, score, tweetID); err != nil {
-		return respErr(err), nil
-	}
-	if err := c.zadd(userSid, userFollowingsTweets, score, tweetID); err != nil {
-		return respErr(err), nil
-	}
-
-	// A retweet points at the quoted tweet. Registering its provider role is
-	// best-effort; Leither synchronizes the quoted tweet after registration.
-	if originalID := tweet.originalTweetID(); originalID != "" {
-		if authorLists {
-			c.ensureProvided(authSid, originalID)
-		} else if err := c.addRef(authSid, authorID, originalID); err != nil {
-			c.errorf("Error sync original tweet: %v, tweet=%s", err, jsonStringify(map[string]any(tweet)))
-		} else {
-			c.ensureProvided(authSid, originalID)
-		}
-	}
-
 	if !authorLists {
-		if err := c.addRef(authSid, authorID, tweetID); err != nil {
+		if err := c.linkSubmittedTweet(authSid, authorID, tweetID, tweet); err != nil {
 			return respErr(err), nil
 		}
 	}
-	if err := c.backupDelRef(authSid, authorID, ""); err != nil {
-		return respErr(err), nil
-	}
-	if err := c.mimeiPublish(authSid, authorID); err != nil {
-		c.warnf("publish %s failed: %v", authorID, err)
-	}
 
 	c.infof("local %s", jsonStringify(map[string]any(tweet)))
+	if originalID != "" {
+		originalHost := c.str("originalauthorhostid")
+		c.afterCommit(func(work *ctx) {
+			work.publishCommitted(authSid, tweetID)
+			work.publishCommitted(authSid, authorID)
+			work.deliverQuoteRetweetState(authSid, authorID, tweetID, tweet, originalHost)
+			work.ensureProvided(authSid, originalID)
+		})
+	}
 	return c.wrapPassthrough(map[string]any{"success": true, "mid": tweetID}), nil
+}
+
+// linkSubmittedTweet commits the author's lists and native references after
+// the tweet has committed. A retry uses the original submission timestamp.
+func (c *ctx) linkSubmittedTweet(authSid, authorID, tweetID string, tweet tweetObj) error {
+	userSid, err := c.openMimei(authSid, authorID, verCur)
+	if err != nil {
+		return fmt.Errorf("MMOpen(%s, cur): %v", authorID, err)
+	}
+	defer c.closeMimei(userSid)
+
+	score := tweet.timestamp()
+	if err := c.zadd(userSid, userTweetList, score, tweetID); err != nil {
+		return err
+	}
+	if err := c.zadd(userSid, userFollowingsTweets, score, tweetID); err != nil {
+		return err
+	}
+	if originalID := tweet.originalTweetID(); originalID != "" {
+		if err := c.addRef(authSid, authorID, originalID); err != nil {
+			c.errorf("Error sync original tweet: %v, tweet=%s", err, jsonStringify(map[string]any(tweet)))
+		}
+	}
+	if err := c.addRef(authSid, authorID, tweetID); err != nil {
+		return err
+	}
+	if err := c.backupDelRef(authSid, authorID, ""); err != nil {
+		return err
+	}
+	if tweet.originalTweetID() == "" {
+		c.publishCommitted(authSid, authorID)
+	}
+	return nil
+}
+
+const submissionConflict = "requestid already names a different submission"
+
+// commitSubmission reports whether an earlier attempt committed the object.
+// A replay validates the stored payload before the caller touches its parent.
+func (c *ctx) commitSubmission(authSid, mid, requestID string, submission tweetObj, deferPublish bool) (bool, error) {
+	if requestID != "" {
+		committed, err := c.hasCommittedVersion(authSid, mid)
+		if err != nil {
+			return false, err
+		}
+		if committed {
+			return true, c.readMimei(authSid, mid, func(mmsid string) error {
+				stored, err := c.getObject(mmsid, tweetContentKey)
+				if err != nil {
+					return err
+				}
+				if stored == nil {
+					return fmt.Errorf("committed submission %s has no content", mid)
+				}
+				if submissionPayload(stored) != submissionPayload(submission) {
+					return fmt.Errorf("%s", submissionConflict)
+				}
+				submission["mid"] = mid
+				submission["timestamp"] = stored["timestamp"]
+				return nil
+			})
+		}
+	}
+
+	mmsid, err := c.openMimei(authSid, mid, verCur)
+	if err != nil {
+		return false, fmt.Errorf("MMOpen(%s, cur): %v", mid, err)
+	}
+	defer c.closeMimei(mmsid)
+	submission["mid"] = mid
+	submission["timestamp"] = nowMillis()
+	if err := c.setValue(mmsid, tweetContentKey, map[string]any(submission)); err != nil {
+		return false, err
+	}
+	for _, attachment := range submission.attachments() {
+		if child := mapStr(attachment, "mid"); child != "" {
+			if err := c.addRef(authSid, mid, child); err != nil {
+				c.warnf("attachment ref %s failed: %v", child, err)
+			}
+		}
+	}
+	if err := c.backupDelRef(authSid, mid, ""); err != nil {
+		return false, err
+	}
+	if !deferPublish {
+		c.publishCommitted(authSid, mid)
+	}
+	return false, nil
+}
+
+func submissionPayload(submission map[string]any) string {
+	core := fileCoreRecord(tweetContentKey, submission)
+	delete(core, "mid")
+	delete(core, "timestamp")
+	return jsonStringify(core)
 }
 
 // submissionMark turns a client's requestid into the creation mark of the
@@ -186,7 +228,6 @@ func (c *ctx) authorizePost(tweet tweetObj, user userObj, agentAuth map[string]a
 		// signature issued for one user and post as another.
 		//
 		// Keep legacy verification for accounts that have not opted out.
-		// A named submission can also rewrite an existing tweet.
 		result := c.verifyAgentAuth(agentAuth, map[string]any{
 			"authorId": tweet.authorID(),
 			"content":  tweet.content(),
@@ -249,7 +290,7 @@ func entryGetTweet(c *ctx) (any, error) {
 	// the node provides the author but Leither has not replicated this tweet to it.
 	// Pull the tweet now and become its provider, then read it again. Only the
 	// detail view does this; a routine read keeps answering from the local copy.
-	if (err != nil || stored == nil) && c.str("fromdetailview") == "true" {
+	if c.str("fromdetailview") == "true" && stored == nil && (err == nil || missingLocalTweet(err)) {
 		if c.pullTweetForDetailView(tweetID) {
 			c.closeMimei(mmsid)
 			mmsid, stored, err = c.readTweetContent(tweetID)
@@ -277,13 +318,18 @@ func entryGetTweet(c *ctx) (any, error) {
 		}
 	}
 
-	isFavorite, err := c.hhas(mmsid, tweetLikeList, appUserID)
-	if err != nil {
-		return c.wrapErr(err), nil
-	}
-	isBookmarked, err := c.hhas(mmsid, tweetBookmarkList, appUserID)
-	if err != nil {
-		return c.wrapErr(err), nil
+	isFavorite, isBookmarked, viewerSavedStateAtRoot, viewerSavedStateKnown := c.viewerSavedFlags(appUserID, tweetID)
+	if !viewerSavedStateKnown {
+		// Older clients still use the tweet-side snapshot where the viewer's
+		// account isn't available. New clients can keep confirmed local flags.
+		isFavorite, err = c.hhas(mmsid, tweetLikeList, appUserID)
+		if err != nil {
+			return c.wrapErr(err), nil
+		}
+		isBookmarked, err = c.hhas(mmsid, tweetBookmarkList, appUserID)
+		if err != nil {
+			return c.wrapErr(err), nil
+		}
 	}
 	hasRetweeted, err := c.hhas(mmsid, tweetRetweetList, appUserID)
 	if err != nil {
@@ -326,7 +372,8 @@ func entryGetTweet(c *ctx) (any, error) {
 		"retweetCount":  retweetCount,
 
 		// [isFavorite, isBookmarked, hasRetweeted] for the requesting user.
-		"favorites": []any{isFavorite, isBookmarked, hasRetweeted},
+		"favorites":              []any{isFavorite, isBookmarked, hasRetweeted},
+		"viewerSavedStateAtRoot": viewerSavedStateAtRoot,
 	}
 	if format := mapStr(tweet, "storageFormat"); format != "" {
 		ret["storageFormat"] = format
@@ -383,13 +430,19 @@ func (c *ctx) readTweetContent(tweetID string) (string, map[string]any, error) {
 	return mmsid, stored, nil
 }
 
+// missingLocalTweet recognizes Leither's local metadata and File version
+// misses. Permission and storage failures reach the caller directly.
+func missingLocalTweet(err error) bool {
+	message := err.Error()
+	return strings.Contains(message, "30000:No MiMei mid[") || strings.Contains(message, "OpenMM ver is empty")
+}
+
 // pullTweetForDetailView fetches a tweet this node does not hold yet, for a
 // detail view served by an access node. It reports whether the pull ran, so the
 // caller knows a second read is worthwhile.
 //
-// It does nothing when the node is the author's root host: the root is where the
-// tweet is written, so a tweet missing there does not exist and a sync would
-// have nowhere to pull from. The author's root host comes from the client's
+// A pull requires a known root host other than this node. The author's root
+// host comes from the client's
 // authorhostid (or, for a quoted tweet, from its author's account via authorid)
 // because the tweet, which would name its author, is not here to read.
 //
@@ -415,7 +468,10 @@ func (c *ctx) pullTweetForDetailView(tweetID string) bool {
 	}
 	c.debugf("fromdetailview pulling absent tweetId=%s on nodeId=%s from writeHostId=%s",
 		tweetID, nodeID, writeHostID)
-	if err := c.mimeiSync(authSid, tweetID, nil); err != nil {
+	if err := c.mimeiSync(authSid, tweetID, writeHostID); syncStillRunning(err) {
+		c.debugf("fromdetailview sync continues tweetId=%s hostId=%s", tweetID, writeHostID)
+		return true
+	} else if err != nil {
 		c.errorf("fromdetailview sync failed for %s: %v", tweetID, err)
 		return false
 	}
@@ -526,9 +582,11 @@ func entryRefreshTweet(c *ctx) (any, error) {
 		c.debugf("tweetId=%s on nodeId=%s from hostId=%s", tweetID, nodeID, hostID)
 		authSid, err := c.authSid()
 		if err == nil {
-			err = c.mimeiSync(authSid, tweetID, nil)
+			err = c.mimeiSync(authSid, tweetID, hostID)
 		}
-		if err != nil {
+		if syncStillRunning(err) {
+			c.debugf("tweet sync continues tweetId=%s hostId=%s", tweetID, hostID)
+		} else if err != nil {
 			c.errorf("Failed to sync tweetId=%s from hostId=%s: %v", tweetID, hostID, err)
 		}
 	}
@@ -602,10 +660,10 @@ func entryDeleteTweet(c *ctx) (any, error) {
 	if err != nil {
 		return respErr(err), nil
 	}
-	return c.deleteTweet(userID, tweetAuthorID, tweetID, false)
+	return c.deleteTweet(userID, tweetAuthorID, tweetID, true)
 }
 
-func (c *ctx) deleteTweet(userID, tweetAuthorID, tweetID string, delegated bool) (any, error) {
+func (c *ctx) deleteTweet(userID, tweetAuthorID, tweetID string, updateOriginal bool) (any, error) {
 	authSid, err := c.authSid()
 	if err != nil {
 		return respErr(err), nil
@@ -645,15 +703,17 @@ func (c *ctx) deleteTweet(userID, tweetAuthorID, tweetID string, delegated bool)
 	if err := c.backupDelRef(authSid, userID, ""); err != nil {
 		return respErr(err), nil
 	}
-	if err := c.mimeiPublish(authSid, userID); err != nil {
-		c.warnf("publish %s failed: %v", userID, err)
-	}
 	c.debugf("Delete tweet %s %s", tweetID, jsonStringify(map[string]any(deleted)))
-	if delegated {
-		c.unlinkDelegatedRetweet(authSid, deleted)
+	if updateOriginal && deleted.originalTweetID() != "" {
+		c.afterCommit(func(work *ctx) {
+			work.publishCommitted(authSid, userID)
+			work.deliverQuoteRetweetState(authSid, userID, tweetID, deleted, "")
+		})
+	} else {
+		c.publishCommitted(authSid, userID)
 	}
 
-	return c.wrapDelete(map[string]any{"tweetid": tweetID, "success": true}), nil
+	return c.wrapDelete(map[string]any{"tweetid": tweetID, "success": true, "peerUpdateDeferred": true}), nil
 }
 
 // destroyTweet permanently removes a tweet the requesting user authored.

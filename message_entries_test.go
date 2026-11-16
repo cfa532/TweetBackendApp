@@ -16,11 +16,13 @@ func TestMessageOutgoingDeliversThroughPeer(t *testing.T) {
 	api.sessions["author-session"] = "uid-author"
 	api.reply = map[string]any{"success": true}
 
-	ret, err := entryMessageOutgoing(commentCtx(api, "message_outgoing", map[string]string{
+	params := map[string]string{
 		"userid":    "sender",
 		"receiptid": "receipt",
+		"requestid": "same-send",
 		"msg":       `{"content":"hi","authorId":"sender","receiptId":"receipt"}`,
-	}))
+	}
+	ret, err := entryMessageOutgoing(commentCtx(api, "message_outgoing", params))
 	if err != nil {
 		t.Fatalf("message_outgoing returned error: %v", err)
 	}
@@ -31,7 +33,7 @@ func TestMessageOutgoingDeliversThroughPeer(t *testing.T) {
 		t.Fatalf("no delivery delegation: %#v", api.remote)
 	}
 	req := api.remote.req
-	if req["senderid"] != "sender" || req["receiptid"] != "receipt" || req["sid"] != "author-session" {
+	if req["senderid"] != "sender" || req["receiptid"] != "receipt" || req["sid"] != "author-session" || req["requestid"] != "same-send" {
 		t.Fatalf("delivery params wrong: %#v", req)
 	}
 	if !hasCall(api, "zadd:receipt") || !hasCall(api, "hset:mid-") || !strings.Contains(strings.Join(api.calls, " "), "/receipt/") {
@@ -39,6 +41,15 @@ func TestMessageOutgoingDeliversThroughPeer(t *testing.T) {
 	}
 	if len(filterCalls(api, "stamped:")) != 1 {
 		t.Fatalf("stored copies do not carry the delivery stamp, calls: %v", api.calls)
+	}
+
+	api.calls = nil
+	ret, err = entryMessageOutgoing(commentCtx(api, "message_outgoing", params))
+	if m, ok := toMap(ret); err != nil || !ok || !mapBool(m, "success") {
+		t.Fatalf("retry failed: reply=%#v, error=%v", ret, err)
+	}
+	if hasCall(api, "zadd:") || len(filterCalls(api, "stamped:")) != 0 {
+		t.Fatalf("retry wrote a duplicate sender copy: %v", api.calls)
 	}
 
 	// A peer refusal fails the send rather than leaving it half-delivered,
@@ -71,12 +82,14 @@ func TestMessageIncomingPeerGuard(t *testing.T) {
 	api.absent["sender"] = true
 	api.codes["code-node"] = map[string]string{"nodeid": "nodeA", "forapp": "aid-test"}
 
-	ret, err := entryMessageIncoming(commentCtx(api, "message_incoming", map[string]string{
-		"senderid":  "sender",
-		"receiptid": "receipt",
+	params := map[string]string{
+		"senderid":    "sender",
+		"receiptid":   "receipt",
 		"nodeappcode": "code-node",
-		"msg":       `{"content":"hi","authorId":"sender","receiptId":"receipt"}`,
-	}))
+		"requestid":   "same-send",
+		"msg":         `{"content":"hi","authorId":"sender","receiptId":"receipt"}`,
+	}
+	ret, err := entryMessageIncoming(commentCtx(api, "message_incoming", params))
 	if err != nil {
 		t.Fatalf("returned error: %v", err)
 	}
@@ -88,6 +101,15 @@ func TestMessageIncomingPeerGuard(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(api.calls, " "), "/"+userLastIncomingMsg+"/sender") {
 		t.Fatalf("incoming indicator not written, calls: %v", api.calls)
+	}
+
+	api.calls = nil
+	ret, err = entryMessageIncoming(commentCtx(api, "message_incoming", params))
+	if m, ok := toMap(ret); err != nil || !ok || !mapBool(m, "success") {
+		t.Fatalf("retry failed: reply=%#v, error=%v", ret, err)
+	}
+	if hasCall(api, "zadd:") || len(filterCalls(api, "stamped:")) != 0 || hasCall(api, "/"+userLastIncomingMsg+"/") {
+		t.Fatalf("retry stored a duplicate or changed the unread indicator: %v", api.calls)
 	}
 
 	api.calls = nil
@@ -110,10 +132,10 @@ func TestMessageIncomingPeerGuard(t *testing.T) {
 	// A code naming any other node is refused too.
 	api.codes["code-wrong"] = map[string]string{"nodeid": "nodeZ", "forapp": "aid-test"}
 	ret, _ = entryMessageIncoming(commentCtx(api, "message_incoming", map[string]string{
-		"senderid":  "sender",
-		"receiptid": "receipt",
+		"senderid":    "sender",
+		"receiptid":   "receipt",
 		"nodeappcode": "code-wrong",
-		"msg":       `{"content":"hi","authorId":"sender","receiptId":"receipt"}`,
+		"msg":         `{"content":"hi","authorId":"sender","receiptId":"receipt"}`,
 	}))
 	if m, ok := toMap(ret); ok && mapBool(m, "success") {
 		t.Fatalf("foreign node passed the guard: %#v", ret)

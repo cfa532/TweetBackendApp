@@ -408,8 +408,7 @@ func entryGetTweetFeed(c *ctx) (any, error) {
 // ---------------------------------------------------------------------------
 
 // entryGetPinnedTweets returns a user's pinned tweets, each with the time it
-// was pinned. On the user's root node, pins whose tweet no longer exists are
-// removed.
+// was pinned. A pin with an unavailable tweet is omitted from the response.
 func entryGetPinnedTweets(c *ctx) (any, error) {
 	userID := c.str("userid")
 	appUserID := c.str("appuserid")
@@ -420,63 +419,24 @@ func entryGetPinnedTweets(c *ctx) (any, error) {
 	}
 	defer c.closeMimei(readSid)
 
-	isHome := c.isHomeNode(userID)
-	var authSid, writeSid string
-	if isHome {
-		authSid, writeSid = c.openWriterFor(userID)
-		if writeSid == "" {
-			isHome = false
-		} else {
-			defer c.closeMimei(writeSid)
-		}
-	}
-
 	tweetIDs, err := c.hkeys(readSid, userPinnedTweets)
 	if err != nil {
 		return c.wrapErrList(err), nil
 	}
 
 	result := []any{}
-	var stale []string
 	for _, tweetID := range tweetIDs {
 		pinnedAt, err := c.hget(readSid, userPinnedTweets, tweetID)
 		if err != nil {
 			return c.wrapErrList(err), nil
 		}
 		if tweet := c.fetchTweetV2(tweetID, appUserID); tweet != nil {
-			// The timestamp is when the tweet was pinned, not when it was written.
 			result = append(result, map[string]any{
 				"tweet":     tweet,
 				"timestamp": toString(pinnedAt),
 			})
-			continue
-		}
-		if isHome {
-			stale = append(stale, tweetID)
 		}
 	}
-
-	if isHome && len(stale) > 0 {
-		failed := false
-		for _, tweetID := range stale {
-			c.warnf("removing stale tweetId=%s from PINNED_TWEETS, userId=%s", tweetID, userID)
-			if err := c.hdel(writeSid, userPinnedTweets, tweetID); err != nil {
-				c.errorf("failed to remove stale tweetIds for userId=%s: %v", userID, err)
-				failed = true
-				break
-			}
-		}
-		if !failed {
-			if err := c.backupDelRef(authSid, userID, ""); err != nil {
-				c.errorf("failed to remove stale tweetIds for userId=%s: %v", userID, err)
-			} else if err := c.mimeiPublish(authSid, userID); err != nil {
-				c.errorf("failed to remove stale tweetIds for userId=%s: %v", userID, err)
-			} else {
-				c.warnf("removed %d stale tweetId(s) from PINNED_TWEETS, userId=%s", len(stale), userID)
-			}
-		}
-	}
-
 	return c.wrap(result), nil
 }
 
@@ -591,39 +551,134 @@ func (c *ctx) toggleRetweetList(add bool) (any, error) {
 		return c.wrapErr(err), nil
 	}
 
-	// Route to the original author's node, preferring this node's own record
-	// of their account over the client's hostid hint.
-	authorHost := c.str("hostid")
-	if author, err := c.loadUser(authorID); err == nil && author != nil && author.hasValidHost() {
-		authorHost = author.hostID()
+	if retweetID == "" || tweetID == "" || authorID == "" {
+		return c.wrapErr(fmt.Errorf("Missing retweet ID, original tweet ID, or author ID")), nil
 	}
-	if authorHost == "" {
-		return c.wrapErr(fmt.Errorf("Author host not found")), nil
+	authorHost := c.str("hostid")
+	if add {
+		// Older clients still register after posting. Verify the same committed
+		// object and timeline membership that add_tweet commits before delegation.
+		retweet, err := c.loadTweet(retweetID)
+		if err != nil {
+			return c.wrapErr(err), nil
+		}
+		if retweet == nil || retweet.authorID() != appUserID || retweet.originalTweetID() != tweetID {
+			return c.wrapErr(fmt.Errorf("Retweet does not match the original or the requester")), nil
+		}
+		listed, err := c.listedInCommitted(appUserID, userTweetList, retweetID)
+		if err != nil {
+			return c.wrapErr(err), nil
+		}
+		if !listed {
+			return c.wrapErr(fmt.Errorf("Retweet is not in the author's committed timeline")), nil
+		}
+		ownerID, err := c.originalRetweetStorageAuthor(tweetID, retweet.originalAuthorID())
+		if err != nil {
+			return c.wrapErr(err), nil
+		}
+		if authorID != ownerID {
+			authorHost = ""
+		}
+		authorID = ownerID
 	}
 
 	authSid, err := c.authSid()
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
-	peerReply, err := c.callPeerEntry(authSid, authorHost, "apply_retweet", map[string]string{
-		"tweetid":   tweetID,
-		"authorid":  authorID,
-		"userid":    appUserID,
-		"retweetid": retweetID,
-		"wanted":    boolParam(add),
-	})
+	updated, err := c.delegateRetweet(authSid, appUserID, retweetID, tweetID, authorID, authorHost, "", add)
 	if err != nil {
 		return c.wrapErr(err), nil
 	}
-	peer, ok := toMap(peerReply)
-	if !ok || !mapBool(peer, "success") {
-		message := firstNonEmpty(mapStr(peer, "message"), mapStr(peer, "error"))
-		if message == "" {
-			message = "Retweet operation failed"
-		}
-		return c.wrapErr(fmt.Errorf("%s", message)), nil
+	return c.wrapRetweet(updated), nil
+}
+
+// deliverQuoteRetweetState uses the quoted parent for the card and the source
+// comment for its own engagement count. The comment is stored on its immediate
+// parent's author's root, even when the parent is itself a comment.
+func (c *ctx) deliverQuoteRetweetState(authSid, actorID, retweetID string, retweet tweetObj, originalHost string) {
+	originalID, originalAuthorID := retweet.originalTweetID(), retweet.originalAuthorID()
+	if commentID := retweet.quotedCommentID(); commentID != "" {
+		c.deliverRetweetState(authSid, actorID, retweetID, commentID, originalAuthorID, originalHost, originalID)
 	}
-	return c.wrapRetweet(peer["tweet"]), nil
+	ownerID, err := c.originalRetweetStorageAuthor(originalID, originalAuthorID)
+	if err != nil {
+		c.warnf("original retweet update failed after commit userId=%s retweetId=%s originalId=%s: %v", actorID, retweetID, originalID, err)
+		return
+	}
+	if ownerID != originalAuthorID {
+		originalHost = ""
+	}
+	c.deliverRetweetState(authSid, actorID, retweetID, originalID, ownerID, originalHost, "")
+}
+
+// Creation and deletion can finish in either order at the peer. Check the
+// actor's committed timeline before and after delivery to settle on membership.
+func (c *ctx) deliverRetweetState(authSid, actorID, retweetID, tweetID, authorID, hostID, expectedParentID string) {
+	wanted, err := c.listedInCommitted(actorID, userTweetList, retweetID)
+	for err == nil {
+		if _, err = c.delegateRetweet(authSid, actorID, retweetID, tweetID, authorID, hostID, expectedParentID, wanted); err != nil {
+			break
+		}
+		c.infof("retweet record confirmed userId=%s retweetId=%s tweetId=%s present=%t", actorID, retweetID, tweetID, wanted)
+		next, readErr := c.listedInCommitted(actorID, userTweetList, retweetID)
+		if readErr == nil && next == wanted {
+			return
+		}
+		wanted, err = next, readErr
+	}
+	c.warnf("retweet update failed after commit userId=%s retweetId=%s tweetId=%s: %v", actorID, retweetID, tweetID, err)
+}
+
+// A local copy can identify a comment's storage author. Otherwise the recorded
+// original author identifies the ordinary tweet's root. The peer verifies the
+// placement before mutating its own data.
+func (c *ctx) originalRetweetStorageAuthor(tweetID, authorID string) (string, error) {
+	original, err := c.loadTweet(tweetID)
+	if err == nil && original != nil {
+		return c.tweetStorageAuthor(original, tweetID, "")
+	}
+	if authorID == "" {
+		return "", fmt.Errorf("Original tweet author not found")
+	}
+	return authorID, nil
+}
+
+func (c *ctx) delegateRetweet(authSid, actorID, retweetID, tweetID, authorID, authorHost, expectedParentID string, add bool) (map[string]any, error) {
+	if authorHost == "" {
+		var err error
+		authorHost, err = c.userHostID(authorID)
+		if err != nil {
+			return nil, err
+		}
+		if authorHost == "" {
+			return nil, fmt.Errorf("Root not found for original tweet author %s", authorID)
+		}
+	}
+	params := map[string]string{
+		"tweetid":   tweetID,
+		"authorid":  authorID,
+		"userid":    actorID,
+		"retweetid": retweetID,
+		"wanted":    boolParam(add),
+	}
+	if expectedParentID != "" {
+		params["parenttweetid"] = expectedParentID
+	}
+	peerReply, err := c.callPeerEntry(authSid, authorHost, "apply_retweet", params)
+	if err != nil {
+		return nil, err
+	}
+	peer, _ := toMap(peerReply)
+	if !mapBool(peer, "success") {
+		message := firstNonEmpty(mapStr(peer, "message"), mapStr(peer, "error"), "Retweet update not confirmed")
+		return nil, fmt.Errorf("node %s: %s", authorHost, message)
+	}
+	updated, ok := toMap(peer["tweet"])
+	if !ok || updated == nil {
+		return nil, fmt.Errorf("Node %s returned no updated original tweet", authorHost)
+	}
+	return updated, nil
 }
 
 // entryApplyRetweet performs the tweet-side half on the original author's root
@@ -640,27 +695,26 @@ func entryApplyRetweet(c *ctx) (any, error) {
 	authorID := c.str("authorid")
 	add := c.boolParam("wanted")
 
-	// The list lives inside the author's tweet, so this must be their node.
-	// The failure is reported as it happened: a wrong-node call and an unknown
-	// author are different problems, and collapsing both into one message sent
-	// whoever had to debug it looking for the wrong thing.
-	if err := c.requireRootNode(authorID); err != nil {
-		return respErr(fmt.Errorf("Author host not found")), nil
+	if retweetID == "" || tweetID == "" || userID == "" || authorID == "" {
+		return respFail("Missing retweet, original tweet, or user ID"), nil
 	}
-	// The tweet object itself must agree with the named author.
+	if err := c.requirePeerCall(userID); err != nil {
+		return respErr(err), nil
+	}
+	if err := c.requireRootNode(authorID); err != nil {
+		return respErr(err), nil
+	}
 	tweet, err := c.loadTweet(tweetID)
 	if err != nil {
 		return respErr(err), nil
 	}
 	if tweet == nil {
-		return respErr(fmt.Errorf("Tweet not found")), nil
+		return respFail("Tweet not found"), nil
 	}
-	if tweet.authorID() != authorID {
-		return respErr(fmt.Errorf("Tweet does not belong to the named author")), nil
+	if expected := c.str("parenttweetid"); expected != "" && mapStr(tweet, "parentTweetId") != expected {
+		return respFail("Quoted comment does not belong to the original tweet"), nil
 	}
-
-	// Only the retweeper's own root may ask this node to touch the list.
-	if err := c.requirePeerCall(userID); err != nil {
+	if err := c.requireTweetStorageAuthor(tweet, tweetID, authorID); err != nil {
 		return respErr(err), nil
 	}
 
@@ -681,19 +735,34 @@ func entryApplyRetweet(c *ctx) (any, error) {
 	if err != nil {
 		return respErr(err), nil
 	}
-	if owner := toString(recorded); owner != "" && owner != userID {
+	owner := toString(recorded)
+	if owner != "" && owner != userID {
 		return respErr(fmt.Errorf("This retweet record belongs to another user")), nil
 	}
 
-	if add {
+	// Prepare the reply before writing. Count this request only when it
+	// changes membership in the writable list.
+	updatedTweet, ok := toMap(c.fetchTweetV2(tweetID, userID))
+	if !ok {
+		return respFail("Could not read the original tweet before updating the retweet list"), nil
+	}
+	count, err := c.hlen(tweetSid, tweetRetweetList)
+	if err != nil {
+		return respErr(err), nil
+	}
+
+	if add && owner == "" {
 		if err := c.hset(tweetSid, tweetRetweetList, retweetID, userID); err != nil {
 			return respErr(err), nil
 		}
-	} else {
+		count++
+	} else if !add && owner != "" {
 		if err := c.hdel(tweetSid, tweetRetweetList, retweetID); err != nil {
 			return respErr(err), nil
 		}
+		count--
 	}
+	updatedTweet["retweetCount"] = count
 
 	if err := c.backupDelRef(authSid, tweetID, ""); err != nil {
 		return respErr(err), nil
@@ -704,7 +773,7 @@ func entryApplyRetweet(c *ctx) (any, error) {
 
 	return c.wrapPassthrough(map[string]any{
 		"success": true,
-		"tweet":   c.fetchTweetV2(tweetID, userID),
+		"tweet":   updatedTweet,
 	}), nil
 }
 

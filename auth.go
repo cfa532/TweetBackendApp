@@ -185,7 +185,6 @@ func (c *ctx) friendByAppCode(nodeAppCode, frontEndHostID string) (string, error
 	if nodeAppCode == "" {
 		return frontEndHostID, nil
 	}
-	c.tracef("nodeAppCode=%s", nodeAppCode)
 
 	nodeID, err := c.api.SessionGet(nodeAppCode, "nodeid")
 	if err != nil {
