@@ -213,6 +213,18 @@ the node's owners have run `tweet-owner.sh --guests deny`.
 
 ## Tweet Management Endpoints
 
+### Retweet a Comment
+**Endpoint:** `retweet_comment`
+
+Call on the retweeter's root using the same parameters as `add_tweet`.
+The tweet object names the source in `quotedCommentId`, its immediate parent
+in `originalTweetId`, and the parent's author in `originalAuthorId`.
+The server snapshots the stored comment into an authored quote of its parent,
+then publishes a pure retweet of that quote. Only the retweet enters the timeline.
+The response's `mid` is the retweet and `commentQuoteId` is the generated quote.
+Reuse the request ID to retry both records. The quote's `quotedCommentAuthorId`
+from `get_tweet` identifies the commenter for attribution.
+
 ### Add Tweet
 **Endpoint:** `add_tweet`
 

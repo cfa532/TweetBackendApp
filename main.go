@@ -165,6 +165,7 @@ func entryTable() map[string]entryFunc {
 
 		// Tweets
 		"add_tweet":                  entryAddTweet,
+		"retweet_comment":            entryAddTweet,
 		"get_tweet":                  entryGetTweet,
 		"delete_tweet":               entryDeleteTweet,
 		"update_tweet":               entryUpdateTweet,

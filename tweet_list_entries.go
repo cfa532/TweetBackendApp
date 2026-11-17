@@ -597,6 +597,10 @@ func (c *ctx) toggleRetweetList(add bool) (any, error) {
 // comment for its own engagement count. The comment is stored on its immediate
 // parent's author's root, even when the parent is itself a comment.
 func (c *ctx) deliverQuoteRetweetState(authSid, actorID, retweetID string, retweet tweetObj, originalHost string) {
+	if source := retweet.commentRetweetSource(); source != nil {
+		c.deliverRetweetState(authSid, actorID, retweetID, retweet.originalTweetID(), retweet.originalAuthorID(), "", "")
+		retweet = source
+	}
 	originalID, originalAuthorID := retweet.originalTweetID(), retweet.originalAuthorID()
 	if commentID := retweet.quotedCommentID(); commentID != "" {
 		c.deliverRetweetState(authSid, actorID, retweetID, commentID, originalAuthorID, originalHost, originalID)

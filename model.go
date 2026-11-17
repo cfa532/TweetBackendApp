@@ -75,6 +75,15 @@ func (t tweetObj) originalAuthorID() string { return mapStr(t, "originalAuthorId
 // quotedCommentID names the comment whose content the quote post carries.
 func (t tweetObj) quotedCommentID() string { return mapStr(t, "quotedCommentId") }
 
+const commentRetweetSourceKey = "commentRetweetSource"
+const quotedCommentAuthorKey = "quotedCommentAuthorId"
+
+// commentRetweetSource holds the original comment and parent for a generated retweet.
+func (t tweetObj) commentRetweetSource() tweetObj {
+	source, _ := toMap(t[commentRetweetSourceKey])
+	return tweetObj(source)
+}
+
 // isPrivate reports whether the tweet is visible only to its author.
 func (t tweetObj) isPrivate() bool { return mapBool(t, "isPrivate") }
 

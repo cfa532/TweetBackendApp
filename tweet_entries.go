@@ -32,6 +32,9 @@ func entryAddTweet(c *ctx) (any, error) {
 		return respErr(err), nil
 	}
 	tweet := tweetObj(raw)
+	// The server records the source of a wrapped comment retweet after authorization.
+	delete(tweet, commentRetweetSourceKey)
+	delete(tweet, quotedCommentAuthorKey)
 
 	agentAuth, err := parseAgentAuth(c.str("agentAuth"))
 	if err != nil {
@@ -76,14 +79,44 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 	// objects.
 	requestID := c.str("requestid")
 	authorID := tweet.authorID()
-	tweetID, err := c.fileObjectID(authSid, "tweet", submissionMark("tweet", authorID, requestID))
+	originalID := tweet.originalTweetID()
+	commentID := tweet.quotedCommentID()
+	isCommentRetweet := c.entry == "retweet_comment"
+	if isCommentRetweet && commentID == "" {
+		return respFail("Retweet requires a source comment"), nil
+	}
+	if commentID != "" && (commentID == originalID || originalID == "" || tweet.originalAuthorID() == "") {
+		return respFail("Quoted comment requires its parent tweet and author"), nil
+	}
+	kind := "tweet"
+	if isCommentRetweet {
+		kind = "comment-retweet"
+	}
+	tweetID, err := c.fileObjectID(authSid, "tweet", submissionMark(kind, authorID, requestID))
 	if err != nil {
 		return respErr(fmt.Errorf("MMCreate(tweet): %v", err)), nil
 	}
-	originalID := tweet.originalTweetID()
-	if commentID := tweet.quotedCommentID(); commentID != "" &&
-		(commentID == originalID || originalID == "" || tweet.originalAuthorID() == "") {
-		return respFail("Quoted comment requires its parent tweet and author"), nil
+
+	var commentQuote tweetObj
+	var commentQuoteID string
+	if isCommentRetweet {
+		// Derive the quote's identity from the wrapper so retries converge on both records.
+		commentQuoteID, err = c.fileObjectID(authSid, "tweet", submissionMark("comment-retweet-quote", authorID, tweetID))
+		if err != nil {
+			return respErr(fmt.Errorf("MMCreate(comment quote): %v", err)), nil
+		}
+		commentQuote, err = c.commentQuoteForRetweet(authSid, commentQuoteID, tweet)
+		if err != nil {
+			return respErr(err), nil
+		}
+		tweet = tweetObj{
+			"authorId": authorID, "originalTweetId": commentQuoteID, "originalAuthorId": authorID,
+			"isPrivate": commentQuote.isPrivate(),
+			commentRetweetSourceKey: map[string]any{
+				"originalTweetId": originalID, "originalAuthorId": commentQuote.originalAuthorID(),
+				"quotedCommentId": commentID,
+			},
+		}
 	}
 	tweetCommitted, err := c.commitSubmission(authSid, tweetID, requestID, tweet, originalID != "")
 	if err != nil {
@@ -95,9 +128,22 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 			return respErr(err), nil
 		}
 	}
+	if commentQuote != nil {
+		if _, err := c.commitSubmission(authSid, commentQuoteID, tweetID, commentQuote, true); err != nil {
+			return respErr(err), nil
+		}
+	}
 	if !authorLists {
 		if err := c.linkSubmittedTweet(authSid, authorID, tweetID, tweet); err != nil {
 			return respErr(err), nil
+		}
+	}
+
+	if commentQuoteID != "" {
+		// Both author references are committed before the quote is published.
+		// Publish the quote first so remote readers can resolve the wrapper.
+		if err := c.mimeiPublish(authSid, commentQuoteID); err != nil {
+			return respErr(fmt.Errorf("publish comment quote: %v", err)), nil
 		}
 	}
 
@@ -111,7 +157,87 @@ func (c *ctx) addTweetLocal(tweet tweetObj, user userObj, agentAuth map[string]a
 			work.ensureProvided(authSid, originalID)
 		})
 	}
-	return c.wrapPassthrough(map[string]any{"success": true, "mid": tweetID}), nil
+	result := map[string]any{"success": true, "mid": tweetID}
+	if commentQuoteID != "" {
+		result["commentQuoteId"] = commentQuoteID
+	}
+	return c.wrapPassthrough(result), nil
+}
+
+// commentQuoteForRetweet copies the stored comment and preserves that snapshot on retry.
+func (c *ctx) commentQuoteForRetweet(authSid, quoteID string, draft tweetObj) (tweetObj, error) {
+	committed, err := c.hasCommittedVersion(authSid, quoteID)
+	if err != nil {
+		return nil, err
+	}
+	if committed {
+		quote, err := c.loadTweet(quoteID)
+		if err != nil {
+			return nil, err
+		}
+		if quote.authorID() != draft.authorID() || quote.quotedCommentID() != draft.quotedCommentID() ||
+			quote.originalTweetID() != draft.originalTweetID() || quote.originalAuthorID() != draft.originalAuthorID() ||
+			quote.isPrivate() != draft.isPrivate() {
+			return nil, fmt.Errorf("%s", submissionConflict)
+		}
+		return quote, nil
+	}
+
+	host := c.str("originalauthorhostid")
+	if host == "" {
+		host, err = c.userHostID(draft.originalAuthorID())
+		if err != nil {
+			return nil, err
+		}
+	}
+	comment, err := c.readCommentRetweetSource(authSid, host, draft.quotedCommentID(), draft.authorID())
+	if err != nil {
+		return nil, err
+	}
+	if comment.authorID() == "" || mapStr(comment, "parentTweetId") != draft.originalTweetID() {
+		return nil, fmt.Errorf("Comment does not belong to the quoted parent")
+	}
+	parent, err := c.readCommentRetweetSource(authSid, host, draft.originalTweetID(), draft.authorID())
+	if err != nil {
+		return nil, err
+	}
+	if parent.authorID() != draft.originalAuthorID() {
+		return nil, fmt.Errorf("Quoted parent does not belong to the named author")
+	}
+	if parent.isPrivate() || comment.isPrivate() {
+		return nil, fmt.Errorf("A private comment or its private parent cannot be forwarded")
+	}
+
+	quote := tweetObj{
+		"authorId": draft.authorID(), "originalTweetId": draft.originalTweetID(),
+		"originalAuthorId": draft.originalAuthorID(), "quotedCommentId": draft.quotedCommentID(),
+		quotedCommentAuthorKey: comment.authorID(), "isPrivate": draft.isPrivate(),
+	}
+	for _, key := range []string{"content", "title", "attachments", "downloadable"} {
+		if value, ok := comment[key]; ok && value != nil {
+			quote[key] = value
+		}
+	}
+	return quote, nil
+}
+
+func (c *ctx) readCommentRetweetSource(authSid, host, mid, viewerID string) (tweetObj, error) {
+	if host == c.nodeID() {
+		return c.loadTweet(mid)
+	}
+	reply, err := c.callRemote(host, "get_tweet", map[string]string{
+		reqAppID: c.appID(), reqAppVer: verLast, reqVersion: versionV2, reqSid: authSid,
+		"tweetid": mid, "appuserid": viewerID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	envelope, _ := toMap(reply)
+	data, _ := toMap(envelope["data"])
+	if !mapBool(envelope, "success") || mapStr(data, "mid") != mid {
+		return nil, fmt.Errorf("Comment retweet source %s is unavailable", mid)
+	}
+	return tweetObj(data), nil
 }
 
 // linkSubmittedTweet commits the author's lists and native references after
@@ -130,7 +256,15 @@ func (c *ctx) linkSubmittedTweet(authSid, authorID, tweetID string, tweet tweetO
 	if err := c.zadd(userSid, userFollowingsTweets, score, tweetID); err != nil {
 		return err
 	}
-	if originalID := tweet.originalTweetID(); originalID != "" {
+	originalID := tweet.originalTweetID()
+	if source := tweet.commentRetweetSource(); source != nil {
+		// The generated quote is an authored tweet, even though only the retweet is listed.
+		if err := c.addRef(authSid, authorID, originalID); err != nil {
+			return err
+		}
+		originalID = source.originalTweetID()
+	}
+	if originalID != "" {
 		if err := c.addRef(authSid, authorID, originalID); err != nil {
 			c.errorf("Error sync original tweet: %v, tweet=%s", err, jsonStringify(map[string]any(tweet)))
 		}
@@ -377,6 +511,9 @@ func entryGetTweet(c *ctx) (any, error) {
 	}
 	if format := mapStr(tweet, "storageFormat"); format != "" {
 		ret["storageFormat"] = format
+	}
+	if sourceAuthor := mapStr(tweet, quotedCommentAuthorKey); sourceAuthor != "" {
+		ret[quotedCommentAuthorKey] = sourceAuthor
 	}
 	// Only set when present, so an absent content field does not become "".
 	if content := tweet.content(); content != "" {
@@ -757,7 +894,8 @@ func (c *ctx) destroyTweet(authSid, userID, tweetID string) (tweetObj, error) {
 		return tweet, err
 	}
 
-	if originalID := tweet.originalTweetID(); originalID != "" {
+	// The generated quote has its own author reference and can be opened independently.
+	if originalID := tweet.originalTweetID(); originalID != "" && tweet.commentRetweetSource() == nil {
 		if err := c.delRef(authSid, userID, originalID); err != nil {
 			c.warnf("original unref %s failed: %v", originalID, err)
 		}
