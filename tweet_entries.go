@@ -321,7 +321,7 @@ func (c *ctx) commitSubmission(authSid, mid, requestID string, submission tweetO
 		return false, err
 	}
 	for _, attachment := range submission.attachments() {
-		if child := mapStr(attachment, "mid"); child != "" {
+		for _, child := range mediaMids(attachment) {
 			if err := c.addRef(authSid, mid, child); err != nil {
 				c.warnf("attachment ref %s failed: %v", child, err)
 			}
@@ -883,7 +883,7 @@ func (c *ctx) destroyTweet(authSid, userID, tweetID string) (tweetObj, error) {
 	// Dropping the attachment references leaves them unreferenced, and the
 	// garbage collector reclaims them.
 	for _, attachment := range tweet.attachments() {
-		if mid := mapStr(attachment, "mid"); mid != "" {
+		for _, mid := range mediaMids(attachment) {
 			if err := c.delRef(authSid, tweetID, mid); err != nil {
 				c.warnf("attachment unref %s failed: %v", mid, err)
 			}

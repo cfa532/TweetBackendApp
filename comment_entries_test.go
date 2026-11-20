@@ -1014,14 +1014,14 @@ func TestAddTweetRetryDoesNotRepeatReferences(t *testing.T) {
 
 	payload := map[string]any{
 		"authorId": "author", "content": "hello",
-		"attachments": []any{map[string]any{"mid": "media-1"}},
+		"attachments": []any{map[string]any{"mid": "media-1", "previewMid": "media-1-preview"}},
 	}
 	if ok, msg := submit(jsonStringify(payload)); !ok {
 		t.Fatalf("initial add_tweet failed: %s", msg)
 	}
 	first := filterCalls(api, "addref:")
-	if len(first) != 2 {
-		t.Fatalf("first attempt should reference the attachment and the tweet, got %v", first)
+	if len(first) != 3 {
+		t.Fatalf("first attempt should reference the attachment, its preview and the tweet, got %v", first)
 	}
 
 	// What the first attempt left committed.

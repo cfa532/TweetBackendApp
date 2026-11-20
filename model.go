@@ -100,6 +100,21 @@ func (t tweetObj) attachments() []map[string]any {
 	return out
 }
 
+// mediaMids lists the stored files one attachment refers to: the media itself and,
+// for large images, an optional smaller preview ("previewMid") that feeds load
+// instead of the original. Each is a Mimei child of the tweet, so a preview is
+// synchronized with the tweet and becomes collectable when the tweet goes away,
+// exactly like the media it previews.
+func mediaMids(attachment map[string]any) []string {
+	var mids []string
+	for _, key := range []string{"mid", "previewMid"} {
+		if mid := mapStr(attachment, key); mid != "" {
+			mids = append(mids, mid)
+		}
+	}
+	return mids
+}
+
 // ---------------------------------------------------------------------------
 // Loading
 // ---------------------------------------------------------------------------

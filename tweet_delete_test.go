@@ -45,7 +45,7 @@ func (a *fileDeleteAPI) MFGetData(string, int64, int) ([]byte, error) {
 		"schema": fileSchema, "kind": "tweet", "mid": "tweet",
 		"value": map[string]any{
 			"authorId": a.author, "content": "test", "originalTweetId": "original",
-			"attachments": []any{map[string]any{"mid": "media"}},
+			"attachments": []any{map[string]any{"mid": "media", "previewMid": "media-preview"}},
 		},
 	})), nil
 }
@@ -72,7 +72,7 @@ func TestDeleteFileTweetUnpublishesBeforeDeletionWithoutBackup(t *testing.T) {
 			var want []string
 			switch mode {
 			case "success":
-				want = []string{"unpublish:tweet", "unref:tweet:media", "versions:tweet", "unref:user:original", "unref:user:tweet"}
+				want = []string{"unpublish:tweet", "unref:tweet:media", "unref:tweet:media-preview", "versions:tweet", "unref:user:original", "unref:user:tweet"}
 			case "unpublish failure":
 				a.unpublishErr = errors.New("unpublish denied")
 				want = []string{"unpublish:tweet"}

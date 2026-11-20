@@ -140,14 +140,14 @@ func parseAttachments(raw string) ([]any, error) {
 func (c *ctx) reconcileAttachments(authSid, tweetID string, tweet tweetObj, next []any) error {
 	previous := map[string]bool{}
 	for _, attachment := range tweet.attachments() {
-		if mid := mapStr(attachment, "mid"); mid != "" {
+		for _, mid := range mediaMids(attachment) {
 			previous[mid] = true
 		}
 	}
 	wanted := map[string]bool{}
 	for _, item := range next {
 		if attachment, ok := toMap(item); ok {
-			if mid := mapStr(attachment, "mid"); mid != "" {
+			for _, mid := range mediaMids(attachment) {
 				wanted[mid] = true
 			}
 		}
